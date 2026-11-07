@@ -8,8 +8,8 @@ What it does (Isaac Sim 6.2 / isaacsim.* API, every call checked against the 6.2
 validates it; the `# UNVERIFIED (6.2):` comments mark what the docs did not settle):
   1. imports the flat URDF (rd_sim export_urdf) with URDFImporter as a floating-base articulation, the drive wheels
      velocity-driven and the UR joints position-driven, and references the result into the stage; the hand is the baked visual
-  2. builds the world: a ground plane and the active map's occupied cells as 2.5 m boxes (so the simulated lidars
-     see the walls the map has) from rd_nav's maps folder
+  2. builds the world: a ground plane and the active map's occupied cells, one 2.5 m tall box per cell (so the
+     simulated lidars see exactly the walls the map has) from rd_nav's maps folder
   3. attaches sensors: two 2D RTX lidars (frames rp_s1_lidar / rp_s2e_lidar, 360 deg, 10 Hz, 0.1..20 m), a Velodyne-like
      3D RTX lidar (velodyne_frame), an RGB camera on camera_link_optical (1280x720) and three RGB webcams (scene / wrist /
      side) - the PhysX lidar and isaacsim.sensors.camera are deprecated since 6.0
@@ -54,8 +54,10 @@ def parse():
     return ap.parse_args()
 
 
-def map_boxes(maps_dir: Path, name: str, height: float = 2.5, merge: int = 4):
-    """Occupied cells of a nav map as (x, y, size) blocks, merged merge x merge cells at a time."""
+def map_boxes(maps_dir: Path, name: str, height: float = 2.5, merge: int = 1):
+    """Occupied cells of a nav map as (x, y, size) blocks, merged merge x merge cells at a time. merge=1 is the map
+    itself (zone_one: ~3500 cells of 0.05 m); 4 x 4 blocks fattened thin walls to 0.2 m and closed a doorway on the way
+    to the Dining Room (Nav2 planned no path in the sim where the map has one)."""
     import numpy as np
     import yaml
     meta = yaml.safe_load((maps_dir / f"{name}.yaml").read_text())
