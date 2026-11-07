@@ -1,0 +1,691 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>RD 3D</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --bg: #15171c; --panel: #1f2229; --line: #343846; --fg: #e8e9ee; --muted: #9aa0ad; --accent: #4f8cff; --ok: #2ea043; --danger: #c93c3c; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 13px/1.4 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  #app { display: flex; height: 100%; }
+  #side { width: 300px; background: var(--panel); border-right: 1px solid var(--line); padding: 12px; overflow: auto; display: flex; flex-direction: column; gap: 10px; }
+  #side h2 { margin: 0; font-size: 15px; display: flex; justify-content: space-between; align-items: center; }
+  #side h3 { margin: 6px 0 0; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .row { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
+  /* labels in Title Case, rows justified across the side panel */
+  .row { justify-content: space-between; width: 100%; }
+  label.cb, #toolbar button, #maptools button, .modes button, details.settings summary, #cam-panel label, #sim-panel button { text-transform: capitalize; }
+  .unit { text-transform: none; }
+  label.cb { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; white-space: nowrap; }
+  /* layer toggles: no checkbox — the label itself is the switch, underlined green when active */
+  label.cb:has(input[type=checkbox]) { position: relative; padding: 1px 0 3px; border-bottom: 2px solid transparent; color: var(--muted); user-select: none; cursor: pointer; }
+  label.cb:has(input[type=checkbox]) input[type=checkbox] { position: absolute; opacity: 0; width: 0; height: 0; margin: 0; pointer-events: none; }
+  label.cb:has(input[type=checkbox]:checked) { color: var(--fg); border-bottom-color: var(--ok); }
+  label.cb:has(input[type=checkbox]):hover { color: var(--fg); }
+  label.cb:has(input[type=checkbox]:focus-visible) { outline: 1px dashed var(--muted); outline-offset: 2px; }
+  .sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+  input[type=number], select { background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; font: inherit; }
+  input[type=number] { width: 60px; }
+  button { background: #2a2e38; color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; font: inherit; cursor: pointer; }
+  button.accent { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+  .muted { color: var(--muted); } .mono { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+  #view { flex: 1; position: relative; min-width: 0; }
+  canvas { display: block; width: 100%; height: 100%; }
+  /* telemetry line: bright and bold with a drop shadow so it reads against the dark canvas */
+  #status { position: absolute; left: 10px; top: 8px; background: rgba(0,0,0,.6); padding: 4px 8px; border-radius: 6px; font-size: 12px; pointer-events: none;
+            color: #f3f4f6; font-weight: bold; text-shadow: 1px 1px 2px #000; max-width: calc(100% - 340px); }   /* wraps before the floating tool bar */
+  #hint { position: absolute; left: 10px; bottom: 8px; background: rgba(0,0,0,.6); padding: 6px 10px; border-radius: 6px; font-size: 11px; color: var(--muted); max-width: 520px; }
+  /* floating tool bar inside the 3D viewport (orbit / nav goal / initial pose; cone in the simulator) */
+  #toolbar { position: absolute; right: 10px; top: 8px; z-index: 2; display: flex; gap: 6px; padding: 4px; background: rgba(0,0,0,.6); border: 1px solid var(--line); border-radius: 10px; backdrop-filter: blur(4px); }
+  #toolbar button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  #side button.halt { margin-top: auto; width: 100%; padding: 12px; font-size: 16px; font-weight: 700; letter-spacing: .08em; }
+  #side button.halt.halted { background: var(--ok); border-color: var(--ok); color: #fff; }
+  #out { white-space: pre-wrap; font-size: 11px; color: var(--muted); }
+  .row.velodyne { align-items: flex-start; flex-wrap: nowrap; gap: 8px; }
+  details.settings { flex: 1; }
+  details.settings summary { cursor: pointer; user-select: none; list-style: none; display: inline-flex; align-items: center; padding: 1px 6px; border-radius: 6px; }
+  details.settings summary:hover { background: #2a2e38; }
+  details.settings summary::-webkit-details-marker { display: none; }
+  details.settings .caret::before { content: "▸ Settings"; color: var(--muted); font-size: 12px; } details.settings[open] .caret::before { content: "▾ Settings"; }
+  details.settings .row { margin: 6px 0 0 4px; }
+  /* collapsible side sections (accordion): click the heading to fold it; the checkbox lists inside are a 2-column grid */
+  .acc .acc-head { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 6px; border-radius: 6px; margin: 6px -4px 0; padding: 2px 4px; }
+  .acc .acc-head:hover { background: #2a2e38; color: var(--fg); }
+  .acc .acc-head:focus-visible { outline: 1px dashed var(--muted); outline-offset: 1px; }
+  .acc .acc-head::before { content: "▸"; width: 10px; font-size: 11px; }
+  .acc.open .acc-head::before { content: "▾"; }
+  .acc .acc-body { display: none; }
+  .acc.open .acc-body { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+  .acc .row.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 12px; }
+  .acc .row.grid > label.cb { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "/static/vendor/three.module.min.js",
+               "three/examples/jsm/": "/static/vendor/jsm/",
+               "three/addons/": "/static/vendor/jsm/" } }
+</script>
+</head>
+<body>
+<div id="app">
+  <div id="side">
+    <h2>3D <span><button onclick="location.href='/?view=map'">2D map</button></span></h2>
+    <section class="acc open" data-acc="scene">
+    <h3 class="acc-head" role="button" tabindex="0" aria-expanded="true">Scene</h3>
+    <div class="acc-body">
+    <div class="row grid">
+      <label class="cb"><input type="checkbox" id="l-map" checked> map</label>
+      <label class="cb" title="draw the nav map with its colours inverted (dark free space, light walls)"><input type="checkbox" id="l-invert" checked> invert map</label>
+      <label class="cb"><input type="checkbox" id="l-grid"> grid</label>
+      <label class="cb"><input type="checkbox" id="l-global" checked><span class="sw" data-key="cm_global" style="background:#ff3caa"></span>global costmap</label>
+      <label class="cb"><input type="checkbox" id="l-local" checked><span class="sw" data-key="cm_local" style="background:#8c32ff"></span>local costmap</label>
+      <label class="cb">opacity <input type="number" id="cmalpha" value="15" min="5" max="100" step="5"> <span class="unit">%</span></label>
+    </div>
+    </div>
+    </section>
+    <section class="acc open" data-acc="sensors">
+    <h3 class="acc-head" role="button" tabindex="0" aria-expanded="true">Sensors</h3>
+    <div class="acc-body">
+    <div class="row velodyne">
+      <label class="cb"><input type="checkbox" id="l-velodyne" checked><span class="sw" data-key="velodyne" style="background:linear-gradient(90deg,#3030ff,#30ff30,#ff3030)"></span>Velodyne</label>
+      <details id="velodyne-settings" class="settings"><summary title="Velodyne settings"><span class="caret"></span></summary>
+        <div class="row"><select id="cloudcolor"><option value="height">colour: height</option><option value="intensity">colour: intensity</option><option value="flat">colour: flat</option></select></div>
+        <div class="row">
+          <label class="cb">size <input type="number" id="ptsize" value="2" min="1" max="8" step="0.5"> <span class="unit">px</span></label>
+          <label class="cb">rate <input type="number" id="cloudhz" value="4" min="1" max="10" step="1"> <span class="unit">Hz</span></label>
+        </div>
+        <div class="row"><label class="cb">max <input type="number" id="cloudmax" value="20000" min="1000" max="60000" step="1000"> <span class="unit">pts</span></label></div>
+      </details>
+    </div>
+    <div class="row grid">
+      <label class="cb"><input type="checkbox" id="l-s1" checked><span class="sw" data-key="s1" style="background:#f5d033"></span>S1</label>
+      <label class="cb"><input type="checkbox" id="l-s2e" checked><span class="sw" data-key="s2e" style="background:#39d353"></span>S2E</label>
+    </div>
+    </div>
+    </section>
+    <h3>Robot</h3>
+    <div class="row">
+      <label class="cb"><input type="checkbox" id="l-robot" checked> robot model (URDF)</label>
+      <label class="cb"><input type="checkbox" id="l-frames"> TF frames</label>
+    </div>
+    <section class="acc open" data-acc="navigation">
+    <h3 class="acc-head" role="button" tabindex="0" aria-expanded="true">Navigation</h3>
+    <div class="acc-body">
+    <div class="row grid">
+      <label class="cb"><input type="checkbox" id="l-plan" checked><span class="sw" data-key="plan" style="background:#39d353"></span>plan</label>
+      <label class="cb"><input type="checkbox" id="l-localplan" checked><span class="sw" data-key="localplan" style="background:#4fd6ff"></span>local plan</label>
+      <label class="cb"><input type="checkbox" id="l-goal" checked><span class="sw" data-key="goal" style="background:#ff4040"></span>goal</label>
+      <label class="cb"><input type="checkbox" id="l-footprint" checked><span class="sw" data-key="footprint" style="background:#b98cff"></span>footprint</label>
+      <label class="cb"><input type="checkbox" id="l-stop" checked><span class="sw" data-key="stop" style="background:#ff4040"></span>stop polygon</label>
+      <label class="cb"><input type="checkbox" id="l-slowdown" checked><span class="sw" data-key="slowdown" style="background:#ffa040"></span>slowdown polygon</label>
+      <label class="cb"><input type="checkbox" id="l-particles"><span class="sw" data-key="particles" style="background:#8ab4ff"></span>AMCL particles</label>
+      <label class="cb" title="AprilTag landmarks: taught map poses (amber) and tags the camera sees right now (green)"><input type="checkbox" id="l-apriltags" checked><span class="sw" data-key="apriltags" style="background:#ffd166"></span>AprilTags</label>
+    </div>
+    <div class="row">
+      <label class="cb"><input type="checkbox" id="l-route" checked><span class="sw" data-key="route" style="background:#fabe17"></span>route</label>
+      <select id="routes"></select>
+    </div>
+    </div>
+    </section>
+    <h3>Cameras</h3>
+    <div class="row" id="cam-panel"></div>
+    <h3>Drive</h3>
+    <div class="row" id="drive-panel"></div>
+    <div id="sim-panel" hidden>
+      <h3>Simulation</h3>
+      <div class="row"><button id="cone-front">+ cone ahead</button><button id="cone-clear">clear cones</button><span class="muted" id="cone-info">no cones</span></div>
+      <div class="muted" style="font-size:11px">cones are seen by the lidars, the Velodyne and the cameras, marked in both costmaps, and trip the stop / slowdown zones — the sim robot stops like the collision monitor does</div>
+    </div>
+    <h3>View point</h3>
+    <div class="row">
+      <button id="cam-reset">reset</button><button id="cam-top">top-down</button><button id="cam-robot">look at robot</button>
+    </div>
+    <div class="row">
+      <label class="cb"><input type="checkbox" id="follow" checked> follow robot</label>
+    </div>
+    <div id="out" class="mono"></div>
+    <button id="t-halt" class="danger halt" title="STOP ALL MOTION: cancel the nav2 goal, zero velocity, stop the route runner and the VLA action / eval">HALT</button>
+  </div>
+  <div id="view">
+    <canvas id="c"></canvas>
+    <div id="status">starting…</div>
+    <div id="toolbar"><button id="t-orbit" class="on" title="left drag = orbit · right drag = pan · wheel = zoom">orbit</button><button id="t-goal" title="click the floor, drag for the heading, release = publish /goal_pose">nav goal</button><button id="t-init" title="click the floor, drag for the heading, release = publish /initialpose">initial pose</button><button id="t-cone" hidden title="simulation: click the floor to drop a cone; drag a cone to move it (any mode); shift-click a cone to remove it">cone</button></div>
+    <div id="hint">left drag = orbit · right drag = pan · wheel = zoom · tools top-right: click the floor and drag for the heading</div>
+  </div>
+</div>
+<script src="/static/cams.js"></script>
+<script src="/static/drivepad.js?v=3"></script>
+<script src="/static/swatches.js"></script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import URDFLoader from '/static/vendor/urdf/URDFLoader.js';
+
+const $ = (s) => document.querySelector(s);
+const on = (id) => $(id).checked;
+const out = (t) => { $("#out").textContent = t; };
+
+// ---------------------------------------------------------------- renderer / scene / camera
+const canvas = $("#c");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x15171c);
+const camera = new THREE.PerspectiveCamera(45, 1, 0.05, 600);
+camera.up.set(0, 0, 1);                                   // ROS: z up
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true; controls.dampingFactor = 0.12; controls.screenSpacePanning = false;
+controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+scene.add(new THREE.HemisphereLight(0xffffff, 0x3a3f55, 1.6));
+const sun = new THREE.DirectionalLight(0xffffff, 2.0); sun.position.set(6, -8, 14); scene.add(sun);
+
+const grid = new THREE.GridHelper(60, 60, 0xff69b4, 0xff69b4);           // hot pink
+grid.rotation.x = Math.PI / 2; grid.position.z = 0.03; grid.material.depthWrite = false; grid.material.transparent = true; grid.material.opacity = 0.7;
+scene.add(grid);
+const axes = new THREE.AxesHelper(1); axes.position.z = 0.035; scene.add(axes);
+
+function resize() {
+  const r = $("#view").getBoundingClientRect();
+  renderer.setSize(r.width, r.height, false);
+  camera.aspect = r.width / Math.max(1, r.height); camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe($("#view")); resize();
+
+// view like the Foxglove layout: perspective, distance 16 m, 28° from vertical, azimuth 122°
+function setView(target, distance = 16, phiDeg = 28, thetaDeg = 122) {
+  const phi = phiDeg * Math.PI / 180, th = thetaDeg * Math.PI / 180;
+  controls.target.copy(target);
+  camera.position.set(target.x + distance * Math.sin(phi) * Math.cos(th), target.y + distance * Math.sin(phi) * Math.sin(th), target.z + distance * Math.cos(phi));
+  controls.update();
+}
+
+// ---------------------------------------------------------------- state
+let MAP = null, pose = null, robotPos = new THREE.Vector3(), frames = {}, joints = {}, viewInit = false;
+let robotModel = null, urdfState = "loading", simBadge = "";
+const robotTarget = { pos: new THREE.Vector3(), quat: new THREE.Quaternion(), yaw: 0, has: false, t: 0 };   // eased in animate()
+const stats = { cloud: {}, tfHz: 0, tfN: 0, tfT: performance.now(), fps: 0, fN: 0, fT: performance.now() };
+
+// ---------------------------------------------------------------- map plane (+ costmaps)
+const texLoader = new THREE.TextureLoader();
+function groundPlane(meta, z, opacity) {
+  const W = meta.width * meta.resolution, H = meta.height * meta.resolution;
+  const g = new THREE.PlaneGeometry(W, H).translate(W / 2, H / 2, 0);     // corner at the origin
+  const m = new THREE.MeshBasicMaterial({ transparent: true, opacity, depthWrite: false });
+  const mesh = new THREE.Mesh(g, m);
+  mesh.position.set(meta.origin[0], meta.origin[1], z); mesh.rotation.z = meta.yaw || 0;
+  mesh.userData.size = [meta.width, meta.height];
+  return mesh;
+}
+function setTexture(mesh, url, cb) {
+  texLoader.load(url, (t) => {
+    t.magFilter = THREE.NearestFilter; t.minFilter = THREE.LinearFilter; t.colorSpace = THREE.SRGBColorSpace;
+    if (mesh.material.map) mesh.material.map.dispose();
+    mesh.material.map = t; mesh.material.needsUpdate = true; if (cb) cb();
+  });
+}
+let mapMesh = null;
+function setMapTexture() {
+  // the nav map, optionally inverted (dark free space, light walls) through a canvas filter
+  if (!mapMesh || !MAP) return;
+  const im = new Image();
+  im.onload = () => {
+    const c = document.createElement("canvas"); c.width = im.naturalWidth; c.height = im.naturalHeight;
+    const g = c.getContext("2d");
+    if ($("#l-invert").checked) g.filter = "invert(1)";
+    g.drawImage(im, 0, 0);
+    const t = new THREE.CanvasTexture(c);
+    t.magFilter = THREE.NearestFilter; t.minFilter = THREE.LinearFilter; t.colorSpace = THREE.SRGBColorSpace;
+    if (mapMesh.material.map) mapMesh.material.map.dispose();
+    mapMesh.material.map = t; mapMesh.material.needsUpdate = true;
+  };
+  im.src = MAP.image + (MAP.rev ? "?rev=" + MAP.rev : "");   // without this the browser re-serves the
+                                                             // cached PNG and a growing SLAM map never
+                                                             // reaches the texture
+}
+const costmaps = {};                                      // name -> {mesh, stamp}
+const CM_COLORS = { global: "", local: "" };              // "" = the server's default palette
+
+// ---------------------------------------------------------------- point clouds
+const LUT = Array.from({ length: 256 }, (_, i) => new THREE.Color().setHSL((1 - i / 255) * 0.667, 1, 0.5));
+const CLOUD_FLAT = { velodyne: new THREE.Color(0xe85cff), s1: new THREE.Color(0xf5d033), s2e: new THREE.Color(0x39d353) };
+const clouds = {};
+for (const name of ["velodyne", "s1", "s2e"]) {
+  const pts = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ size: 2, sizeAttenuation: false, vertexColors: true }));
+  pts.frustumCulled = false; pts.visible = false; scene.add(pts); clouds[name] = pts;
+}
+function quatMat(x, y, z, w) {
+  const xx = x * x, yy = y * y, zz = z * z, xy = x * y, xz = x * z, yz = y * z, wx = w * x, wy = w * y, wz = w * z;
+  return [1 - 2 * (yy + zz), 2 * (xy - wz), 2 * (xz + wy), 2 * (xy + wz), 1 - 2 * (xx + zz), 2 * (yz - wx), 2 * (xz - wy), 2 * (yz + wx), 1 - 2 * (xx + yy)];
+}
+async function fetchCloud(name) {
+  const r = await fetch(`/api/cloud.bin?name=${name}&max=${parseInt($("#cloudmax").value) || 20000}`);
+  if (!r.ok) { stats.cloud[name] = "no data"; return; }
+  const buf = await r.arrayBuffer();
+  const hl = new DataView(buf).getUint32(0, true);
+  const hdr = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 4, hl)));
+  const f = new Float32Array(buf, 4 + hl, hdr.n * 4);
+  if (!hdr.tf) { stats.cloud[name] = `no TF map->${hdr.frame}`; return; }
+  const [tx, ty, tz, qx, qy, qz, qw] = hdr.tf, R = quatMat(qx, qy, qz, qw);
+  const n = hdr.n, pos = new Float32Array(n * 3), col = new Float32Array(n * 3);
+  const mode = name === "velodyne" ? $("#cloudcolor").value : "flat", flat = CLOUD_FLAT[name];
+  const z0 = -0.1, z1 = 2.2;
+  for (let i = 0; i < n; i++) {
+    const x = f[i * 4], y = f[i * 4 + 1], z = f[i * 4 + 2], it = f[i * 4 + 3];
+    const wx = tx + R[0] * x + R[1] * y + R[2] * z, wy = ty + R[3] * x + R[4] * y + R[5] * z, wz = tz + R[6] * x + R[7] * y + R[8] * z;
+    pos[i * 3] = wx; pos[i * 3 + 1] = wy; pos[i * 3 + 2] = name === "velodyne" ? wz : wz + 0.02;
+    let c = flat;
+    if (mode === "height") c = LUT[Math.max(0, Math.min(255, Math.round((wz - z0) / (z1 - z0) * 255)))];
+    else if (mode === "intensity") c = LUT[Math.max(0, Math.min(255, Math.round(it)))];
+    col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(pos, 3)); g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  const old = clouds[name].geometry; clouds[name].geometry = g; old.dispose();
+  stats.cloud[name] = `${n} pts`;
+}
+
+// ---------------------------------------------------------------- robot model + frames
+const robotRing = new THREE.Mesh(new THREE.RingGeometry(0.28, 0.33, 40), new THREE.MeshBasicMaterial({ color: 0x2ea043, side: THREE.DoubleSide }));
+robotRing.position.z = 0.04; scene.add(robotRing);
+const robotHeading = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(), 0.5, 0x2ea043, 0.15, 0.1); scene.add(robotHeading);
+const urdfLoader = new URDFLoader();
+urdfLoader.packages = (pkg) => "/mesh/" + pkg;            // package://X/… -> served from X's share directory
+urdfLoader.parseCollision = false;
+// the URDF references the same STL many times (the hand: ~40 files, 162 visuals): load each file once
+// and hand out clones, instead of 162 requests on the first page load
+const meshCache = new Map();
+const defaultMeshLoader = urdfLoader.loadMeshCb;
+urdfLoader.loadMeshCb = (path, manager, done) => {
+  if (!meshCache.has(path)) meshCache.set(path, new Promise((res, rej) => defaultMeshLoader(path, manager, (obj, err) => (err || !obj) ? rej(err || new Error("no mesh")) : res(obj))));
+  meshCache.get(path).then((obj) => done(obj.clone()), (err) => done(null, err));
+};
+function loadUrdf() {
+  urdfLoader.load("/api/urdf", (robot) => {
+    robot.traverse((c) => { if (c.isMesh) { c.castShadow = false; if (c.material && c.material.color && c.material.color.r > 0.95 && c.material.color.g > 0.95 && c.material.color.b > 0.95) c.material.color.setHex(0xb8bcc8); } });
+    robotModel = robot; scene.add(robot); urdfState = `URDF: ${Object.keys(robot.links).length} links, ${Object.keys(robot.joints).length} joints`;
+  }, undefined, (e) => { urdfState = "URDF not available yet (retrying)"; setTimeout(loadUrdf, 5000); });
+}
+loadUrdf();
+const frameAxes = new THREE.Group(); frameAxes.visible = false; scene.add(frameAxes);
+const frameObjs = {};
+function updateFrames() {
+  for (const [name, f] of Object.entries(frames)) {
+    let o = frameObjs[name];
+    if (!o) { o = new THREE.AxesHelper(0.2); frameObjs[name] = o; frameAxes.add(o); }
+    o.position.set(f[0], f[1], f[2]); o.quaternion.set(f[3], f[4], f[5], f[6]);
+  }
+}
+
+// ---------------------------------------------------------------- navigation overlays
+function lineObj(color, width) { const l = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color })); l.frustumCulled = false; scene.add(l); return l; }
+const planLine = lineObj(0x39d353), localPlanLine = lineObj(0x4fd6ff), routeLine = lineObj(0xfabe17);
+const polyLines = {}; const POLY_COLORS = { footprint: 0xb98cff, stop: 0xff4040, slowdown: 0xffa040 };
+const goalArrow = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(), 1.2, 0xff4040, 0.4, 0.24); goalArrow.visible = false; scene.add(goalArrow);
+const particles = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x8ab4ff, transparent: true, opacity: 0.7 })); particles.frustumCulled = false; scene.add(particles);
+const routePts = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ size: 9, sizeAttenuation: false, vertexColors: true })); routePts.frustumCulled = false; scene.add(routePts);
+function setLine(line, pts, z) {
+  if (!pts || pts.length < 2) { line.visible = false; return; }
+  line.geometry.dispose(); line.geometry = new THREE.BufferGeometry().setFromPoints(pts.map((p) => new THREE.Vector3(p[0], p[1], z + (p[2] || 0))));
+  line.visible = true;
+}
+const polyOn = (name) => { const e = $(`#l-${name}`); return e ? e.checked : true; };   // one checkbox per polygon
+const polyFills = {}; let polyAlert = "", navStatus = "";
+function setLoop(name, pts, z, triggered) {
+  let l = polyLines[name], f = polyFills[name];
+  if (!l) {
+    l = new THREE.LineLoop(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: POLY_COLORS[name] || 0xffffff })); l.frustumCulled = false; scene.add(l); polyLines[name] = l;
+    // the fill shows while something is inside the polygon (the collision monitor would be acting)
+    f = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ color: POLY_COLORS[name] || 0xffffff, transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false })); f.frustumCulled = false; scene.add(f); polyFills[name] = f;
+  }
+  l.userData.has = !!(pts && pts.length >= 3); l.userData.triggered = !!triggered;
+  if (!l.userData.has) { l.visible = false; f.visible = false; return; }
+  l.geometry.dispose(); l.geometry = new THREE.BufferGeometry().setFromPoints(pts.map((p) => new THREE.Vector3(p[0], p[1], z))); l.visible = polyOn(name);
+  if (triggered) { f.geometry.dispose(); f.geometry = new THREE.ShapeGeometry(new THREE.Shape(pts.map((p) => new THREE.Vector2(p[0], p[1])))).translate(0, 0, z - 0.005); }
+  f.visible = !!triggered && polyOn(name);
+}
+const isMarked = (w) => !/^(wp_|x_|start$|here_)/.test(w.name) || (w.post_actions && w.post_actions.length);
+async function loadRoute(name) {
+  if (!name) { routeLine.visible = false; routePts.visible = false; return; }
+  const d = await fetch(`/api/route?name=${encodeURIComponent(name)}`).then((r) => r.json());
+  const W = d.waypoints || [];
+  setLine(routeLine, W.map((w) => [w.x, w.y, 0]), 0.05);
+  const pos = new Float32Array(W.length * 3), col = new Float32Array(W.length * 3);
+  W.forEach((w, i) => { pos[i * 3] = w.x; pos[i * 3 + 1] = w.y; pos[i * 3 + 2] = 0.06; const c = new THREE.Color(isMarked(w) ? 0xe04848 : 0x4f8cff); col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; });
+  routePts.geometry.dispose(); const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(pos, 3)); g.setAttribute("color", new THREE.BufferAttribute(col, 3)); routePts.geometry = g;
+  routePts.visible = W.length > 0;
+}
+
+// ---------------------------------------------------------------- AprilTag landmarks (/api/apriltags)
+// Each tag is a square in the map frame with the tag's id on it: taught poses (the relocalizer's
+// file) in amber, tags the detector sees right now (TF tag_<id>) in green and at their live pose.
+const tagsGroup = new THREE.Group(); scene.add(tagsGroup);
+const tagObjs = {};                                      // id -> {mesh, edge, label, seen}
+const TAG_COLORS = { taught: 0xffd166, seen: 0x39d353 };
+function tagTexture(id, seen) {
+  const c = document.createElement("canvas"); c.width = c.height = 128; const g = c.getContext("2d");
+  g.fillStyle = "#fff"; g.fillRect(0, 0, 128, 128);
+  g.fillStyle = "#000"; g.fillRect(12, 12, 104, 104);
+  g.fillStyle = "#fff"; g.fillRect(28, 28, 72, 72);
+  g.fillStyle = seen ? "#1f8f3a" : "#000"; g.font = "bold 44px sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(String(id), 64, 66);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+function textSprite(text, color) {
+  const c = document.createElement("canvas"); c.width = 256; c.height = 64; const g = c.getContext("2d");
+  g.font = "bold 36px sans-serif"; g.textAlign = "center"; g.textBaseline = "middle";
+  g.lineWidth = 6; g.strokeStyle = "rgba(0,0,0,.8)"; g.strokeText(text, 128, 32); g.fillStyle = color; g.fillText(text, 128, 32);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthTest: false, transparent: true })); sp.scale.set(0.8, 0.2, 1); return sp;
+}
+function tagObject(id, size, seen) {
+  const grp = new THREE.Group();
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(size, size), new THREE.MeshBasicMaterial({ map: tagTexture(id, seen), side: THREE.DoubleSide }));
+  const edge = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(size * 1.25, size * 1.25)), new THREE.LineBasicMaterial({ color: seen ? TAG_COLORS.seen : TAG_COLORS.taught, linewidth: 2 }));
+  const label = textSprite(`tag ${id}`, seen ? "#9fe3a6" : "#ffd166"); label.position.set(0.05, -size * 0.9, 0);
+  // This detector's tag frame (measured on tag_3, 2026-11-01): X = the tag's normal, out of the face toward
+  // the camera; Y = DOWN the paper; Z = along the paper. So the face lies in the frame's Y-Z plane. Map the
+  // plane's local axes (x right, y up, z toward the viewer) onto (frame Z, frame -Y, frame X).
+  const faceRot = new THREE.Matrix4().set(0, 0, 1, 0,  0, -1, 0, 0,  1, 0, 0, 0,  0, 0, 0, 1);
+  mesh.setRotationFromMatrix(faceRot); edge.setRotationFromMatrix(faceRot);
+  grp.add(mesh, edge, label);
+  return { grp, mesh, edge, label, seen };
+}
+async function pollTags() {
+  if (!on("#l-apriltags")) return;
+  let d; try { d = await fetch("/api/apriltags").then((r) => r.json()); } catch (e) { return; }
+  const ids = new Set();
+  const place = (id, tf, seen) => {
+    ids.add(id);
+    const size = (d.sizes && d.sizes[id]) || d.size || 0.15;
+    let o = tagObjs[id];
+    if (o && o.seen !== seen) { tagsGroup.remove(o.grp); o = null; }
+    if (!o) { o = tagObject(id, size, seen); tagObjs[id] = o; tagsGroup.add(o.grp); }
+    o.grp.position.set(tf[0], tf[1], tf[2]); o.grp.quaternion.set(tf[3], tf[4], tf[5], tf[6]);
+  };
+  for (const [id, tf] of Object.entries(d.taught || {})) place(id, tf, false);
+  for (const [id, tf] of Object.entries(d.seen || {})) place(id, tf, true);        // live pose wins
+  for (const id of Object.keys(tagObjs)) if (!ids.has(id)) { tagsGroup.remove(tagObjs[id].grp); delete tagObjs[id]; }
+  const n = Object.keys(d.taught || {}).length, m = Object.keys(d.seen || {}).length;
+  pollTags.info = `${n} taught${m ? `, ${m} in view` : ""}`;
+}
+
+// ---------------------------------------------------------------- simulated obstacles (cones)
+const cones = new THREE.Group(); scene.add(cones);
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+const coneMeshes = {};                                   // id -> mesh
+const coneMat = new THREE.MeshStandardMaterial({ color: 0xff6a00, roughness: 0.7 });
+const coneBandMat = new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.8 });
+let obstacles = [], coneDrag = null, lastCone = null, isSim = false;
+function coneMesh(o) {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.ConeGeometry(o.r, o.h, 24), coneMat); body.rotation.x = Math.PI / 2; body.position.z = o.h / 2; body.userData.coneId = o.id; g.add(body);
+  const band = new THREE.Mesh(new THREE.ConeGeometry(o.r * 0.62, o.h * 0.14, 24), coneBandMat); band.rotation.x = Math.PI / 2; band.position.z = o.h * 0.45; band.userData.coneId = o.id; g.add(band);
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(o.r * 1.25, o.r * 1.25, 0.02, 4), coneMat); base.rotation.x = Math.PI / 2; base.rotation.y = Math.PI / 4; base.position.z = 0.01; base.userData.coneId = o.id; g.add(base);
+  g.userData.coneId = o.id; return g;
+}
+function syncCones(list) {
+  obstacles = list || [];
+  const seen = new Set();
+  for (const o of obstacles) {
+    seen.add(o.id);
+    let m = coneMeshes[o.id];
+    if (!m) { m = coneMesh(o); coneMeshes[o.id] = m; cones.add(m); }
+    if (!(coneDrag && coneDrag.id === o.id)) m.position.set(o.x, o.y, 0);
+  }
+  for (const id of Object.keys(coneMeshes)) if (!seen.has(+id)) { cones.remove(coneMeshes[id]); delete coneMeshes[id]; }
+  $("#cone-info").textContent = obstacles.length ? `${obstacles.length} cone${obstacles.length > 1 ? "s" : ""}` : "no cones";
+}
+async function obstacleCmd(body) {
+  try { const r = await fetch("/api/obstacles", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json()); if (r.error) out(r.error); }
+  catch (e) { out(`obstacle: ${e}`); }
+}
+function coneUnderPointer(e) {
+  const r = canvas.getBoundingClientRect();
+  ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const hit = ray.intersectObjects(cones.children, true)[0];
+  return hit ? hit.object.userData.coneId : null;
+}
+$("#cone-front").onclick = () => { if (pose) obstacleCmd({ action: "add", x: +(pose.x + 1.2 * Math.cos(pose.yaw)).toFixed(3), y: +(pose.y + 1.2 * Math.sin(pose.yaw)).toFixed(3) }); };
+$("#cone-clear").onclick = () => obstacleCmd({ action: "clear" });
+window.addEventListener("keydown", (e) => { if ((e.key === "Delete" || e.key === "Backspace") && lastCone != null && document.activeElement.tagName !== "INPUT") { obstacleCmd({ action: "remove", id: lastCone }); lastCone = null; } });
+
+// ---------------------------------------------------------------- click tools (nav goal / initial pose)
+let tool = "orbit", dragStart = null, halted = false;
+async function haltClick() {
+  const resume = halted;
+  try {
+    const r = await fetch("/api/halt", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ resume }) }).then((r) => r.json());
+    out(r.error ? `halt failed: ${r.error}` : (resume ? "resumed" : "HALTED: ") + (r.did || []).join(" · "));
+  } catch (e) { out(`halt failed: ${e}`); }
+}
+$("#t-halt").onclick = haltClick;
+const floor = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+// the arrow you drag while placing a nav goal / initial pose: big and bright, with a disc at its foot
+const preview = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(), 1.8, 0xffffff, 0.6, 0.36); preview.visible = false; scene.add(preview);
+preview.line.material.linewidth = 3;
+const previewDisc = new THREE.Mesh(new THREE.RingGeometry(0.22, 0.32, 40), new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.9 })); previewDisc.visible = false; scene.add(previewDisc);
+function floorPoint(e) {
+  const r = canvas.getBoundingClientRect();
+  ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera); const p = new THREE.Vector3();
+  return ray.ray.intersectPlane(floor, p) ? p : null;
+}
+function setTool(t) {
+  tool = t; controls.enabled = t === "orbit"; dragStart = null; preview.visible = false; previewDisc.visible = false;
+  for (const id of ["orbit", "goal", "init", "cone"]) $(`#t-${id}`).classList.toggle("on", id === t);
+  canvas.style.cursor = t === "orbit" ? "" : "crosshair";
+  $("#hint").textContent = t === "orbit" ? "left drag = orbit · right drag = pan · wheel = zoom · tools top-right: click the floor and drag for the heading" + (isSim ? " · drag a cone to move it, shift-click to remove" : "")
+    : t === "cone" ? "CONE: click the floor to drop a cone · drag a cone to move it · shift-click a cone to remove it · Esc leaves the tool"
+    : `${t === "goal" ? "NAV GOAL" : "INITIAL POSE"}: click the floor, drag for the heading, release to publish (${t === "goal" ? "/goal_pose — the robot will drive there" : "/initialpose"}); Esc cancels`;
+}
+$("#t-orbit").onclick = () => setTool("orbit"); $("#t-goal").onclick = () => setTool("goal"); $("#t-init").onclick = () => setTool("init"); $("#t-cone").onclick = () => setTool("cone");
+window.addEventListener("keydown", (e) => { if (e.key === "Escape") setTool("orbit"); });
+canvas.addEventListener("pointerdown", (e) => {
+  if (e.button !== 0) return;
+  if (isSim) {                                                    // cones first: draggable in any mode
+    const id = coneUnderPointer(e);
+    if (id != null) {
+      if (e.shiftKey) { obstacleCmd({ action: "remove", id }); return; }
+      const p = floorPoint(e); if (!p) return;
+      const m = coneMeshes[id];
+      coneDrag = { id, dx: m.position.x - p.x, dy: m.position.y - p.y, sent: 0 }; lastCone = id;
+      controls.enabled = false; canvas.setPointerCapture(e.pointerId); return;
+    }
+    if (tool === "cone") { const p = floorPoint(e); if (p) obstacleCmd({ action: "add", x: +p.x.toFixed(3), y: +p.y.toFixed(3) }); return; }
+  }
+  if (tool === "orbit") return;
+  const p = floorPoint(e); if (!p) return;
+  dragStart = p; preview.position.set(p.x, p.y, 0.08); preview.setDirection(new THREE.Vector3(1, 0, 0)); preview.visible = true;
+  previewDisc.position.set(p.x, p.y, 0.07); previewDisc.visible = true; canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener("pointermove", (e) => {
+  if (coneDrag) {
+    const p = floorPoint(e); if (!p) return;
+    const m = coneMeshes[coneDrag.id]; if (!m) { coneDrag = null; return; }
+    m.position.set(p.x + coneDrag.dx, p.y + coneDrag.dy, 0);
+    const now = performance.now();
+    if (now - coneDrag.sent > 100) { coneDrag.sent = now; obstacleCmd({ action: "move", id: coneDrag.id, x: +m.position.x.toFixed(3), y: +m.position.y.toFixed(3) }); }
+    return;
+  }
+  if (!dragStart) return;
+  const p = floorPoint(e); if (!p) return;
+  const dx = p.x - dragStart.x, dy = p.y - dragStart.y;
+  if (Math.hypot(dx, dy) > 0.05) preview.setDirection(new THREE.Vector3(dx, dy, 0).normalize());
+});
+canvas.addEventListener("pointerup", async (e) => {
+  if (coneDrag) {
+    const m = coneMeshes[coneDrag.id];
+    if (m) obstacleCmd({ action: "move", id: coneDrag.id, x: +m.position.x.toFixed(3), y: +m.position.y.toFixed(3) });
+    coneDrag = null; controls.enabled = tool === "orbit"; return;
+  }
+  if (!dragStart) return;
+  const p = floorPoint(e) || dragStart, dx = p.x - dragStart.x, dy = p.y - dragStart.y;
+  const yaw = Math.hypot(dx, dy) > 0.05 ? Math.atan2(dy, dx) : 0;
+  const body = { type: tool === "goal" ? "goal" : "initialpose", x: +dragStart.x.toFixed(3), y: +dragStart.y.toFixed(3), yaw: +yaw.toFixed(4) };
+  setTool("orbit");
+  try { const r = await fetch("/api/publish", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json());
+    out(r.error ? `publish failed: ${r.error}` : `published ${body.type}: (${body.x}, ${body.y}) ${(yaw * 180 / Math.PI).toFixed(0)}°`); } catch (err) { out(`publish failed: ${err}`); }
+});
+
+// ---------------------------------------------------------------- polling (each loop survives its own errors)
+const onScreen = () => window.innerWidth > 0 && window.innerHeight > 0;   // false inside a hidden manager tab
+async function loop(fn, ms) {
+  if (!onScreen()) { setTimeout(() => loop(fn, ms), 1000); return; }
+  try { await fn(); } catch (e) { console.warn(fn.name, e); }
+  setTimeout(() => loop(fn, ms), typeof ms === "function" ? ms() : ms);
+}
+
+async function pollTf() {
+  const d = await fetch("/api/tf").then((r) => r.json());
+  frames = d.frames || {}; joints = d.joints || {}; simBadge = (d.sim ? "SIM · " : "") + (d.mapping ? "MAPPING · " : "");
+  if (MAP && d.map_rev && d.map_rev !== MAP.rev && !pollTf.reloading) {        // another map activated, or SLAM's live map
+    pollTf.reloading = true;
+    fetch("/api/map").then((r) => r.json()).then((m) => { MAP = m; MAP.image = "/map.png?rev=" + m.rev; if (mapMesh) { scene.remove(mapMesh); mapMesh.geometry.dispose(); }
+      mapMesh = groundPlane(MAP, 0, 0.95); scene.add(mapMesh); setMapTexture(); }).finally(() => { pollTf.reloading = false; });
+  }
+  if (d.sim !== isSim) { isSim = !!d.sim; $("#t-cone").hidden = !isSim; $("#sim-panel").hidden = !isSim; }
+  stats.tfN++; const now = performance.now(); if (now - stats.tfT > 2000) { stats.tfHz = stats.tfN / ((now - stats.tfT) / 1000); stats.tfN = 0; stats.tfT = now; }
+  const bf = frames.base_footprint || frames.base_link;
+  if (bf) {
+    const yaw = Math.atan2(2 * (bf[6] * bf[5] + bf[3] * bf[4]), 1 - 2 * (bf[4] * bf[4] + bf[5] * bf[5]));
+    pose = { x: bf[0], y: bf[1], yaw };
+    const root = (robotModel && frames[robotModel.urdfName]) || frames.base_link || bf;
+    robotTarget.pos.set(root[0], root[1], root[2]); robotTarget.quat.set(root[3], root[4], root[5], root[6]); robotTarget.yaw = yaw;
+    if (!robotTarget.has || !viewInit) {                              // first fix (or back after a loss): snap
+      robotPos.set(bf[0], bf[1], bf[2]); if (robotModel) { robotModel.position.copy(robotTarget.pos); robotModel.quaternion.copy(robotTarget.quat); }
+      if (!viewInit) { setView(robotPos.clone()); viewInit = true; }
+    }
+    robotTarget.has = true; robotTarget.t = performance.now();
+  } else { pose = null; robotTarget.has = false; }
+  if (robotModel) for (const [n, v] of Object.entries(joints)) if (robotModel.joints[n]) robotModel.setJointValue(n, v);
+  if (on("#l-frames")) updateFrames();
+  if (d.published && d.published.t > (pollTf.lastPub || 0)) { pollTf.lastPub = d.published.t; }
+  halted = !!d.halted; const hb = $("#t-halt"); hb.textContent = halted ? "RESUME" : "HALT"; hb.classList.toggle("halted", halted);
+}
+async function pollClouds() {
+  for (const name of ["velodyne", "s1", "s2e"]) if (on(`#l-${name}`)) await fetchCloud(name);
+}
+async function pollNav() {
+  const d = await fetch(`/api/nav${on("#l-particles") ? "?particles=1" : ""}`).then((r) => r.json());
+  setLine(planLine, d.plan && d.plan.pts, 0.05); setLine(localPlanLine, d.local_plan && d.local_plan.pts, 0.06);
+  if (d.goal) { goalArrow.position.set(d.goal.x, d.goal.y, 0.05); goalArrow.setDirection(new THREE.Vector3(Math.cos(d.goal.yaw), Math.sin(d.goal.yaw), 0)); goalArrow.visible = on("#l-goal"); }
+  const alerts = [];
+  for (const [name, pg] of Object.entries(d.polygons || {})) { setLoop(name, pg.pts, 0.07, pg.triggered); if (pg.triggered) alerts.push(`${name.toUpperCase()} zone: ${pg.inside} pts`); }
+  polyAlert = alerts.join(" · ");
+  if (d.obstacles) syncCones(d.obstacles);
+  navStatus = d.status && d.status !== "following" ? `nav: ${d.status}` : "";
+  if (d.particles) {
+    const n = d.particles.length, pos = new Float32Array(n * 6);
+    d.particles.forEach((p, i) => { pos[i * 6] = p[0]; pos[i * 6 + 1] = p[1]; pos[i * 6 + 2] = 0.04; pos[i * 6 + 3] = p[0] + 0.12 * Math.cos(p[2]); pos[i * 6 + 4] = p[1] + 0.12 * Math.sin(p[2]); pos[i * 6 + 5] = 0.04; });
+    particles.geometry.dispose(); const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(pos, 3)); particles.geometry = g; particles.visible = true;
+  } else particles.visible = false;
+}
+async function pollCostmaps() {
+  for (const name of ["global", "local"]) {
+    if (!on(`#l-${name}`)) { if (costmaps[name]) costmaps[name].mesh.visible = false; continue; }
+    const meta = await fetch(`/api/costmap?name=${name}${CM_COLORS[name] ? "&color=" + CM_COLORS[name].replace("#", "") : ""}`).then((r) => r.json());
+    if (meta.error) continue;
+    let cm = costmaps[name];
+    if (!cm) { cm = { mesh: groundPlane(meta, name === "global" ? 0.01 : 0.02, 0.15), stamp: null }; scene.add(cm.mesh); costmaps[name] = cm; }
+    cm.mesh.position.set(meta.origin[0], meta.origin[1], cm.mesh.position.z); cm.mesh.rotation.z = meta.yaw || 0;
+    if (cm.mesh.userData.size[0] !== meta.width || cm.mesh.userData.size[1] !== meta.height) {   // size changed: rebuild
+      scene.remove(cm.mesh); cm.mesh.geometry.dispose(); cm.mesh = groundPlane(meta, cm.mesh.position.z, 0.4); scene.add(cm.mesh); cm.stamp = null;
+    }
+    cm.mesh.material.opacity = Math.max(0.05, Math.min(1, (parseFloat($("#cmalpha").value) || 15) / 100));
+    if (cm.stamp !== meta.stamp) { cm.stamp = meta.stamp; setTexture(cm.mesh, meta.image, () => { cm.mesh.visible = true; }); }
+    cm.mesh.visible = !!cm.mesh.material.map;
+  }
+}
+async function loadRoutes() {
+  const d = await fetch("/api/routes").then((r) => r.json());
+  const s = $("#routes"); s.innerHTML = `<option value="">(none)</option>` + d.routes.map((n) => `<option>${n}</option>`).join("");
+  await loadRoute(s.value);                                  // default (none): pick a route from the list to show it
+}
+$("#routes").onchange = () => loadRoute($("#routes").value);
+// the Scene / Sensors / Navigation sections fold on a click of their heading (Enter / Space too); folds are remembered per browser
+{ let closed = []; try { closed = JSON.parse(localStorage.getItem("map3d.closed") || "[]"); } catch (e) { /* no storage */ }
+  for (const sec of document.querySelectorAll("#side .acc")) {
+    const head = sec.querySelector(".acc-head"), key = sec.dataset.acc;
+    const set = (open) => { sec.classList.toggle("open", open); head.setAttribute("aria-expanded", String(open)); };
+    set(!closed.includes(key));
+    const toggle = () => {
+      set(!sec.classList.contains("open"));
+      closed = [...document.querySelectorAll("#side .acc:not(.open)")].map((x) => x.dataset.acc);
+      try { localStorage.setItem("map3d.closed", JSON.stringify(closed)); } catch (e) { /* ignore */ }
+    };
+    head.onclick = toggle; head.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } };
+  } }
+// the Velodyne settings fold stays as you left it (per browser)
+{ const d = $("#velodyne-settings"); try { d.open = localStorage.getItem("map3d.velodyneSettings") === "open"; } catch (e) { /* no storage */ }
+  d.addEventListener("toggle", () => { try { localStorage.setItem("map3d.velodyneSettings", d.open ? "open" : "closed"); } catch (e) { /* ignore */ } }); }
+for (const id of ["#l-map", "#l-grid", "#l-robot", "#l-frames", "#l-plan", "#l-localplan", "#l-goal", "#l-footprint", "#l-stop", "#l-slowdown", "#l-particles", "#l-apriltags", "#l-route", "#l-velodyne", "#l-s1", "#l-s2e"]) $(id).onchange = applyVisibility;
+$("#l-invert").onchange = setMapTexture;
+$("#ptsize").onchange = () => { for (const p of Object.values(clouds)) p.material.size = parseFloat($("#ptsize").value) || 2; };
+$("#cam-reset").onclick = () => setView(pose ? robotPos.clone() : new THREE.Vector3(MAP ? MAP.origin[0] + MAP.width * MAP.resolution / 2 : 0, MAP ? MAP.origin[1] + MAP.height * MAP.resolution / 2 : 0, 0));
+$("#cam-top").onclick = () => setView(controls.target.clone(), camera.position.distanceTo(controls.target), 0.01, 90);
+$("#cam-robot").onclick = () => { if (pose) setView(robotPos.clone(), 8, 35, pose.yaw * 180 / Math.PI + 180); };
+function applyVisibility() {
+  if (mapMesh) mapMesh.visible = on("#l-map");
+  grid.visible = on("#l-grid"); axes.visible = on("#l-grid");
+  if (robotModel) robotModel.visible = on("#l-robot");
+  robotRing.visible = robotHeading.visible = !(robotModel && on("#l-robot"));
+  frameAxes.visible = on("#l-frames");
+  tagsGroup.visible = on("#l-apriltags"); if (tagsGroup.visible) pollTags();
+  planLine.visible = planLine.visible && on("#l-plan"); localPlanLine.visible = localPlanLine.visible && on("#l-localplan");
+  goalArrow.visible = goalArrow.visible && on("#l-goal");
+  for (const [n, l] of Object.entries(polyLines)) { l.visible = !!l.userData.has && polyOn(n); if (polyFills[n]) polyFills[n].visible = !!l.userData.has && !!l.userData.triggered && polyOn(n); }
+  routeLine.visible = routePts.visible = on("#l-route") && routePts.geometry.attributes.position && routePts.geometry.attributes.position.count > 0;
+  for (const [n, p] of Object.entries(clouds)) p.visible = on(`#l-${n}`);
+}
+
+// ---------------------------------------------------------------- layer colours (hold a swatch)
+function applyColor(k, hex) {
+  const c = new THREE.Color(hex);
+  if (k === "velodyne" || k === "s1" || k === "s2e") { CLOUD_FLAT[k] = c; if (k === "velodyne" && $("#cloudcolor").value !== "flat") $("#cloudcolor").value = "flat"; }
+  else if (k === "plan") planLine.material.color.copy(c);
+  else if (k === "localplan") localPlanLine.material.color.copy(c);
+  else if (k === "goal") goalArrow.setColor(c);
+  else if (k === "footprint" || k === "stop" || k === "slowdown") { POLY_COLORS[k] = c.getHex(); if (polyLines[k]) polyLines[k].material.color.copy(c); if (polyFills[k]) polyFills[k].material.color.copy(c); }
+  else if (k === "particles") particles.material.color.copy(c);
+  else if (k === "apriltags") { TAG_COLORS.taught = c.getHex(); for (const o of Object.values(tagObjs)) if (!o.seen) o.edge.material.color.copy(c); }
+  else if (k === "route") routeLine.material.color.copy(c);
+  else if (k === "cm_global" || k === "cm_local") { const n = k.slice(3); CM_COLORS[n] = hex; if (costmaps[n]) costmaps[n].stamp = null; }
+}
+
+// ---------------------------------------------------------------- render loop + status
+let lastFrameT = performance.now();
+function animate() {
+  requestAnimationFrame(animate);
+  const nowT = performance.now(), dt = Math.min(0.1, (nowT - lastFrameT) / 1000); lastFrameT = nowT;
+  if (robotTarget.has) {                                                // ease towards the latest TF (10 Hz) at 60 fps
+    const k = 1 - Math.exp(-dt / 0.08);
+    const prev = robotPos.clone();
+    robotPos.lerp(new THREE.Vector3(robotTarget.pos.x, robotTarget.pos.y, 0), k);
+    if (robotModel) { robotModel.position.lerp(robotTarget.pos, k); robotModel.quaternion.slerp(robotTarget.quat, k); }
+    robotRing.position.set(robotPos.x, robotPos.y, 0.04); robotHeading.position.set(robotPos.x, robotPos.y, 0.05);
+    robotHeading.setDirection(new THREE.Vector3(Math.cos(robotTarget.yaw), Math.sin(robotTarget.yaw), 0));
+    if (on("#follow")) { const d_ = robotPos.clone().sub(prev); controls.target.add(d_); camera.position.add(d_); }
+  }
+  robotRing.visible = robotHeading.visible = robotTarget.has && !(robotModel && on("#l-robot"));
+  if (robotModel) robotModel.visible = robotTarget.has && on("#l-robot");   // no live TF: no robot drawn (it was drawn where it used to be)
+  controls.update(); renderer.render(scene, camera);
+  stats.fN++; const now = performance.now(); if (now - stats.fT > 1000) { stats.fps = stats.fN; stats.fN = 0; stats.fT = now; }
+  $("#status").textContent = `${simBadge}${pose ? `robot (${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}) ${(pose.yaw * 180 / Math.PI).toFixed(0)}°` : "no robot pose"} · ` +
+    Object.entries(stats.cloud).filter(([n]) => on(`#l-${n}`)).map(([n, v]) => `${n}: ${v}`).join(" · ") + ` · ${urdfState} · tf ${stats.tfHz.toFixed(0)} Hz · ${stats.fps} fps` + (polyAlert ? ` · ⚠ ${polyAlert}` : "") + (navStatus ? ` · ${navStatus}` : "");
+}
+
+(async () => {
+  MAP = await fetch("/api/map").then((r) => r.json());
+  mapMesh = groundPlane(MAP, 0, 0.95); scene.add(mapMesh); setMapTexture();
+  setView(new THREE.Vector3(MAP.origin[0] + MAP.width * MAP.resolution / 2, MAP.origin[1] + MAP.height * MAP.resolution / 2, 0), 28, 30, 122);
+  loadRoutes().catch(() => {});
+  loop(pollTf, 66); loop(pollClouds, () => 1000 / Math.max(1, parseFloat($("#cloudhz").value) || 4)); loop(pollNav, 500); loop(pollCostmaps, 1000); loop(pollTags, 1000);
+  applyVisibility(); animate();
+  if (window.initCams) initCams({ view: $("#view"), panel: $("#cam-panel"), top: 44 });   // below the tool buttons
+  if (window.initDrivePad) initDrivePad({ view: $("#view"), panel: $("#drive-panel") });
+  if (window.initSwatches) initSwatches({ page: "3d", apply: applyColor });
+})();
+</script>
+</body>
+</html>

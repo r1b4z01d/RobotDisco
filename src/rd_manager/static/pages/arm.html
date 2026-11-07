@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Robot Disco — arm</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body { font: 14px/1.4 system-ui, sans-serif; margin: 0; background: #14161a; color: #e6e6e6; }
+  main { padding: 16px; max-width: 1100px; }
+  h2 { margin: 0 0 8px; font-size: 16px; color: #9ad; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 6px 0; }
+  .card { background: #1d2026; border: 1px solid #2a2e36; border-radius: 8px; padding: 12px; margin: 10px 0; }
+  button { background: #2b3340; color: #eee; border: 1px solid #3a4454; border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+  button.primary { background: #2f6fed; border-color: #2f6fed; } button.danger { background: #a3302e; border-color: #a3302e; }
+  button:disabled { opacity: .5; cursor: default; }
+  input, select { background: #0f1115; color: #eee; border: 1px solid #3a4454; border-radius: 6px; padding: 6px 8px; }
+  input[type=range] { width: 160px; }
+  .mono { font-family: ui-monospace, monospace; font-size: 12px; } .muted { color: #8a94a6; } .ok { color: #7bd88f; } .warn { color: #f0b35c; }
+  pre { background: #0f1115; padding: 8px; border-radius: 6px; max-height: 160px; overflow: auto; }
+  table { border-collapse: collapse; } td { padding: 2px 10px 2px 0; }
+</style></head>
+<body><main>
+<h2>Arm, hand and policies</h2>
+<div class="card">
+  <div class="row"><b>UR5e</b> <span id="arm-status" class="mono muted">…</span></div>
+  <div class="row">
+    <button onclick="power(1)" class="primary">Power on</button><button onclick="power(3)">Unlock protective stop</button>
+    <button onclick="power(2)" class="danger">Power off</button><button onclick="power(0)">Status</button>
+    <button onclick="post('/api/arm/home', {})">Go home</button><button onclick="post('/api/arm/wave', {})">Wave</button>
+    <label><input type="checkbox" id="stream" onchange="post('/api/arm/stream', {on: this.checked})"> streaming (forward position, 50 Hz)</label>
+    <span id="stream-state" class="mono muted"></span>
+  </div>
+  <table id="joints" class="mono muted"></table>
+</div>
+<div class="card">
+  <div class="row"><b>Hand</b> <span id="hand-state" class="mono muted"></span>
+    <button onclick="post('/api/hand/open', {})">Open</button><button onclick="post('/api/hand/close', {})">Close</button></div>
+  <div class="row" id="fingers"></div>
+</div>
+<div class="card">
+  <div class="row"><b>Policy</b></div>
+  <div class="row">
+    <input id="task" placeholder="task, e.g. Grab and hold tigger" size="34">
+    <select id="ckpt"><option value="">served checkpoint</option></select>
+    <input id="seconds" type="number" value="60" min="5" max="900" style="width:70px" title="max seconds">
+    <select id="done"><option value="">run to the cap</option><option value="closed">done when closed</option><option value="open">done when open</option></select>
+    <label><input type="checkbox" id="record"> record</label>
+    <button class="primary" onclick="runPolicy()">Run</button><button class="danger" onclick="post('/api/policy/stop', {})">Stop</button>
+    <button class="danger" onclick="post('/api/halt', {})">HALT</button>
+  </div>
+  <pre id="policy" class="mono"></pre>
+</div>
+<div class="card"><div class="row"><b>Say</b> <input id="say" placeholder="something to say" size="40"><button onclick="post('/api/say', {text: $('say').value})">Say</button>
+  <span id="speaking" class="mono muted"></span></div></div>
+<script>
+const $ = (id) => document.getElementById(id);
+async function post(path, body) { const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); const d = await r.json().catch(() => ({})); if (!r.ok) alert(d.detail || r.status); return d; }
+async function power(cmd) { const d = await post("/api/arm/power", { command: cmd }); $("arm-status").textContent = `${d.robot_mode || "?"} / ${d.safety_status || "?"} — ${d.message || ""}`; }
+async function runPolicy() { await post("/api/policy/run", { task: $("task").value, checkpoint: $("ckpt").value, max_seconds: +$("seconds").value, done_when: $("done").value, record: $("record").checked }); }
+const curls = [0, 0, 0, 0]; const names = ["index", "middle", "ring", "thumb"];
+names.forEach((n, i) => { const l = document.createElement("label"); l.innerHTML = `${n} <input type="range" min="0" max="100" value="0">`; l.querySelector("input").oninput = (e) => { curls[i] = e.target.value / 100; post("/api/hand/curls", { curls }); }; $("fingers").append(l); });
+async function refresh() {
+  try {
+    const a = await fetch("/api/arm").then((r) => r.json());
+    $("stream-state").textContent = a.stream || ""; $("stream").checked = (a.stream || "").startsWith("on");
+    $("hand-state").textContent = a.hand && a.hand.length ? `curls ${a.hand.slice(0, 4).map((v) => v.toFixed(2)).join(" ")}` : "no hand state";
+    const j = Object.entries(a.joints || {}); $("joints").innerHTML = j.length ? "<tr>" + j.map(([k, v]) => `<td>${k.replace("ur_", "")}</td>`).join("") + "</tr><tr>" + j.map(([k, v]) => `<td>${(v * 180 / Math.PI).toFixed(1)}°</td>`).join("") + "</tr>" : "<tr><td>no joint states</td></tr>";
+    if (a.status && a.status.robot_mode) $("arm-status").textContent = `${a.status.robot_mode} / ${a.status.safety_status}${a.status.remote_control ? "" : " (local control)"}`;
+    $("speaking").textContent = a.speaking ? "speaking…" : "";
+    const p = await fetch("/api/policy").then((r) => r.json());
+    $("policy").textContent = JSON.stringify({ active: p.active, feedback: p.feedback, result: p.result }, null, 1);
+  } catch (e) { $("arm-status").textContent = "manager unreachable"; }
+}
+fetch("/api/models").then((r) => r.json()).then((m) => { for (const r of m.runs || []) { const o = document.createElement("option"); o.value = r.run; o.textContent = `${r.run} (${r.last || "?"})`; $("ckpt").append(o); } }).catch(() => {});
+refresh(); setInterval(refresh, 1000);
+</script></main></body></html>

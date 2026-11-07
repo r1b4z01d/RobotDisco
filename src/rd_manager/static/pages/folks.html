@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Robot Disco — folks</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body { font: 14px/1.4 system-ui, sans-serif; margin: 0; background: #14161a; color: #e6e6e6; }
+  main { padding: 16px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+  .card { background: #1d2026; border: 1px solid #2a2e36; border-radius: 8px; padding: 10px; }
+  .card.live { border-color: #2f6fed; }
+  img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 6px; background: #0f1115; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; font-size: 12px; color: #8a94a6; margin: 6px 0; }
+  .kv b { color: #e6e6e6; }
+  button { width: 100%; margin-top: 4px; background: #2b3340; color: #eee; border: 1px solid #3a4454; border-radius: 6px; padding: 5px; cursor: pointer; }
+  button.danger { background: #a3302e; border-color: #a3302e; }
+  .mono { font-family: ui-monospace, monospace; } .muted { color: #8a94a6; }
+</style></head>
+<body><main>
+<div id="status" class="mono muted">…</div>
+<div class="grid" id="grid"></div>
+<script>
+const $ = (id) => document.getElementById(id);
+const when = (t) => t ? new Date(t * 1000).toLocaleString() : "never";
+const inWords = (s) => s <= 0 ? "now" : s < 3600 ? `${Math.round(s / 60)} min` : `${(s / 3600).toFixed(1)} h`;
+async function post(path, body) { const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) }); return r.json().catch(() => ({})); }
+async function refresh() {
+  let d; try { d = await fetch("/api/people").then((r) => r.json()); } catch (e) { $("status").textContent = "manager unreachable"; return; }
+  const live = d.live || {};
+  $("status").textContent = `${(d.people || []).length} known` + (live.id ? ` · in view: ${live.name || live.id} (${live.score})` : "");
+  $("grid").replaceChildren(...(d.people || []).map((p) => {
+    const c = document.createElement("div"); c.className = "card" + (live.id === p.id ? " live" : "");
+    c.innerHTML = `<img src="/thumb/${p.id}.jpg?t=${Math.round(p.last_seen || 0)}" onerror="this.style.opacity=.2">
+      <div class="kv"><span>ID</span><b>${p.id}</b><span>Name</span><b>${p.name || "—"}</b><span>Seen</span><b>${p.seen_count} × · ${p.views} views</b>
+      <span>Last seen</span><b>${when(p.last_seen)}</b><span>Last hello</span><b>${when(p.last_greeted)}</b><span>Next earliest hello</span><b>${p.last_greeted ? inWords(p.next_hello_in) : "now"}</b></div>`;
+    const b = (label, fn, cls) => { const x = document.createElement("button"); x.textContent = label; x.className = cls || ""; x.onclick = fn; c.append(x); };
+    b("Rename", async () => { const n = prompt("Name", p.name || ""); if (n != null) { await post(`/api/people/${p.id}/name`, { name: n }); refresh(); } });
+    b("Reset hello", async () => { await post(`/api/people/${p.id}/reset_greeting`); refresh(); });
+    b("Forget", async () => { if (confirm(`Forget ${p.name || p.id}?`)) { await post(`/api/people/${p.id}/forget`); refresh(); } }, "danger");
+    return c;
+  }));
+}
+refresh(); setInterval(refresh, 3000);
+</script></main></body></html>

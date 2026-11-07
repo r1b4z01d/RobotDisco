@@ -28,7 +28,7 @@ cmd="${1:-}"; shift || true
 case "$cmd" in
   image)  docker build -t "$IMAGE" -f "$HERE/Dockerfile" "$ROOT" ;;
   build)  run "colcon build --symlink-install --event-handlers console_cohesion+ --cmake-args -DCMAKE_BUILD_TYPE=Release ${*:+--packages-up-to $*}" ;;
-  test)   run "colcon test --event-handlers console_cohesion+ ${*:+--packages-select $*} && colcon test-result --verbose" ;;
+  test)   run "colcon test --executor sequential --event-handlers console_cohesion+ --pytest-args -x --timeout=900 ${*:+--packages-select $*}; colcon test-result --verbose | tail -40" ;;
   pytest) run "python3 -m pytest -x -v --timeout=120 $*" ;;
   sh)     run "bash" ;;
   run)    run "$*" ;;
