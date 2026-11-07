@@ -70,7 +70,7 @@ def generate_launch_description():
                          {'device_ip': str(velo_cfg['ip']), 'port': int(velo_cfg.get('port', 2368))}]),
         Node(package='velodyne_pointcloud', executable='velodyne_transform_node', output='both', condition=real(velo),
              parameters=[convert_params], arguments=quiet),
-        Node(package='velodyne_laserscan', executable='velodyne_laserscan_node', output='both', condition=IfCondition(velo),
+        Node(package='velodyne_laserscan', executable='velodyne_laserscan_node', output='both', condition=real(velo),   # needs the driver's 'ring' field
              parameters=[os.path.join(laserscan_share, 'config', 'default-velodyne_laserscan_node-params.yaml')],
              remappings=[('scan', 'velodyne/scan')], arguments=quiet),
     ]
