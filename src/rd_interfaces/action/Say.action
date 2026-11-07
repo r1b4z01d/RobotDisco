@@ -1,0 +1,12 @@
+# Speak a sentence through the robot's speaker, driving the mouth animation.
+# Served by rd_audio (TTS) with rd_face subscribed to the mouth stream. Called by rd_voice, rd_face, rd_manager.
+string text
+string voice                # Kokoro voice id; "" = the configured default
+float32 speed 1.0
+bool interrupt false        # stop whatever is being said first
+---
+bool success
+string message              # "done", "cancelled", "interrupted", "tts_failed", "no_sink"
+float32 seconds
+---
+float32 progress            # 0..1 of the audio played

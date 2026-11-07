@@ -1,0 +1,57 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- =========================================================================================
+       UR5e + platform, mounted on the back RPLidar (rp_s2e_lidar).
+
+       The UR base is 30 mm above the lidar and x/y-centered on it. Everything here is parented
+       to rp_s2e_lidar, so if you correct the lidar/platform Z in rp_s2e_lidar.xacro the whole
+       arm + platform move with it automatically.
+
+       NOTE: the UR comes from ur_description (the same package ur5e.launch.py drives). Adjust the
+       parameter-file paths if your ur_description version differs. Platform plate dims are an
+       estimate from the CAD ("Amazing Hand UR Mount") — refine when you have exact numbers.
+       ========================================================================================= -->
+
+  <!-- Platform plate: RPLidar mounts to its bottom, the UR to its top. -->
+  <link name="ur_platform">
+    <visual>
+      <geometry><box size="0.18 0.18 0.006"/></geometry>
+      <material name="gray"/>
+    </visual>
+    <collision>
+      <geometry><box size="0.18 0.18 0.006"/></geometry>
+    </collision>
+    <inertial>
+      <mass value="0.5"/>
+      <inertia ixx="0.0014" ixy="0" ixz="0" iyy="0.0014" iyz="0" izz="0.0027"/>
+    </inertial>
+  </link>
+  <joint name="ur_platform_joint" type="fixed">
+    <parent link="rp_s2e_lidar"/>
+    <child link="ur_platform"/>
+    <origin xyz="0 0 0.015" rpy="0 0 0"/>
+  </joint>
+
+  <!-- UR5e arm: base 30 mm above the lidar, x/y centered. -->
+  <xacro:include filename="$(find ur_description)/urdf/ur_macro.xacro"/>
+  <!-- generate_ros2_control_tag=false: the arm is driven by its own controller_manager (the
+       ur5e driver launched by rd_arm, ur_control.launch.py under /ur5e). With the tag the base
+       controller_manager tries to open the UR hardware itself and aborts
+       ("Failed to set the initial state of the component : ur5e to active") — seen with
+       ur_description 2.13 on the Jetson robot PC, 2026-10-10. Here the arm is visual + TF only. -->
+  <xacro:ur_robot
+      name="ur5e"
+      tf_prefix="ur_"
+      parent="rp_s2e_lidar"
+      generate_ros2_control_tag="false"
+      joint_limits_parameters_file="$(find ur_description)/config/ur5e/joint_limits.yaml"
+      kinematics_parameters_file="$(find ur_description)/config/ur5e/default_kinematics.yaml"
+      physical_parameters_file="$(find ur_description)/config/ur5e/physical_parameters.yaml"
+      visual_parameters_file="$(find ur_description)/config/ur5e/visual_parameters.yaml">
+    <!-- 30 mm above the lidar, x/y centered. Yaw +90 deg: with -90 the model showed the arm 180 deg
+         from the real one once joint states were live (Foxglove, 2026-10-11, Jetson rig). -->
+    <origin xyz="0 0 0.03" rpy="0 0 1.5708"/>
+  </xacro:ur_robot>
+
+</robot>

@@ -1,0 +1,23 @@
+# colcon
+build/
+install/
+log/
+__pycache__/
+*.pyc
+
+# venvs (rd_vla's LeRobot venv, the face-ID venv)
+.venv/
+venv/
+
+# OS
+.DS_Store
+._*
+
+# robot state that lives on /mnt/data, not in git
+provision/snapshot-*/
+**/landmarks/img/
+*.pgm.bak
+
+# editors
+.vscode/
+*.code-workspace

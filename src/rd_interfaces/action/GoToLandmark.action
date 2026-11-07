@@ -1,0 +1,14 @@
+# Drive to a named landmark of the active map (Nav2 under the hood), then stop.
+# Served by rd_nav. Called by rd_voice, the route runner and rd_manager.
+string landmark             # landmark id from the active map's landmarks file
+string map                  # "" = the active map
+bool relocalize_first false # run the AprilTag corrector / grid localizer before planning
+float32 xy_tolerance_m 0    # 0 = Nav2 defaults
+---
+bool success
+string message              # "arrived", "aborted", "cancelled", "unknown_landmark", "not_localized"
+geometry_msgs/PoseStamped final_pose
+---
+float32 distance_remaining_m
+float32 eta_seconds
+string nav_state            # Nav2 feedback summarised: "planning", "following", "recovering"

@@ -1,0 +1,16 @@
+# UR5e power state through the driver's dashboard client, one implementation for every caller
+# (rd_arm serves it; rd_vla, rd_face, rd_manager and the preflight call it).
+uint8 STATUS=0              # report only
+uint8 POWER_ON=1            # clear a protective stop if needed, power on, release brakes -> RUNNING
+uint8 POWER_OFF=2           # brake-safe power off (the controller stays up)
+uint8 UNLOCK_PROTECTIVE_STOP=3
+uint8 SHUTDOWN=4            # power off, then shut down the controller
+uint8 command
+float32 timeout_s 30.0
+---
+bool success
+string message
+string robot_mode           # dashboard "robotmode": POWER_OFF, IDLE, RUNNING, ...
+string safety_status        # dashboard "safetystatus": NORMAL, PROTECTIVE_STOP, ...
+bool remote_control         # PolyScope in remote control (required for every command but STATUS)
+bool program_running        # the external-control URCap program is running (driver connected)

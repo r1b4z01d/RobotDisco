@@ -1,0 +1,50 @@
+# System packages for the Robot Disco robot PC (JetPack 7.2.1 / Ubuntu 24.04, aarch64). One per line.
+# Installed by provision.sh phase "base". ROS packages live in ros-packages.txt, Isaac ROS in isaac-packages.txt.
+# Carried over from v1's list; anything JetPack already ships (CUDA, docker, nvidia-container-toolkit) is left out.
+
+# --- build / dev tooling
+build-essential
+cmake
+git
+git-lfs
+curl
+wget
+rsync
+tmux
+htop
+vim
+python3-pip
+python3-venv
+python3-dev
+python3-socks
+software-properties-common
+
+# --- services
+openssh-server
+supervisor
+chrony
+
+# --- audio: aplay, pactl (the sink watchdog, volume), espeak fallback voice
+alsa-utils
+pulseaudio-utils
+espeak
+
+# --- the face is an OpenGL window on the robot's screen
+libglfw3
+libgl1-mesa-dri
+libegl1
+mesa-utils
+
+# --- cameras / USB devices
+v4l-utils
+libusb-1.0-0
+libhidapi-hidraw0
+libhidapi-libusb0
+usbutils
+ffmpeg
+
+# --- networking
+net-tools
+iproute2
+ethtool
+network-manager

@@ -1,0 +1,58 @@
+# ROS 2 Jazzy apt packages for the Robot Disco robot PC. Installed by provision.sh phase "ros".
+# Each entry is checked against the Jazzy index in phase 1; what is missing moves to vendor/.
+
+# core + build tools
+ros-jazzy-ros-base
+ros-dev-tools
+python3-colcon-common-extensions
+python3-rosdep
+python3-vcstool
+
+# description / TF / control (rd_description, rd_base)
+ros-jazzy-xacro
+ros-jazzy-robot-state-publisher
+ros-jazzy-joint-state-publisher
+ros-jazzy-tf2-ros
+ros-jazzy-tf2-tools
+ros-jazzy-ros2-control
+ros-jazzy-ros2-controllers
+ros-jazzy-controller-manager
+ros-jazzy-diff-drive-controller
+ros-jazzy-joint-state-broadcaster
+ros-jazzy-forward-command-controller
+ros-jazzy-hardware-interface
+ros-jazzy-twist-mux
+ros-jazzy-joy
+ros-jazzy-teleop-twist-joy
+ros-jazzy-robot-localization
+
+# sensors (rd_perception)
+ros-jazzy-realsense2-camera
+ros-jazzy-realsense2-description
+ros-jazzy-rplidar-ros
+ros-jazzy-velodyne
+ros-jazzy-laser-filters
+ros-jazzy-diagnostic-updater
+ros-jazzy-pcl-ros
+ros-jazzy-pcl-conversions
+ros-jazzy-image-transport
+ros-jazzy-image-transport-plugins
+ros-jazzy-cv-bridge
+ros-jazzy-vision-opencv
+ros-jazzy-usb-cam
+
+# navigation (rd_nav)
+ros-jazzy-navigation2
+ros-jazzy-nav2-bringup
+ros-jazzy-nav2-simple-commander
+ros-jazzy-opennav-docking
+ros-jazzy-slam-toolbox
+ros-jazzy-rmw-cyclonedds-cpp
+
+# arm (rd_arm)
+ros-jazzy-ur
+ros-jazzy-moveit
+ros-jazzy-moveit-servo
+
+# misc
+ros-jazzy-rosbag2

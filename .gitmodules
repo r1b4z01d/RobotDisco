@@ -1,0 +1,3 @@
+[submodule "firmware/AmazingHand"]
+	path = firmware/AmazingHand
+	url = https://github.com/r1b4z01d/AmazingHand.git

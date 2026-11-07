@@ -1,0 +1,51 @@
+<?xml version="1.0"?>
+<!-- ros2_control system for the base. The controllers (diff_cont, joint_broad) are configured in
+     rd_base/config/controllers.yaml and loaded by rd_base's launch, not from here.
+     Real robot: the RoboClaw hardware interface (vendor/roboclaw_hardware_interface).
+     sim_mode:   ros2_control's mock hardware, so the same controllers run with no RoboClaw attached;
+                 Isaac Sim publishes joint states through its own bridge. -->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+    <xacro:unless value="$(arg sim_mode)">
+        <ros2_control name="RealRobot" type="system">
+            <hardware>
+                <plugin>roboclaw_hardware_interface/RoboClawHardwareInterface</plugin>
+                <param name="serial_port">/dev/ttyACM0</param>
+            </hardware>
+            <joint name="left_wheel_joint">
+                <command_interface name="velocity"/>
+                <state_interface name="position"/>
+                <param name="address">128</param>
+                <param name="qppr">12762</param>
+                <param name="motor_type">M1</param>
+            </joint>
+            <joint name="right_wheel_joint">
+                <command_interface name="velocity"/>
+                <state_interface name="position"/>
+                <param name="address">128</param>
+                <param name="qppr">12762</param>
+                <param name="motor_type">M2</param>
+            </joint>
+        </ros2_control>
+    </xacro:unless>
+
+    <xacro:if value="$(arg sim_mode)">
+        <ros2_control name="MockRobot" type="system">
+            <hardware>
+                <plugin>mock_components/GenericSystem</plugin>
+                <param name="calculate_dynamics">true</param>
+            </hardware>
+            <joint name="left_wheel_joint">
+                <command_interface name="velocity"/>
+                <state_interface name="position"/>
+                <state_interface name="velocity"/>
+            </joint>
+            <joint name="right_wheel_joint">
+                <command_interface name="velocity"/>
+                <state_interface name="position"/>
+                <state_interface name="velocity"/>
+            </joint>
+        </ros2_control>
+    </xacro:if>
+
+</robot>

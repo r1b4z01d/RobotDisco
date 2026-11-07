@@ -1,0 +1,9 @@
+# Isaac ROS 4.6 host packages (NVIDIA's apt repo for JetPack 7.2 / Jazzy), phase "isaac".
+# The CLI's bare-metal install (isaac_ros_cli) is what the phase runs; this list is what it asks for.
+ros-jazzy-isaac-ros-image-pipeline
+ros-jazzy-isaac-ros-apriltag
+ros-jazzy-isaac-ros-occupancy-grid-localizer
+ros-jazzy-isaac-ros-nvblox
+ros-jazzy-isaac-ros-cumotion
+ros-jazzy-isaac-ros-cumotion-moveit
+# optional (phase 7): ros-jazzy-isaac-ros-visual-slam

@@ -1,0 +1,85 @@
+# Every address and port of the Robot Disco system, once.
+# Launch files, nodes and rd_manager load this file (rd_bringup installs it to the share dir and exports
+# RD_ROBOT_CONFIG); nothing else types an IP. v1 had the UR's address in 17 code files.
+#
+# The robot subnet 192.168.11.0/24 is isolated (no internet): the UR, the hand, the robot PC and the GPU
+# box sit on it; provisioning needs a second uplink (see provision/README.md).
+
+network:
+  subnet: 192.168.11.0/24
+  gateway: 192.168.11.1          # only used by nmcli on the Jetson; the subnet has no route out
+  dns: 8.8.8.8
+
+robot:                            # the robot PC: Jetson AGX Orin, hostname robotdisco, user rd
+  host: robotdisco
+  ip: 192.168.11.80
+  user: rd
+  workspace: /home/rd/RobotDisco  # the colcon workspace (symlink onto the NVMe, see provision/)
+  data: /mnt/data                 # NVMe: datasets, checkpoints, evals, maps, galleries
+  ports:
+    manager: 8092                 # rd_manager: pages + WebSocket (v1: route_editor.py; the teleop page :8090 and
+                                  # the Folks page :8096 fold into it)
+    infer_server: 8777            # rd_vla inference server, loopback only
+    supervisor: 9999              # supervisord web UI / XML-RPC (the manager's Services tab)
+    ollama: 11434                 # fallback language model, loopback only
+  ros:
+    domain_id: 0
+    rmw: rmw_cyclonedds_cpp
+    cyclonedds_uri: file:///home/rd/RobotDisco/provision/cyclonedds.xml
+
+arm:                              # Universal Robots UR5e, PolyScope 5.21
+  ip: 192.168.11.21
+  ports:
+    dashboard: 29999
+    primary: 30001
+    secondary: 30002              # raw URScript
+    realtime: 30003
+    rtde: 30004
+    reverse: 50001                # ur_robot_driver external control
+    script_sender: 50002
+    trajectory: 50003
+    script_command: 50004
+  tool_voltage: 24                # the hand is powered from the tool connector
+  home: vla_home                  # named pose in rd_arm's pose library that policies start from
+
+hand:                             # AmazingHand, ESP32 on the tool flange (firmware/AmazingHand)
+  ip: 192.168.11.117
+  ports:
+    udp: 8766                     # one "J:" line per datagram; "Q" -> "K:" liveness probe
+    tcp: 8765                     # legacy line transport, debugging with nc
+
+gpu:                              # training box: RTX 4090, Ubuntu 24.04, ssh host "GPU"
+  host: gpu
+  ip: 192.168.11.119
+  user: bryan
+  workspace: /home/bryan/RobotDisco
+  ports:
+    manager: 8081                 # rd_manager instance for datasets / training / evals
+    ollama: 11434                 # the voice assistant's first-choice local model
+
+sensors:
+  velodyne:
+    ip: 192.168.11.46
+    port: 2368
+  rplidar_s1:
+    port: /dev/rplidar_s1         # by-id symlink to add to udev/99-robot-disco.rules in phase 1 (v1: a /dev/serial/by-id path; the S1 re-enumerates as ttyUSB1 after a USB drop)
+    range_offset_m: 0.33          # the faulty S1 reads +0.33 m in every mode (2026-11-02); rd_perception corrects it
+  rplidar_s2e:
+    port: /dev/rplidar_s2e
+  roboclaw:
+    port: /dev/ttyACM0
+    address: 128
+  realsense_d435:
+    serial: ""                    # "" = the only one attached
+  usb_cameras:                    # Jetson USB port -> role (provision/jetson/usb-layout.png)
+    scene: "2.4"
+    wrist: "1.1"
+    side: "4.2"
+
+audio:
+  sink: alsa_output.usb-C-Media_Electronics_Inc._USB_Audio_Device-00.analog-stereo
+  mic: TONOR
+  tts_voice: af_heart            # Kokoro-82M
+
+gamepad:
+  device_name: "8BitDo Ultimate 2C Wireless Controller"   # kernel xpad over the 2.4 GHz receiver

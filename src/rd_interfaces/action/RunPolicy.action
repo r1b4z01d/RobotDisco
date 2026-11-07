@@ -1,0 +1,21 @@
+# Run a VLA policy on the arm + hand until it finishes, times out or is cancelled.
+# Served by rd_vla (policy runner). Called by rd_voice (landmark tasks) and rd_nav's route runner.
+string task                 # language instruction, e.g. "pick up tigger"
+string checkpoint           # model id or path known to the inference server; "" = the server's default
+string backend              # "smolvla" (default), "groot"; "" = the server's default
+float32 max_seconds 0       # 0 = no limit
+uint32 max_steps 0          # 0 = no limit
+bool home_first true        # move the arm to the VLA home pose before the first observation
+bool record false           # also write the rollout as a LeRobot episode (datasets/evals tab)
+string landmark             # the landmark this run happens at, recorded on the eval
+---
+bool success
+string message              # why it ended: "done", "timeout", "cancelled", "protective_stop", ...
+uint32 steps
+float32 seconds
+string run_dir              # eval / episode directory on the robot, "" if not recorded
+---
+uint32 step
+float32 seconds
+string phase                # "homing", "serving", "running", "returning"
+float32 obs_latency_ms      # observation age at the last inference

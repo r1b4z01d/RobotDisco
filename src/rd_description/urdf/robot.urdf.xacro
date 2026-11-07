@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<!-- Robot Disco: differential-drive base (RoboClaw), RPLiDAR S1 (front) + S2E (back), Velodyne, RealSense
+     D435, UR5e on the back lidar platform, AmazingHand on the UR flange.
+     Ported from rd_ws/src/robot_disco/description (v1) on 2026-11-06: same links, joints and offsets;
+     the Gazebo blocks are gone (v2 simulates in Isaac Sim, which imports this URDF directly).
+
+     Args:
+       sim_mode   true = ros2_control mock hardware instead of the RoboClaw (dev stack, Isaac Sim)
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="robot_disco">
+
+    <xacro:arg name="sim_mode" default="false"/>
+
+    <xacro:include filename="robot_core.xacro" />
+    <xacro:include filename="ros2_control.xacro" />
+    <xacro:include filename="velodyne.xacro" />
+    <xacro:include filename="rp_s1_lidar.xacro" />
+    <xacro:include filename="rp_s2e_lidar.xacro" />
+    <xacro:include filename="realsense_d435.xacro" />
+    <xacro:include filename="ur_mount.xacro" />
+
+    <!-- AmazingHand on the UR flange (static visual at the open pose; see amazing_hand.xacro) -->
+    <xacro:include filename="amazing_hand.xacro" />
+    <xacro:amazing_hand parent="ur_tool0">
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+    </xacro:amazing_hand>
+</robot>

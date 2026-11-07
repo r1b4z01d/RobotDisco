@@ -1,0 +1,827 @@
+<?xml version="1.0"?>
+<!-- AmazingHand (right) as a STATIC visual at the as-exported CAD pose (keyframe 'zero'), baked from the MuJoCo model
+     (VLA/assets/amazing_hand/AH_Right, servos driven to the sim's open offsets and settled) by
+     rd_ws/provision/../bake_hand.py. 162 mesh visuals on one link; fingers do not animate.
+     The hand root (r_wrist_interface) sits at the UR flange frame, as ur5e_lerobot/sim/combined_model.py
+     attaches it to the MuJoCo attachment_site (= tool0). -->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:macro name="amazing_hand" params="parent *origin">
+    <joint name="${parent}_to_amazing_hand" type="fixed">
+      <parent link="${parent}"/>
+      <child link="amazing_hand"/>
+      <xacro:insert_block name="origin"/>
+    </joint>
+    <link name="amazing_hand">
+      <visual>
+        <origin xyz="-0.02208 0.03055 0.06980" rpy="-0.00000 -0.00000 1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/scs0009.stl"/></geometry>
+        <material name="ah_scs0009"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.01150 0.02450 0.10220" rpy="1.57080 -0.00000 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/finger_frame_1.stl"/></geometry>
+        <material name="ah_finger_frame_1"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.01150 0.02450 0.10220" rpy="1.57080 0.00000 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/r_hand_plate.stl"/></geometry>
+        <material name="ah_r_hand_plate"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.00444 0.01910 0.01912" rpy="-1.57080 -0.00000 -1.22173"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/scs0009.stl"/></geometry>
+        <material name="ah_scs0009"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.01150 -0.00830 0.09615" rpy="1.57080 0.10472 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/finger_frame_2.stl"/></geometry>
+        <material name="ah_finger_frame_2"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.01150 -0.04050 0.08514" rpy="1.57080 0.23562 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/finger_frame_2.stl"/></geometry>
+        <material name="ah_finger_frame_2"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.01500 -0.00830 0.09615" rpy="-1.57080 0.10472 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/bushing_0608_04.stl"/></geometry>
+        <material name="ah_bushing_0608_04"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.01500 0.02450 0.10220" rpy="-1.57080 -0.00000 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/bushing_0608_04.stl"/></geometry>
+        <material name="ah_bushing_0608_04"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.01500 -0.04050 0.08514" rpy="-1.57080 0.23562 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/bushing_0608_04.stl"/></geometry>
+        <material name="ah_bushing_0608_04"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.02500 -0.00830 0.09615" rpy="1.57080 0.10472 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/bushing_0608_04.stl"/></geometry>
+        <material name="ah_bushing_0608_04"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.02808 0.02450 0.02970" rpy="3.14159 -0.00000 1.91986"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/finger_frame_2.stl"/></geometry>
+        <material name="ah_finger_frame_2"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.02208 -0.01093 0.06330" rpy="0.00000 -0.10472 1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/scs0009.stl"/></geometry>
+        <material name="ah_scs0009"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.02208 0.01845 0.06980" rpy="-0.00000 -0.00000 1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/scs0009.stl"/></geometry>
+        <material name="ah_scs0009"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.01090 0.02450 0.10220" rpy="1.57080 0.00000 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/finger_frame_2.stl"/></geometry>
+        <material name="ah_finger_frame_2"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.02208 0.00110 0.06456" rpy="0.00000 -0.10472 1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/scs0009.stl"/></geometry>
+        <material name="ah_scs0009"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.02208 -0.03882 0.05222" rpy="-0.00000 -0.23562 1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/scs0009.stl"/></geometry>
+        <material name="ah_scs0009"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.01150 -0.00830 0.09615" rpy="1.57080 0.10472 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/finger_frame_1.stl"/></geometry>
+        <material name="ah_finger_frame_1"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.02808 0.02450 0.02620" rpy="-0.00000 -0.00000 1.91986"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/bushing_0608_04.stl"/></geometry>
+        <material name="ah_bushing_0608_04"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.02208 -0.02705 0.05505" rpy="-0.00000 -0.23562 1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/scs0009.stl"/></geometry>
+        <material name="ah_scs0009"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.01150 0.02450 0.10220" rpy="1.57080 0.00000 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/r_wrist_interface.stl"/></geometry>
+        <material name="ah_r_wrist_interface"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.00030 0.00773 0.01912" rpy="-1.57080 -0.00000 -1.22173"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/scs0009.stl"/></geometry>
+        <material name="ah_scs0009"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.02500 0.02450 0.10220" rpy="1.57080 -0.00000 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/bushing_0608_04.stl"/></geometry>
+        <material name="ah_bushing_0608_04"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.02500 -0.04050 0.08514" rpy="1.57080 0.23562 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/bushing_0608_04.stl"/></geometry>
+        <material name="ah_bushing_0608_04"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.02808 0.02450 0.01620" rpy="3.14159 -0.00000 1.91986"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/bushing_0608_04.stl"/></geometry>
+        <material name="ah_bushing_0608_04"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.01150 -0.04050 0.08514" rpy="1.57080 0.23562 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/finger_frame_1.stl"/></geometry>
+        <material name="ah_finger_frame_1"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.02808 0.02450 0.02970" rpy="3.14159 0.00000 1.91986"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/finger_frame_1.stl"/></geometry>
+        <material name="ah_finger_frame_1"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.00065 0.03555 0.06980" rpy="1.57080 -0.00003 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/rotule_ball.stl"/></geometry>
+        <material name="ah_rotule_ball"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00385 0.03555 0.06980" rpy="1.57080 -1.57077 1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/ph_pan_head_screw_m2x0_40_x_10__2803432263e518bbd16bccbbef8784ed.stl"/></geometry>
+        <material name="ah_ph_pan_head_screw_m2x0_40_x_10__2803432263e518bbd16bccbbef8784ed"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.00505 0.03055 0.06980" rpy="-1.57080 -0.00003 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/custom_servo_horn.stl"/></geometry>
+        <material name="ah_custom_servo_horn"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00069 0.03220 0.10260" rpy="1.66329 -0.05860 0.94280"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/rotule_lever.stl"/></geometry>
+        <material name="ah_rotule_lever"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.00065 0.03555 0.06980" rpy="-1.51195 0.09233 -0.62257"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/rotule_lever.stl"/></geometry>
+        <material name="ah_rotule_lever"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00070 0.03218 0.10285" rpy="1.51195 -0.09233 2.51903"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/m2_rod_l18.stl"/></geometry>
+        <material name="ah_m2_rod_l18"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00069 0.03220 0.10260" rpy="1.51195 -0.09233 2.51903"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/spacer.stl"/></geometry>
+        <material name="ah_spacer"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.01062 0.02416 0.10533" rpy="1.02200 -0.00394 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/link.stl"/></geometry>
+        <material name="ah_link"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00069 0.03670 0.10258" rpy="-1.57835 -1.02199 0.00644"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/ph_pan_head_screw_m2x0_40_x_10__2803432263e518bbd16bccbbef8784ed.stl"/></geometry>
+        <material name="ah_ph_pan_head_screw_m2x0_40_x_10__2803432263e518bbd16bccbbef8784ed"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00069 0.03220 0.10260" rpy="1.56618 0.54879 -0.00242"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/rotule_ball.stl"/></geometry>
+        <material name="ah_rotule_ball"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00069 0.01160 0.10268" rpy="1.56324 -1.02199 0.00644"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/ph_pan_head_screw_m2x0_40_x_10__2803432263e518bbd16bccbbef8784ed.stl"/></geometry>
+        <material name="ah_ph_pan_head_screw_m2x0_40_x_10__2803432263e518bbd16bccbbef8784ed"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00069 0.01610 0.10267" rpy="-1.57542 0.54879 -0.00242"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/rotule_ball.stl"/></geometry>
+        <material name="ah_rotule_ball"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.02720 0.02450 0.10220" rpy="-1.57077 -0.00394 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/std00333_plast_tcb_torx_2_5x8__configuration_copy_of_default.stl"/></geometry>
+        <material name="ah_std00333_plast_tcb_torx_2_5x8__configuration_copy_of_default"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.01150 0.02450 0.10220" rpy="1.57082 -0.00394 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/gimbal.stl"/></geometry>
+        <material name="ah_gimbal"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.02530 0.02450 0.10220" rpy="1.57082 -0.00394 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/plain_washer_large_grade_a_m2_5__9a369f0dc77bf9c598cdf3fb468977e5.stl"/></geometry>
+        <material name="ah_plain_washer_large_grade_a_m2_5__9a369f0dc77bf9c598cdf3fb468977e5"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.00550 0.02450 0.10220" rpy="-1.57474 -0.00002 -0.00001"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/parallel_pin_2_x_10__fee063fca0c8b40e46bbc4ffff61d999.stl"/></geometry>
+        <material name="ah_parallel_pin_2_x_10__fee063fca0c8b40e46bbc4ffff61d999"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.03481 0.03362 0.15804" rpy="-1.56229 -1.08907 3.13405"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/std00447_thermoplastique_m2_5x6__configuration_default.stl"/></geometry>
+        <material name="ah_std00447_thermoplastique_m2_5x6__configuration_default"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.03481 0.01442 0.15812" rpy="1.57930 -1.08907 3.13405"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/std00447_thermoplastique_m2_5x6__configuration_default.stl"/></geometry>
+        <material name="ah_std00447_thermoplastique_m2_5x6__configuration_default"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.03063 0.02388 0.12258" rpy="0.48171 -0.00394 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/distal.stl"/></geometry>
+        <material name="ah_distal"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.03063 0.02388 0.12258" rpy="0.48171 -0.00394 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/distal_shell.stl"/></geometry>
+        <material name="ah_distal_shell"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.01052 0.02399 0.15009" rpy="-1.57930 1.08907 -0.00754"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/parallel_pin_2_x_10__fee063fca0c8b40e46bbc4ffff61d999.stl"/></geometry>
+        <material name="ah_parallel_pin_2_x_10__fee063fca0c8b40e46bbc4ffff61d999"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00063 0.01306 0.12997" rpy="1.57540 -0.54483 3.13920"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/std00447_thermoplastique_m2_5x6__configuration_default.stl"/></geometry>
+        <material name="ah_std00447_thermoplastique_m2_5x6__configuration_default"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00063 0.03646 0.12988" rpy="-1.56619 -0.54483 3.13920"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/std00447_thermoplastique_m2_5x6__configuration_default.stl"/></geometry>
+        <material name="ah_std00447_thermoplastique_m2_5x6__configuration_default"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.01150 0.02465 0.10220" rpy="1.57540 -0.54483 3.13920"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/parallel_pin_2_x_16__da4b7ddbe9d803fe3fbc70f2e822b99b.stl"/></geometry>
+        <material name="ah_parallel_pin_2_x_16__da4b7ddbe9d803fe3fbc70f2e822b99b"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.01545 0.02483 0.14667" rpy="1.57540 -0.54483 3.13920"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/parallel_pin_2_x_16__da4b7ddbe9d803fe3fbc70f2e822b99b.stl"/></geometry>
+        <material name="ah_parallel_pin_2_x_16__da4b7ddbe9d803fe3fbc70f2e822b99b"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.01150 0.02465 0.10220" rpy="1.02597 -0.00394 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/proximal_shell.stl"/></geometry>
+        <material name="ah_proximal_shell"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.01150 0.02475 0.10220" rpy="1.02597 -0.00394 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/proximal.stl"/></geometry>
+        <material name="ah_proximal"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.00505 0.01845 0.06980" rpy="1.57080 -0.00003 1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/custom_servo_horn.stl"/></geometry>
+        <material name="ah_custom_servo_horn"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.00065 0.01345 0.06980" rpy="-1.57080 -0.00003 1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/rotule_ball.stl"/></geometry>
+        <material name="ah_rotule_ball"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00385 0.01345 0.06980" rpy="1.57080 1.57077 1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/ph_pan_head_screw_m2x0_40_x_10__2803432263e518bbd16bccbbef8784ed.stl"/></geometry>
+        <material name="ah_ph_pan_head_screw_m2x0_40_x_10__2803432263e518bbd16bccbbef8784ed"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.00065 0.01345 0.06980" rpy="-1.65805 -0.02235 -0.71627"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/rotule_lever.stl"/></geometry>
+        <material name="ah_rotule_lever"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.00065 0.01345 0.06980" rpy="-1.54836 -0.08723 -2.28902"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/spacer.stl"/></geometry>
+        <material name="ah_spacer"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.00066 0.01343 0.06955" rpy="-1.54836 -0.08723 -2.28902"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/m2_rod_l18.stl"/></geometry>
+        <material name="ah_m2_rod_l18"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00068 0.01610 0.10267" rpy="1.54836 0.08723 0.85258"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/rotule_lever.stl"/></geometry>
+        <material name="ah_rotule_lever"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.00065 0.00608 0.06509" rpy="1.57080 0.10470 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/rotule_ball.stl"/></geometry>
+        <material name="ah_rotule_ball"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00385 0.00608 0.06509" rpy="-1.57080 -1.46610 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/ph_pan_head_screw_m2x0_40_x_10__2803432263e518bbd16bccbbef8784ed.stl"/></geometry>
+        <material name="ah_ph_pan_head_screw_m2x0_40_x_10__2803432263e518bbd16bccbbef8784ed"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.00505 0.00110 0.06456" rpy="-1.57080 0.10470 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/custom_servo_horn.stl"/></geometry>
+        <material name="ah_custom_servo_horn"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.00065 0.00608 0.06509" rpy="-1.53038 -0.20640 1.57103"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/rotule_lever.stl"/></geometry>
+        <material name="ah_rotule_lever"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00068 -0.00068 0.09736" rpy="1.36423 -0.03955 -3.13308"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/rotule_lever.stl"/></geometry>
+        <material name="ah_rotule_lever"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.00066 0.00613 0.06484" rpy="-1.36423 0.03955 0.00852"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/m2_rod_l18.stl"/></geometry>
+        <material name="ah_m2_rod_l18"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.00065 0.00608 0.06509" rpy="-1.36423 0.03955 0.00852"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/spacer.stl"/></geometry>
+        <material name="ah_spacer"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00068 -0.01670 0.09574" rpy="-1.45290 0.54572 0.06140"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/rotule_ball.stl"/></geometry>
+        <material name="ah_rotule_ball"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00068 0.00380 0.09781" rpy="-1.37946 -1.01375 -0.16297"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/ph_pan_head_screw_m2x0_40_x_10__2803432263e518bbd16bccbbef8784ed.stl"/></geometry>
+        <material name="ah_ph_pan_head_screw_m2x0_40_x_10__2803432263e518bbd16bccbbef8784ed"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.01062 -0.00896 0.09923" rpy="1.02198 0.10071 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/link.stl"/></geometry>
+        <material name="ah_link"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00068 -0.02118 0.09529" rpy="1.76214 -1.01375 -0.16297"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/ph_pan_head_screw_m2x0_40_x_10__2803432263e518bbd16bccbbef8784ed.stl"/></geometry>
+        <material name="ah_ph_pan_head_screw_m2x0_40_x_10__2803432263e518bbd16bccbbef8784ed"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00068 -0.00068 0.09736" rpy="1.68870 0.54572 0.06140"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/rotule_ball.stl"/></geometry>
+        <material name="ah_rotule_ball"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.00550 -0.00830 0.09616" rpy="-1.47008 -0.00000 -0.00000"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/parallel_pin_2_x_10__fee063fca0c8b40e46bbc4ffff61d999.stl"/></geometry>
+        <material name="ah_parallel_pin_2_x_10__fee063fca0c8b40e46bbc4ffff61d999"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.02720 -0.00830 0.09616" rpy="-1.57079 0.10071 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/std00333_plast_tcb_torx_2_5x8__configuration_copy_of_default.stl"/></geometry>
+        <material name="ah_std00333_plast_tcb_torx_2_5x8__configuration_copy_of_default"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.02530 -0.00830 0.09616" rpy="1.57080 0.10071 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/plain_washer_large_grade_a_m2_5__9a369f0dc77bf9c598cdf3fb468977e5.stl"/></geometry>
+        <material name="ah_plain_washer_large_grade_a_m2_5__9a369f0dc77bf9c598cdf3fb468977e5"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.01150 -0.00830 0.09616" rpy="1.57080 0.10071 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/gimbal.stl"/></geometry>
+        <material name="ah_gimbal"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.03063 -0.01104 0.11636" rpy="0.48169 0.10071 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/distal.stl"/></geometry>
+        <material name="ah_distal"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.03481 -0.02416 0.15071" rpy="1.35604 -1.07950 -2.95159"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/std00447_thermoplastique_m2_5x6__configuration_default.stl"/></geometry>
+        <material name="ah_std00447_thermoplastique_m2_5x6__configuration_default"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.03063 -0.01104 0.11636" rpy="0.48169 0.10071 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/distal_shell.stl"/></geometry>
+        <material name="ah_distal_shell"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.03481 -0.00506 0.15264" rpy="-1.78556 -1.07950 -2.95159"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/std00447_thermoplastique_m2_5x6__configuration_default.stl"/></geometry>
+        <material name="ah_std00447_thermoplastique_m2_5x6__configuration_default"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.01052 -0.01381 0.14373" rpy="-1.35604 1.07950 0.19000"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/parallel_pin_2_x_10__fee063fca0c8b40e46bbc4ffff61d999.stl"/></geometry>
+        <material name="ah_parallel_pin_2_x_10__fee063fca0c8b40e46bbc4ffff61d999"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.01545 -0.01262 0.14042" rpy="1.45318 -0.54178 -3.08074"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/parallel_pin_2_x_16__da4b7ddbe9d803fe3fbc70f2e822b99b.stl"/></geometry>
+        <material name="ah_parallel_pin_2_x_16__da4b7ddbe9d803fe3fbc70f2e822b99b"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00063 0.00070 0.12494" rpy="-1.68841 -0.54178 -3.08074"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/std00447_thermoplastique_m2_5x6__configuration_default.stl"/></geometry>
+        <material name="ah_std00447_thermoplastique_m2_5x6__configuration_default"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00063 -0.02258 0.12258" rpy="1.45318 -0.54178 -3.08074"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/std00447_thermoplastique_m2_5x6__configuration_default.stl"/></geometry>
+        <material name="ah_std00447_thermoplastique_m2_5x6__configuration_default"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.01150 -0.00805 0.09618" rpy="1.02595 0.10071 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/proximal.stl"/></geometry>
+        <material name="ah_proximal"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.01150 -0.00815 0.09617" rpy="1.02595 0.10071 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/proximal_shell.stl"/></geometry>
+        <material name="ah_proximal_shell"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.01150 -0.00815 0.09617" rpy="1.45318 -0.54178 -3.08074"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/parallel_pin_2_x_16__da4b7ddbe9d803fe3fbc70f2e822b99b.stl"/></geometry>
+        <material name="ah_parallel_pin_2_x_16__da4b7ddbe9d803fe3fbc70f2e822b99b"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00385 -0.01590 0.06278" rpy="1.57080 1.46604 1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/ph_pan_head_screw_m2x0_40_x_10__2803432263e518bbd16bccbbef8784ed.stl"/></geometry>
+        <material name="ah_ph_pan_head_screw_m2x0_40_x_10__2803432263e518bbd16bccbbef8784ed"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.00065 -0.01590 0.06278" rpy="-1.57080 -0.10475 1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/rotule_ball.stl"/></geometry>
+        <material name="ah_rotule_ball"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.00505 -0.01093 0.06330" rpy="1.57080 -0.10475 1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/custom_servo_horn.stl"/></geometry>
+        <material name="ah_custom_servo_horn"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00068 -0.01670 0.09574" rpy="1.54647 -0.04043 -3.13979"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/rotule_lever.stl"/></geometry>
+        <material name="ah_rotule_lever"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.00065 -0.01590 0.06278" rpy="-1.53035 -0.02431 1.57161"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/rotule_lever.stl"/></geometry>
+        <material name="ah_rotule_lever"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00070 -0.01671 0.09599" rpy="1.53035 0.02431 -1.56998"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/m2_rod_l18.stl"/></geometry>
+        <material name="ah_m2_rod_l18"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00068 -0.01670 0.09574" rpy="1.53035 0.02431 -1.56998"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/spacer.stl"/></geometry>
+        <material name="ah_spacer"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.00065 -0.02219 0.05622" rpy="1.57080 0.23560 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/rotule_ball.stl"/></geometry>
+        <material name="ah_rotule_ball"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.00505 -0.02705 0.05505" rpy="-1.57080 0.23560 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/custom_servo_horn.stl"/></geometry>
+        <material name="ah_custom_servo_horn"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00385 -0.02219 0.05622" rpy="-1.57080 -1.33519 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/ph_pan_head_screw_m2x0_40_x_10__2803432263e518bbd16bccbbef8784ed.stl"/></geometry>
+        <material name="ah_ph_pan_head_screw_m2x0_40_x_10__2803432263e518bbd16bccbbef8784ed"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.00065 -0.02219 0.05622" rpy="-1.40538 0.29804 -0.93210"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/rotule_lever.stl"/></geometry>
+        <material name="ah_rotule_lever"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00069 -0.03310 0.08733" rpy="1.87271 -0.15806 0.58972"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/rotule_lever.stl"/></geometry>
+        <material name="ah_rotule_lever"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.00066 -0.02211 0.05598" rpy="-1.87271 0.15806 -2.55187"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/m2_rod_l18.stl"/></geometry>
+        <material name="ah_m2_rod_l18"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.00065 -0.02219 0.05622" rpy="-1.87271 0.15806 -2.55187"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/spacer.stl"/></geometry>
+        <material name="ah_spacer"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00069 -0.04877 0.08363" rpy="-1.30102 0.53253 0.13947"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/rotule_ball.stl"/></geometry>
+        <material name="ah_rotule_ball"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00069 -0.03310 0.08733" rpy="1.84057 0.53253 0.13947"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/rotule_ball.stl"/></geometry>
+        <material name="ah_rotule_ball"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00069 -0.05315 0.08260" rpy="1.99552 -0.97976 -0.35924"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/ph_pan_head_screw_m2x0_40_x_10__2803432263e518bbd16bccbbef8784ed.stl"/></geometry>
+        <material name="ah_ph_pan_head_screw_m2x0_40_x_10__2803432263e518bbd16bccbbef8784ed"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.01062 -0.04156 0.08811" rpy="1.02201 0.23168 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/link.stl"/></geometry>
+        <material name="ah_link"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00069 -0.02873 0.08836" rpy="-1.14608 -0.97976 -0.35924"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/ph_pan_head_screw_m2x0_40_x_10__2803432263e518bbd16bccbbef8784ed.stl"/></geometry>
+        <material name="ah_ph_pan_head_screw_m2x0_40_x_10__2803432263e518bbd16bccbbef8784ed"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.01150 -0.04050 0.08514" rpy="1.57082 0.23168 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/gimbal.stl"/></geometry>
+        <material name="ah_gimbal"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.02720 -0.04050 0.08514" rpy="-1.57077 0.23168 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/std00333_plast_tcb_torx_2_5x8__configuration_copy_of_default.stl"/></geometry>
+        <material name="ah_std00333_plast_tcb_torx_2_5x8__configuration_copy_of_default"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.02530 -0.04050 0.08514" rpy="1.57082 0.23168 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/plain_washer_large_grade_a_m2_5__9a369f0dc77bf9c598cdf3fb468977e5.stl"/></geometry>
+        <material name="ah_plain_washer_large_grade_a_m2_5__9a369f0dc77bf9c598cdf3fb468977e5"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.00550 -0.04050 0.08514" rpy="-1.33912 -0.00002 -0.00001"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/parallel_pin_2_x_10__fee063fca0c8b40e46bbc4ffff61d999.stl"/></geometry>
+        <material name="ah_parallel_pin_2_x_10__fee063fca0c8b40e46bbc4ffff61d999"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.03481 -0.04467 0.14157" rpy="-2.04177 -1.04022 -2.72778"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/std00447_thermoplastique_m2_5x6__configuration_default.stl"/></geometry>
+        <material name="ah_std00447_thermoplastique_m2_5x6__configuration_default"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.03481 -0.06336 0.13716" rpy="1.09983 -1.04022 -2.72778"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/std00447_thermoplastique_m2_5x6__configuration_default.stl"/></geometry>
+        <material name="ah_std00447_thermoplastique_m2_5x6__configuration_default"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.01052 -0.05218 0.13159" rpy="-1.09983 1.04022 0.41381"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/parallel_pin_2_x_10__fee063fca0c8b40e46bbc4ffff61d999.stl"/></geometry>
+        <material name="ah_parallel_pin_2_x_10__fee063fca0c8b40e46bbc4ffff61d999"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.03063 -0.04586 0.10482" rpy="0.48173 0.23168 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/distal.stl"/></geometry>
+        <material name="ah_distal"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.03063 -0.04586 0.10482" rpy="0.48173 0.23168 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/distal_shell.stl"/></geometry>
+        <material name="ah_distal_shell"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.01150 -0.04035 0.08518" rpy="1.02598 0.23168 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/proximal_shell.stl"/></geometry>
+        <material name="ah_proximal_shell"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00063 -0.05811 0.10948" rpy="1.30164 -0.52871 -3.00334"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/std00447_thermoplastique_m2_5x6__configuration_default.stl"/></geometry>
+        <material name="ah_std00447_thermoplastique_m2_5x6__configuration_default"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.01150 -0.04026 0.08520" rpy="1.02598 0.23168 -1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/proximal.stl"/></geometry>
+        <material name="ah_proximal"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.01150 -0.04035 0.08518" rpy="1.30164 -0.52871 -3.00334"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/parallel_pin_2_x_16__da4b7ddbe9d803fe3fbc70f2e822b99b.stl"/></geometry>
+        <material name="ah_parallel_pin_2_x_16__da4b7ddbe9d803fe3fbc70f2e822b99b"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00063 -0.03533 0.11485" rpy="-1.83996 -0.52871 -3.00334"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/std00447_thermoplastique_m2_5x6__configuration_default.stl"/></geometry>
+        <material name="ah_std00447_thermoplastique_m2_5x6__configuration_default"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.01545 -0.05057 0.12846" rpy="1.30164 -0.52871 -3.00334"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/parallel_pin_2_x_16__da4b7ddbe9d803fe3fbc70f2e822b99b.stl"/></geometry>
+        <material name="ah_parallel_pin_2_x_16__da4b7ddbe9d803fe3fbc70f2e822b99b"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.00065 -0.04368 0.05106" rpy="-1.57080 -0.23566 1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/rotule_ball.stl"/></geometry>
+        <material name="ah_rotule_ball"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.00505 -0.03882 0.05222" rpy="1.57080 -0.23566 1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/custom_servo_horn.stl"/></geometry>
+        <material name="ah_custom_servo_horn"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00385 -0.04368 0.05106" rpy="1.57080 1.33514 1.57080"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/ph_pan_head_screw_m2x0_40_x_10__2803432263e518bbd16bccbbef8784ed.stl"/></geometry>
+        <material name="ah_ph_pan_head_screw_m2x0_40_x_10__2803432263e518bbd16bccbbef8784ed"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.00065 -0.04368 0.05106" rpy="-1.43004 -0.07701 0.75342"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/rotule_lever.stl"/></geometry>
+        <material name="ah_rotule_lever"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00068 -0.04878 0.08363" rpy="1.49302 -0.14033 2.33512"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/rotule_lever.stl"/></geometry>
+        <material name="ah_rotule_lever"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.00066 -0.04364 0.05081" rpy="-1.49302 0.14033 -0.80648"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/m2_rod_l18.stl"/></geometry>
+        <material name="ah_m2_rod_l18"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.00065 -0.04368 0.05106" rpy="-1.49302 0.14033 -0.80648"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/spacer.stl"/></geometry>
+        <material name="ah_spacer"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00141 0.00304 0.04055" rpy="3.14159 0.00000 1.91992"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/rotule_ball.stl"/></geometry>
+        <material name="ah_rotule_ball"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.00030 0.00773 0.03615" rpy="-0.00000 0.00000 1.91992"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/custom_servo_horn.stl"/></geometry>
+        <material name="ah_custom_servo_horn"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00141 0.00304 0.04505" rpy="-0.00000 -0.00000 0.34913"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/ph_pan_head_screw_m2x0_40_x_10__2803432263e518bbd16bccbbef8784ed.stl"/></geometry>
+        <material name="ah_ph_pan_head_screw_m2x0_40_x_10__2803432263e518bbd16bccbbef8784ed"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.03109 0.01740 0.04188" rpy="2.78086 -1.45593 2.38014"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/rotule_lever.stl"/></geometry>
+        <material name="ah_rotule_lever"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.00141 0.00304 0.04055" rpy="-0.04070 0.10744 2.01722"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/rotule_lever.stl"/></geometry>
+        <material name="ah_rotule_lever"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.03132 0.01751 0.04190" rpy="0.04070 -0.10744 -1.12437"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/m2_rod_l18.stl"/></geometry>
+        <material name="ah_m2_rod_l18"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.03109 0.01740 0.04188" rpy="0.04070 -0.10744 -1.12437"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/spacer.stl"/></geometry>
+        <material name="ah_spacer"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.03109 0.01740 0.04188" rpy="1.57077 -1.02197 -2.79645"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/rotule_ball.stl"/></geometry>
+        <material name="ah_rotule_ball"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.03091 0.02589 0.03058" rpy="2.59277 -0.00001 1.91592"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/link.stl"/></geometry>
+        <material name="ah_link"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.02412 0.03679 0.04189" rpy="-1.57078 -0.54883 0.34511"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/ph_pan_head_screw_m2x0_40_x_10__2803432263e518bbd16bccbbef8784ed.stl"/></geometry>
+        <material name="ah_ph_pan_head_screw_m2x0_40_x_10__2803432263e518bbd16bccbbef8784ed"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.03261 0.01317 0.04188" rpy="1.57081 -0.54883 0.34511"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/ph_pan_head_screw_m2x0_40_x_10__2803432263e518bbd16bccbbef8784ed.stl"/></geometry>
+        <material name="ah_ph_pan_head_screw_m2x0_40_x_10__2803432263e518bbd16bccbbef8784ed"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.02564 0.03255 0.04189" rpy="-1.57082 -1.02197 -2.79645"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/rotule_ball.stl"/></geometry>
+        <material name="ah_rotule_ball"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.02808 0.02450 0.03570" rpy="-1.71562 -1.57071 -2.65165"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/parallel_pin_2_x_10__fee063fca0c8b40e46bbc4ffff61d999.stl"/></geometry>
+        <material name="ah_parallel_pin_2_x_10__fee063fca0c8b40e46bbc4ffff61d999"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.02808 0.02450 0.01590" rpy="3.14151 -0.00001 1.91592"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/plain_washer_large_grade_a_m2_5__9a369f0dc77bf9c598cdf3fb468977e5.stl"/></geometry>
+        <material name="ah_plain_washer_large_grade_a_m2_5__9a369f0dc77bf9c598cdf3fb468977e5"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.02808 0.02450 0.02970" rpy="3.14150 -0.00001 1.91592"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/gimbal.stl"/></geometry>
+        <material name="ah_gimbal"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.02808 0.02450 0.01400" rpy="-0.00009 -0.00001 1.91592"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/std00333_plast_tcb_torx_2_5x8__configuration_copy_of_default.stl"/></geometry>
+        <material name="ah_std00333_plast_tcb_torx_2_5x8__configuration_copy_of_default"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.04702 0.03205 0.01057" rpy="2.05256 -0.00001 1.91592"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/distal_shell.stl"/></geometry>
+        <material name="ah_distal_shell"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.07718 0.05310 0.07601" rpy="1.57081 0.48176 0.34513"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/std00447_thermoplastique_m2_5x6__configuration_default.stl"/></geometry>
+        <material name="ah_std00447_thermoplastique_m2_5x6__configuration_default"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.07291 0.04136 0.05172" rpy="-1.57081 -0.48176 -2.79646"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/parallel_pin_2_x_10__fee063fca0c8b40e46bbc4ffff61d999.stl"/></geometry>
+        <material name="ah_parallel_pin_2_x_10__fee063fca0c8b40e46bbc4ffff61d999"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.04702 0.03205 0.01057" rpy="2.05256 -0.00001 1.91592"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/distal.stl"/></geometry>
+        <material name="ah_distal"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.08367 0.03503 0.07601" rpy="-1.57078 0.48176 0.34513"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/std00447_thermoplastique_m2_5x6__configuration_default.stl"/></geometry>
+        <material name="ah_std00447_thermoplastique_m2_5x6__configuration_default"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.05818 0.02273 0.04183" rpy="-1.57077 1.02593 0.34514"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/std00447_thermoplastique_m2_5x6__configuration_default.stl"/></geometry>
+        <material name="ah_std00447_thermoplastique_m2_5x6__configuration_default"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.02813 0.02436 0.02970" rpy="1.57082 1.02593 0.34514"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/parallel_pin_2_x_16__da4b7ddbe9d803fe3fbc70f2e822b99b.stl"/></geometry>
+        <material name="ah_parallel_pin_2_x_16__da4b7ddbe9d803fe3fbc70f2e822b99b"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.06998 0.03940 0.05665" rpy="1.57082 1.02593 0.34514"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/parallel_pin_2_x_16__da4b7ddbe9d803fe3fbc70f2e822b99b.stl"/></geometry>
+        <material name="ah_parallel_pin_2_x_16__da4b7ddbe9d803fe3fbc70f2e822b99b"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.02813 0.02436 0.02970" rpy="2.59673 -0.00001 1.91592"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/proximal_shell.stl"/></geometry>
+        <material name="ah_proximal_shell"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.02816 0.02427 0.02970" rpy="2.59673 -0.00001 1.91592"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/proximal.stl"/></geometry>
+        <material name="ah_proximal"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.05027 0.04475 0.04183" rpy="1.57082 1.02593 0.34514"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/std00447_thermoplastique_m2_5x6__configuration_default.stl"/></geometry>
+        <material name="ah_std00447_thermoplastique_m2_5x6__configuration_default"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.00615 0.02380 0.04505" rpy="-0.00000 0.00000 -2.79258"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/ph_pan_head_screw_m2x0_40_x_10__2803432263e518bbd16bccbbef8784ed.stl"/></geometry>
+        <material name="ah_ph_pan_head_screw_m2x0_40_x_10__2803432263e518bbd16bccbbef8784ed"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.00615 0.02380 0.04055" rpy="-3.14159 0.00000 -1.22178"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/rotule_ball.stl"/></geometry>
+        <material name="ah_rotule_ball"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.00444 0.01910 0.03615" rpy="0.00000 0.00000 -1.22178"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/custom_servo_horn.stl"/></geometry>
+        <material name="ah_custom_servo_horn"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.02564 0.03255 0.04188" rpy="1.52363 -1.53029 -2.82583"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/rotule_lever.stl"/></geometry>
+        <material name="ah_rotule_lever"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="-0.00615 0.02380 0.04055" rpy="-0.04046 -0.00191 1.83943"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/rotule_lever.stl"/></geometry>
+        <material name="ah_rotule_lever"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.02588 0.03262 0.04190" rpy="0.04046 0.00191 -1.30216"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/m2_rod_l18.stl"/></geometry>
+        <material name="ah_m2_rod_l18"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0.02564 0.03255 0.04188" rpy="0.04046 0.00191 -1.30216"/>
+        <geometry><mesh filename="package://rd_description/meshes/amazing_hand/spacer.stl"/></geometry>
+        <material name="ah_spacer"><color rgba="0.500 0.500 0.500 1"/></material>
+      </visual>
+    </link>
+  </xacro:macro>
+</robot>
