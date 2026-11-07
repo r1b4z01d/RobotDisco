@@ -138,19 +138,32 @@ def main():
     usd_path = URDFImporter(cfg).import_urdf()
     robot = stage_utils.add_reference_to_stage(usd_path, ROBOT)
     assert robot and robot.GetChildren(), f"{usd_path}: nothing composed at {ROBOT} (no default prim?)"
+    # The 6.2 converter (URDF USD Converter 0.3) writes the joints and bodies into a "Physics" variant set
+    # (physx | physics | mujoco | none) and leaves it unselected: without this there are no joints at all.
+    vs = robot.GetVariantSet("Physics")
+    if vs and vs.GetVariantNames():
+        choice = "physx" if "physx" in vs.GetVariantNames() else vs.GetVariantNames()[0]
+        vs.SetVariantSelection(choice)
+        print(f"Physics variant: {choice} (of {vs.GetVariantNames()})")
     xf = UsdGeom.Xformable(robot)
     xf.ClearXformOpOrder()
     xf.AddTranslateOp().Set(Gf.Vec3d(args.x, args.y, 0.2))
     xf.AddRotateZOp().Set(math.degrees(args.yaw))
 
     def prim_named(name, predicate=lambda p: True):
-        # UNVERIFIED (6.2): the importer's USD layout (links flat under the root or nested) - found by name, not by path
+        # the converter's layout: links nested under <robot>/Geometry/base_link/... as the kinematic tree, joints
+        # flat under <robot>/Physics/<joint name> (a fixed joint between two links gets a sanitized name)
         p = next((p for p in Usd.PrimRange(robot) if p.GetName() == name and predicate(p)), None)
-        assert p, f"{name}: not in the imported USD ({usd_path})"
+        if not p:
+            near = sorted({q.GetName() for q in Usd.PrimRange(robot) if predicate(q)})[:40]
+            raise AssertionError(f"{name}: not in the imported USD ({usd_path}); candidates: {near}")
         return p
 
-    root = next((p for p in Usd.PrimRange(robot) if p.HasAPI(UsdPhysics.ArticulationRootAPI)), robot)
-    root_path = str(root.GetPath())
+    roots = [p for p in Usd.PrimRange(robot) if p.HasAPI(UsdPhysics.ArticulationRootAPI)]
+    assert roots, f"no articulation root in {usd_path}"
+    if len(roots) > 1:   # a massless URDF root link makes every child body its own articulation: export_urdf gives it a mass
+        print(f"WARNING: {len(roots)} articulation roots: {[str(p.GetPath()) for p in roots]}; using the first")
+    root_path = str(roots[0].GetPath())
     for name, stiffness, damping in [(w, 0.0, 1e4) for w in WHEELS] + [(j, 1e4, 1e3) for j in UR]:
         jp = prim_named(name, lambda p: p.IsA(UsdPhysics.Joint))
         drive = UsdPhysics.DriveAPI.Get(jp, "angular") or UsdPhysics.DriveAPI.Apply(jp, "angular")

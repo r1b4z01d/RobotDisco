@@ -1,5 +1,5 @@
-"""Write the flat URDF Isaac Sim's importer takes (package:// mesh URIs resolved to absolute paths), from
-rd_description's xacro.    export_urdf [out.urdf] [--sim-mode]"""
+"""Write the flat URDF Isaac Sim's importer takes (package:// mesh URIs resolved to absolute paths, a token mass on
+the massless root link), from rd_description's xacro.    export_urdf [out.urdf] [--real]"""
 from __future__ import annotations
 
 import os
@@ -27,7 +27,32 @@ def flat_urdf(sim_mode: bool = True) -> str:
             except Exception:  # noqa: BLE001
                 cache[pkg] = None
         return f'filename="{cache[pkg]}/{rel}"' if cache[pkg] else m.group(0)
-    return re.sub(r'filename="package://([^/"]+)/([^"]+)"', repl, urdf)
+    return with_root_mass(re.sub(r'filename="package://([^/"]+)/([^"]+)"', repl, urdf))
+
+
+ROOT_INERTIAL = ('<inertial><origin xyz="0 0 0" rpy="0 0 0"/><mass value="0.1"/>'
+                 '<inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/></inertial>')
+
+
+def with_root_mass(urdf: str) -> str:
+    """Isaac Sim's URDF converter (6.2) treats a massless root link as a world attachment: every child body becomes
+    its own articulation and the wheel joints end up jointed to the world (seen on the first import of
+    rd_description, whose base_link is an empty frame). A token mass on the root link keeps one articulation
+    rooted at base_link, which is also the frame the odometry reports."""
+    links = re.findall(r'<link\s+name="([^"]+)"', urdf)
+    children = set(re.findall(r'<child\s+link="([^"]+)"', urdf))
+    roots = [name for name in links if name not in children]
+    if len(roots) != 1:
+        return urdf
+    m = re.search(rf'<link\s+name="{re.escape(roots[0])}"\s*(/>|>)', urdf)
+    if not m:
+        return urdf
+    if m.group(1) == "/>":
+        return urdf[:m.start()] + f'<link name="{roots[0]}">{ROOT_INERTIAL}</link>' + urdf[m.end():]
+    end = urdf.index("</link>", m.end())
+    if "<inertial" in urdf[m.end():end]:
+        return urdf
+    return urdf[:m.end()] + ROOT_INERTIAL + urdf[m.end():]
 
 
 def main(argv=None) -> int:

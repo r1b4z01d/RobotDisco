@@ -55,7 +55,11 @@ def post(path, body):
         with urllib.request.urlopen(req, timeout=30) as r:
             return r.status, json.loads(r.read())
     except urllib.error.HTTPError as e:
-        return e.code, json.loads(e.read() or b'{}')
+        raw = e.read() or b'{}'
+        try:
+            return e.code, json.loads(raw)
+        except ValueError:                       # FastAPI's plain-text 500: keep the status and the text
+            return e.code, {'detail': raw.decode(errors='replace')}
 
 
 class TestManager(unittest.TestCase):

@@ -404,6 +404,7 @@ class RosBridge:
     def voice_text(self, text: str) -> dict:
         """The Live tab's text box: the text reaches rd_voice on /voice/text_in exactly as a Whisper transcript
         would (the wake phrase applies); listeners = 0 means the voice assistant is not running."""
+        from std_msgs.msg import String
         self.voice_text_pub.publish(String(data=text))
         return {"ok": True, "text": text, "listeners": self.voice_text_pub.get_subscription_count()}
 

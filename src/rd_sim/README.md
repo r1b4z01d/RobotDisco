@@ -29,6 +29,9 @@ Still unverified until the first run (marked `# UNVERIFIED (6.2):` in the script
 overrides and the layout of its USD (the script finds links and joints by name and re-asserts the wheel / UR drives on
 the USD), `Example_Rotary` standing in for the Velodyne and the range overrides on the example lidar profiles, replacing
 the camera prims' xform ops with the 180 deg optical-frame turn, rclpy from the system Jazzy inside the Isaac venv, and
-RTX sensor rendering under `--headless`. `arm_mirror` sends the mock UR's commanded joints to the simulated arm. Tests
+RTX sensor rendering under `--headless`. First run on the GPU box (2026-11-07): the app comes up headless and the
+URDF imports; the converter (URDF USD Converter 0.3) writes the joints into a `Physics` variant set that the script now
+selects (`physx`), and a massless root link made every child body its own articulation with the wheels jointed to the
+world, so `export_urdf` gives the root link a token mass. `arm_mirror` sends the mock UR's commanded joints to the simulated arm. Tests
 cover what runs without Isaac Sim: the URDF export and the map-to-walls conversion. Replaces v1's `Scripts/sim_robot.py`
 and the MuJoCo cell.
