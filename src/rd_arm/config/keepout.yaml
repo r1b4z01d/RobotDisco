@@ -1,0 +1,9 @@
+# Collision objects the Wave server adds to MoveIt's planning scene at start, in base_link. The one rule from
+# v1's staged ramps: no part of the arm ever passes above the chassis (whatever is mounted on top), so a box
+# over the body in front of the arm's column is lethal to the planner. Dimensions are from the footprint
+# (x -0.6..0.45, |y| 0.32) with the arm column at the back; REFINE from the CAD before phase 8.
+objects:
+  - id: chassis_keepout
+    frame: base_link
+    box: [0.70, 0.70, 1.15]       # x, y, z size
+    center: [0.10, 0.0, 0.85]     # x, y, z

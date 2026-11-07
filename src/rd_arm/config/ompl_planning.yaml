@@ -1,0 +1,23 @@
+# OMPL on the rig / as the fallback; the Orin plans with cuMotion (isaac_ros_cumotion_moveit, phase 7-8) through
+# the same move_group with planning_pipelines: [cumotion, ompl].
+planning_plugins:
+  - ompl_interface/OMPLPlanner
+request_adapters:
+  - default_planning_request_adapters/ResolveConstraintFrames
+  - default_planning_request_adapters/ValidateWorkspaceBounds
+  - default_planning_request_adapters/CheckStartStateBounds
+  - default_planning_request_adapters/CheckStartStateCollision
+response_adapters:
+  - default_planning_response_adapters/AddTimeOptimalParameterization
+  - default_planning_response_adapters/ValidateSolution
+  - default_planning_response_adapters/DisplayMotionPath
+planner_configs:
+  RRTConnectkConfigDefault:
+    type: geometric::RRTConnect
+    range: 0.0
+ur_manipulator:
+  default_planner_config: RRTConnectkConfigDefault
+  planner_configs:
+    - RRTConnectkConfigDefault
+  projection_evaluator: joints(ur_shoulder_pan_joint,ur_shoulder_lift_joint)
+  longest_valid_segment_fraction: 0.01

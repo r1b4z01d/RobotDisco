@@ -5,14 +5,31 @@
      the Gazebo blocks are gone (v2 simulates in Isaac Sim, which imports this URDF directly).
 
      Args:
-       sim_mode   true = ros2_control mock hardware instead of the RoboClaw (dev stack, Isaac Sim)
+       sim_mode      true = ros2_control mock hardware instead of the RoboClaw and the UR (rig, Isaac Sim)
+       base_control  include the base's ros2_control tag (rd_base's controller manager)        default true
+       ur_control    include the UR driver's ros2_control tag (rd_arm's controller manager)    default false
+       robot_ip, ur_kinematics, tool_voltage, headless_mode, initial_positions_file: the UR driver's (ur_control only)
+
+     Two controller managers share this one description: the base's (base_control:=true ur_control:=false)
+     and the arm's under /ur5e (ur_control:=true base_control:=false). v1 learned the hard way that a
+     controller manager handed both tags tries to open both pieces of hardware.
 -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="robot_disco">
 
     <xacro:arg name="sim_mode" default="false"/>
+    <xacro:arg name="base_control" default="true"/>
+    <xacro:arg name="ur_control" default="false"/>
+    <xacro:arg name="robot_ip" default="0.0.0.0"/>
+    <xacro:arg name="ur_kinematics" default="$(find ur_description)/config/ur5e/default_kinematics.yaml"/>
+    <xacro:arg name="tool_voltage" default="24"/>
+    <xacro:arg name="headless_mode" default="true"/>
+    <xacro:arg name="initial_positions_file" default="$(find ur_description)/config/initial_positions.yaml"/>
+    <xacro:property name="initial_positions_file" default="$(arg initial_positions_file)"/>
 
     <xacro:include filename="robot_core.xacro" />
-    <xacro:include filename="ros2_control.xacro" />
+    <xacro:if value="$(arg base_control)">
+        <xacro:include filename="ros2_control.xacro" />
+    </xacro:if>
     <xacro:include filename="velodyne.xacro" />
     <xacro:include filename="rp_s1_lidar.xacro" />
     <xacro:include filename="rp_s2e_lidar.xacro" />
@@ -24,4 +41,25 @@
     <xacro:amazing_hand parent="ur_tool0">
         <origin xyz="0 0 0" rpy="0 0 0"/>
     </xacro:amazing_hand>
+
+    <!-- The UR driver's hardware interface (rd_arm's controller manager only). Mock hardware in sim_mode. -->
+    <xacro:if value="$(arg ur_control)">
+        <xacro:include filename="$(find ur_robot_driver)/urdf/ur.ros2_control.xacro"/>
+        <xacro:ur_ros2_control
+            name="ur5e"
+            tf_prefix="ur_"
+            ur_type="ur5e"
+            robot_ip="$(arg robot_ip)"
+            kinematics_parameters_file="$(arg ur_kinematics)"
+            script_filename="$(find ur_client_library)/resources/external_control.urscript"
+            input_recipe_filename="$(find ur_robot_driver)/resources/rtde_input_recipe.txt"
+            output_recipe_filename="$(find ur_robot_driver)/resources/rtde_output_recipe.txt"
+            use_mock_hardware="$(arg sim_mode)"
+            mock_sensor_commands="false"
+            headless_mode="$(arg headless_mode)"
+            initial_positions="${xacro.load_yaml(initial_positions_file)}"
+            use_tool_communication="false"
+            tool_voltage="$(arg tool_voltage)"
+            non_blocking_read="true"/>
+    </xacro:if>
 </robot>
