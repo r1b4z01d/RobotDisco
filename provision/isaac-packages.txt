@@ -1,9 +1,9 @@
-# Isaac ROS 4.6 host packages (NVIDIA's apt repo for JetPack 7.2 / Jazzy), phase "isaac".
-# The CLI's bare-metal install (isaac_ros_cli) is what the phase runs; this list is what it asks for.
-ros-jazzy-isaac-ros-image-pipeline
+# Isaac ROS 4.6 host packages (NVIDIA's apt repo: release-4.6, noble main), for provision.sh phase "isaac" (the Orin)
+# and provision/gpu/provision_gpu.sh isaacros (the 4090). Names from the 4.6 package pages (read 2026-11-07).
+ros-jazzy-isaac-ros-image-proc
 ros-jazzy-isaac-ros-apriltag
-ros-jazzy-isaac-ros-occupancy-grid-localizer
 ros-jazzy-isaac-ros-nvblox
-ros-jazzy-isaac-ros-cumotion
-ros-jazzy-isaac-ros-cumotion-moveit
-# optional (phase 7): ros-jazzy-isaac-ros-visual-slam
+# unverified against a package page; the naming pattern of the others:
+ros-jazzy-isaac-ros-occupancy-grid-localizer
+# optional (phase 9): ros-jazzy-isaac-ros-visual-slam
+# cuMotion / cuMotion MoveIt: NO 4.6 binary, a source build of isaac_ros_cumotion (the 4.6 page documents only that)

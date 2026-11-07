@@ -177,17 +177,30 @@ BASHRC
 }
 
 phase_isaac() {
-  # Isaac ROS 4.6 as host debs for JetPack 7.2 / Jazzy (https://nvidia-isaac-ros.github.io/v/release-4.6/getting_started/index.html):
-  # NVIDIA's apt repo, then isaac-packages.txt. VERIFY the repo line against the 4.6 docs on the first run.
-  log "Isaac ROS 4.6"
-  if [ ! -f /etc/apt/sources.list.d/isaac-ros.list ]; then
-    sudo curl -fsSL https://isaac.download.nvidia.com/isaac-ros/repos.key -o /usr/share/keyrings/isaac-ros-keyring.gpg || die "could not fetch the Isaac ROS repo key (internet?)"
-    echo "deb [signed-by=/usr/share/keyrings/isaac-ros-keyring.gpg] https://isaac.download.nvidia.com/isaac-ros/release-4.6 $(. /etc/os-release && echo $UBUNTU_CODENAME) main" \
-      | sudo tee /etc/apt/sources.list.d/isaac-ros.list >/dev/null
-    sudo apt-get update
-  fi
-  apt_install $(pkglist "$HERE/isaac-packages.txt") || warn "some Isaac packages did not install: check the 4.6 package names"
-  # cuRobo / cuMotion for MoveIt and the VLA streamer's IK come with isaac-ros-cumotion; nothing else here
+  # Isaac ROS 4.6 as host debs for JetPack 7.2 / Jazzy. The repo and CLI steps are from the 4.6 Getting Started
+  # page (read 2026-11-07): NVIDIA's apt repo pinned to release-4.6, the isaac-ros-cli, then `isaac-ros init
+  # baremetal` (the host modes replace the host OpenCV with NVIDIA's 4.6.0 build). On the Orin the Jetson apt
+  # repo is already configured by JetPack.
+  log "Isaac ROS 4.6 (host, bare metal)"
+  apt_install curl gnupg
+  local k=/usr/share/keyrings/nvidia-isaac-ros.gpg
+  [ -f $k ] || curl -fsSL https://isaac.download.nvidia.com/isaac-ros/repos.key | sudo gpg --dearmor --yes -o $k
+  local s="deb [signed-by=$k] https://isaac.download.nvidia.com/isaac-ros/release-4.6 noble main"
+  grep -qxF "$s" /etc/apt/sources.list.d/nvidia-isaac-ros.list 2>/dev/null || echo "$s" | sudo tee -a /etc/apt/sources.list.d/nvidia-isaac-ros.list >/dev/null
+  sudo apt-get update
+  sudo mkdir -p /etc/ros/rosdep/sources.list.d
+  sudo curl -fsSL -o /etc/ros/rosdep/sources.list.d/nvidia-isaac.yaml https://raw.githubusercontent.com/NVIDIA-ISAAC-ROS/isaac-ros-cli/release-4.6/docker/rosdep/extra_rosdeps.yaml || true
+  echo "yaml file:///etc/ros/rosdep/sources.list.d/nvidia-isaac.yaml" | sudo tee /etc/ros/rosdep/sources.list.d/00-nvidia-isaac.list >/dev/null
+  rosdep update >/dev/null 2>&1 || true
+  apt_install isaac-ros-cli
+  mkdir -p "$RD_HOME/workspaces/isaac_ros-dev/src"
+  grep -q ISAAC_ROS_WS "$RD_HOME/.bashrc" || echo 'export ISAAC_ROS_WS="${ISAAC_ROS_WS:-${HOME}/workspaces/isaac_ros-dev/}"' >> "$RD_HOME/.bashrc"
+  warn "isaac-ros init replaces the host OpenCV with NVIDIA's build; python3-opencv and cv_bridge are reinstalled after"
+  sudo apt-get remove -y 'libopencv*' 'opencv*' >/dev/null 2>&1 || true
+  sudo isaac-ros init baremetal --yes 2>&1 | tail -5
+  apt_install $(pkglist "$HERE/isaac-packages.txt") python3-opencv ros-jazzy-cv-bridge || warn "some Isaac packages did not install: check isaac-packages.txt"
+  dpkg -l | grep -E 'ros-jazzy-isaac-ros' | awk '{print "  " $2, $3}'
+  # cuMotion (MoveIt planner + the streamer's IK) has no 4.6 binary: source build of isaac_ros_cumotion into $ISAAC_ROS_WS, phase 8
 }
 
 phase_groups() {

@@ -10,7 +10,13 @@ ros2 run rd_sim export_urdf /tmp/robot_disco.urdf                       # the fl
 ros2 launch rd_sim sim.launch.py                                        # nav + arm + vla (fake) + manager, use_sim_time
 ```
 
-`scripts/isaac_scene.py` is written against the Isaac Sim 6.2 API and has not run yet: the first run on the
-4090 is expected to need node-name and attribute fixes. `arm_mirror` sends the mock UR's commanded joints to
+`scripts/isaac_scene.py` is written against the Isaac Sim 6.2 API and has not run yet. Known from the 6.2 docs
+(read 2026-11-07) and still to apply on the first run: the pip install goes in a Python 3.12 venv
+(`provision/gpu/provision_gpu.sh isaacsim`), the EULA needs `OMNI_KIT_ACCEPT_EULA=YES`, the ROS 2 bridge
+extension is `isaacsim.ros2.bridge` with Jazzy recommended on 24.04 and Cyclone DDS supported; the transform
+tree and joint state publishers now take their data from `Isaac Compute Transform Tree` and `Isaac Read Joint
+State` nodes (the script's direct `targetPrims` / `targetPrim` inputs are deprecated but still accepted);
+the PhysX lidar is deprecated in favour of the Physics Raycast Sensor / RTX lidar, so the three lidars will
+move to that API. `arm_mirror` sends the mock UR's commanded joints to
 the simulated arm. Tests cover what runs without Isaac Sim: the URDF export and the map-to-walls conversion.
 Replaces v1's `Scripts/sim_robot.py` and the MuJoCo cell.
