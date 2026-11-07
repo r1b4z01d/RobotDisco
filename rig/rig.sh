@@ -17,7 +17,7 @@ IMAGE="${IMAGE:-robotdisco-rig:jazzy}"
 mkdir -p "$HERE/.colcon"/{build,install,log}
 
 run() {
-  docker run --rm -i $([ -t 0 ] && echo -t) \
+  docker run --rm -i $([ -t 0 ] && echo -t) --ulimit core=0 \
     -v "$ROOT:/ws" \
     -v "$HERE/.colcon/build:/ws/build" -v "$HERE/.colcon/install:/ws/install" -v "$HERE/.colcon/log:/ws/log" \
     -e RD_ROBOT_CONFIG=/ws/config/robot.yaml \

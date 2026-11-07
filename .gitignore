@@ -24,3 +24,7 @@ provision/snapshot-*/
 
 # the test rig's colcon dirs
 rig/.colcon/
+
+# core dumps (move_group segfaults in the rig wrote them into the working tree once)
+core
+core.*
