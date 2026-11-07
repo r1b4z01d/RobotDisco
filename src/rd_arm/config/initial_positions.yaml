@@ -1,7 +1,7 @@
-# Where the mock arm starts (sim_mode): the vla_home placeholder from poses.yaml (unprefixed keys: the UR macro's convention).
-shoulder_pan_joint: 3.17574
-shoulder_lift_joint: -1.61952
-elbow_joint: -0.47343
-wrist_1_joint: -3.07802
-wrist_2_joint: -1.34065
-wrist_3_joint: -0.06669
+# Where the mock arm starts (sim_mode): vla_home from poses.yaml (unprefixed keys: the UR macro's convention).
+shoulder_pan_joint: 4.010228
+shoulder_lift_joint: -1.322734
+elbow_joint: -0.822906
+wrist_1_joint: -1.143980
+wrist_2_joint: 2.198752
+wrist_3_joint: -0.787094

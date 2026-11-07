@@ -119,6 +119,7 @@ def test_motion_library(monkeypatch):
     assert rs[1][0] == pytest.approx(0.01) and rs[-1][0] == pytest.approx((len(m["q"]) - 1) * 0.01)
     poses = motions.load_poses()
     assert set(poses) >= {"vla_home", "transport"} and len(poses["vla_home"]) == 6
-    assert motions.joint_distance(poses["vla_home"], m["q"][0]) < 1e-6     # the rig's placeholder home
+    assert poses["vla_home"] == pytest.approx([4.010228, -1.322734, -0.822906, -1.143980, 2.198752, -0.787094], abs=1e-6)  # the robot's recorded home
+    assert motions.joint_distance(poses["vla_home"], m["q"][0]) > 1.0      # the wave starts elsewhere: a Wave from home begins with a MoveIt approach
     with pytest.raises(FileNotFoundError):
         motions.load_motion("nope")

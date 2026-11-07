@@ -1,9 +1,8 @@
 # Named joint poses (radians, UR joint order: shoulder_pan, shoulder_lift, elbow, wrist_1, wrist_2, wrist_3).
-# vla_home: where every policy starts from and where every gesture returns to (v1: VLA/outputs/home_pose.json,
-# captured with the teleop panel's "Set Home"; the file lives on the robot and comes back with the phase 0
-# snapshot). The value below is the wave recording's first sample, a PLACEHOLDER so the rig's wave needs no
-# long approach; replace it with the robot's real home before phase 8.
+# vla_home: where every policy starts from and where every gesture returns to: the robot's recorded home
+# (v1's VLA/outputs/home_pose.json, the median start pose of the tigger_1 episodes, 2026-10-11; copied from the
+# GPU box 2026-11-07). The wave recording starts elsewhere, so a Wave from home begins with a MoveIt approach plan.
 poses:
-  vla_home: [3.17574, -1.61952, -0.47343, -3.07802, -1.34065, -0.06669]
+  vla_home: [4.010228, -1.322734, -0.822906, -1.143980, 2.198752, -0.787094]
   # a folded transport pose for driving with the arm up out of the way (TODO: capture on the robot)
   transport: [3.14159, -2.0, -1.2, -1.5, -1.5708, 0.0]

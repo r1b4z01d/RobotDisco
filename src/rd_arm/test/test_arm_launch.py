@@ -99,7 +99,7 @@ class TestArm(unittest.TestCase):
         self.wait_for(lambda: all(n in self.q for n in UR), 60, 'UR joint states')
         self.wait_for(lambda: {'joint_state_broadcaster', 'joint_trajectory_controller'} <= self.active_controllers(), 60, 'controllers active')
         self.assertNotIn('forward_position_controller', self.active_controllers())
-        self.assertAlmostEqual(self.q['ur_shoulder_pan_joint'], 3.17574, places=3)     # the mock starts at vla_home
+        self.assertAlmostEqual(self.q['ur_shoulder_pan_joint'], 4.010228, places=3)    # the mock starts at vla_home
 
     def test_2_arm_power(self):
         st = self.call(self.power, ArmPower.Request(command=ArmPower.Request.STATUS))

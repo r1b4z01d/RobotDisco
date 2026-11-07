@@ -22,7 +22,7 @@ ros2 service call /arm/stream std_srvs/srv/SetBool "{data: true}"  # then /arm/t
 | `rd_arm/wave_server.py` | `Wave` action: MoveIt plan to the recording's first sample, the samples as one trajectory at `speed_scale` with the finger wiggle, MoveIt plan back to `home` / `start` / `none` | `ur_motion.py` (servoJ) |
 | `rd_arm/hand_node.py` + `hand_link.py` + `hand_protocol.py` | the hand over UDP with the liveness probe; `/hand/curls`, `/hand/offsets`, `/hand/state`, open / close / wiggle services | `amazing_hand_client.py`, `hand_wiggle.py` |
 | `rd_arm/stream.py` | 50 Hz streaming on `forward_position_controller`: IK once per new target (`/compute_ik`), per-tick step cap, branch-flip rejection; `/arm/stream` switches controllers | `rtde_arm.py`'s servoJ thread |
-| `rd_arm/motions.py`, `motions/wave.json`, `config/poses.yaml` | recorded motions (`$RD_MOTIONS_DIR` for the robot's own) and named poses; `vla_home` is a PLACEHOLDER until the robot's `home_pose.json` comes back | `~/.robot_face/motions`, `VLA/outputs/home_pose.json` |
+| `rd_arm/motions.py`, `motions/wave.json`, `config/poses.yaml` | recorded motions (`$RD_MOTIONS_DIR` for the robot's own) and named poses; `vla_home` is the robot's recorded home (v1's `home_pose.json`, 2026-10-11) | `~/.robot_face/motions`, `VLA/outputs/home_pose.json` |
 | `rd_arm/fake_dashboard.py`, `fake_hand.py` | the rig's UR dashboard and hand on loopback | |
 
 Tests (`rig/rig.sh test rd_arm`): protocol / link / dashboard / motion units against the fakes (incl. protective
@@ -32,4 +32,4 @@ closed and reported back, the wave with MoveIt-planned moves to the transport po
 
 Hardware only (phase 8): the real dashboard and PolyScope's remote-control mode, headless mode's program
 resend, the tool voltage, speed scaling, servo smoothness against v1's servoJ (the plan's gate), the keepout
-box against the CAD, the real `vla_home`, cuMotion in place of OMPL.
+box against the CAD, cuMotion in place of OMPL.
