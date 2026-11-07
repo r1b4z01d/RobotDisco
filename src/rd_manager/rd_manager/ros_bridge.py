@@ -382,7 +382,8 @@ class RosBridge:
                                       for p in ps[::max(1, len(ps) // 1500)]]
             try:
                 tf = self.buf.lookup_transform("map", "base_footprint", rclpy.time.Time())
-                age = now - (tf.header.stamp.sec + tf.header.stamp.nanosec * 1e-9)
+                ros_now = self.node.get_clock().now().nanoseconds * 1e-9       # ROS time: = sim time under use_sim_time (Isaac), wall time otherwise
+                age = ros_now - (tf.header.stamp.sec + tf.header.stamp.nanosec * 1e-9)
                 if age > FRAME_FRESH_S:
                     raise RuntimeError(f"stale TF ({age:.0f} s old)")
                 t, q = tf.transform.translation, tf.transform.rotation

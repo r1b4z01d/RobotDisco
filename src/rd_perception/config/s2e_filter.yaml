@@ -1,4 +1,6 @@
-scan_to_scan_filter_chain:
+# /** = any node name: the launch names the chains rp_s1_filter / rp_s2e_filter, and a file keyed on the default
+# node name applied nothing (no filters at all; found by the rd_perception sim-mode test, 2026-11-07).
+/**:
   ros__parameters:
     HW_ID: none
     filter1:

@@ -37,5 +37,6 @@ def generate_launch_description():
                                  launch_arguments=[('backend', 'fake'), ('python', 'python3'), ('device', 'cpu'), ('use_sim_time', 'true')],
                                  condition=IfCondition(LaunchConfiguration('vla'))),
         Node(package='rd_manager', executable='manager', name='rd_manager', output='screen', arguments=['--sim', 'true'],
+             parameters=[{'use_sim_time': True}],       # its stamps and TF ages follow Isaac's /clock
              condition=IfCondition(LaunchConfiguration('manager'))),
     ])
