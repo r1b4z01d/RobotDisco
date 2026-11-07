@@ -40,5 +40,5 @@ the xpad rebuild and the two-OpenCV patch that v2 no longer needs).
 
 Files: `apt-packages.txt`, `ros-packages.txt`, `isaac-packages.txt`, `udev/`, `netplan/`,
 `cyclonedds.xml` (the loopback-only DDS profile v1 settled on), `patches/` (empty until a vendored package
-needs one). The GPU box's provisioning is `gpu/provision_gpu.sh` (see `gpu/README.md`); the day-to-day deploy script is `deploy_to_rd.sh`. Originally:
-`rd_manager` exists to deploy.
+needs one). The GPU box's provisioning is `gpu/provision_gpu.sh` (see `gpu/README.md`); the day-to-day
+deploy script is `deploy_to_rd.sh`.
