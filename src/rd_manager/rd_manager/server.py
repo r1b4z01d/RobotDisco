@@ -325,15 +325,19 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
 
     @app.post("/api/voice/text")
     def api_voice_text(body: dict = Body(...)):
-        from std_msgs.msg import String
-        if not B:
-            raise HTTPException(503, "no ROS")
-        B.voice_text_pub.publish(String(data=str(body.get("text", ""))))
-        return {"ok": True}
+        """The Live tab's text box: typed text goes to the voice assistant as if Whisper had heard it."""
+        text = str(body.get("text", "")).strip()
+        if not text:
+            raise HTTPException(400, "text")
+        if not ros_up():
+            raise HTTPException(503, "the ROS bridge is not up")
+        return B.voice_text(text)
 
     @app.get("/api/voice")
     def api_voice():
-        return B.voice if B else {}
+        """What the voice assistant last heard / took as the command / answered (each with a server timestamp
+        <key>_t), its state, and listeners = whether it is subscribed to the text box's topic."""
+        return {**B.voice, "listeners": B.voice_text_pub.get_subscription_count()} if B else {}
 
     # ------------------------------------------------------------------ the arm, the hand, policies
     @app.get("/api/arm")

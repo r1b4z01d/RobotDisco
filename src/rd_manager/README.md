@@ -28,4 +28,6 @@ Tests: routes / runner / supervisor / grids (units); the HTTP API without ROS th
 (pages, maps incl. SLAM request and the drawing save, landmarks and tasks, routes, evals, services against
 the fake supervisord); a launch test with the loopback simulator, Nav2, fake cameras and the Say server:
 live pose, scans, map, camera JPEGs, a landmark captured with its photo, GoToLandmark from the API,
-HALT stops the drive, the drive pad, speech, the WebSocket.
+HALT stops the drive, the drive pad, speech, the WebSocket. The Live tab's text box sends typed text to the voice
+assistant exactly as if Whisper had heard it (`POST /api/voice/text` -> `/voice/text_in`, so the wake phrase applies:
+"Robot Disco, what time is it") and shows what it heard and answered (`/api/voice`, timestamped).

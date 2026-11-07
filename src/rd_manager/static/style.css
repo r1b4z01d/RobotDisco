@@ -310,3 +310,8 @@ table.svc pre.svc-log { margin: 0; padding: 8px 12px; max-height: 320px; overflo
 .mapedit-view { flex: 1; overflow: hidden; position: relative; background: #0b0c10; cursor: crosshair; }
 .mapedit-view canvas { position: absolute; left: 0; top: 0; transform-origin: 0 0; image-rendering: pixelated; }
 .mapedit-view.pan { cursor: grab; }
+
+/* the Live tab's voice box: typed text in, as if heard; what the assistant heard and answered next to it */
+.voice-form { display: flex; align-items: center; gap: 6px; margin-left: auto; min-width: 0; }
+.voice-form .ep-input { width: 280px; flex: none; }
+.voice-form #voice-echo { max-width: 460px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -32,7 +32,7 @@ POLY_MAX_POINTS = {"stop": 3, "slowdown": 3}
 FRAME_FRESH_S, FRAME_HOLD_S = 2.0, 6.0
 SCAN_MAX_POINTS, CLOUD_MAX_POINTS, CLOUD_BIN_MAX = 720, 4000, 60000
 CLOUD_Z = (0.05, 2.0)
-DRIVE_HZ, DRIVE_STALE_S, DRIVE_MAX_VX, DRIVE_MAX_WZ, DRIVE_TURBO = 10.0, 0.4, 0.25, 0.6, 2.0
+DRIVE_HZ, DRIVE_STALE_S, DRIVE_MAX_VX, DRIVE_MAX_WZ, DRIVE_TURBO = 10.0, 0.4, 0.25, 0.5, 4.0   # scales + LB turbo of rd_base joystick.yaml (1.0 m/s, 2.0 rad/s)
 
 
 def _yaw(q) -> float:
@@ -161,9 +161,8 @@ class RosBridge:
         n.create_subscription(Float32MultiArray, "/hand/state", lambda m: setattr(self, "hand_state", list(m.data)), 10, callback_group=self.cb)
         n.create_subscription(String, "/arm/stream_state", lambda m: setattr(self, "stream_state", m.data), 10, callback_group=self.cb)
         n.create_subscription(Bool, "/speaking", lambda m: setattr(self, "speaking", bool(m.data)), 10, callback_group=self.cb)
-        n.create_subscription(String, "/voice/state", lambda m: self.voice.__setitem__("state", m.data), 10, callback_group=self.cb)
-        n.create_subscription(String, "/voice/heard", lambda m: self.voice.__setitem__("heard", m.data), 10, callback_group=self.cb)
-        n.create_subscription(String, "/voice/reply", lambda m: self.voice.__setitem__("reply", m.data), 10, callback_group=self.cb)
+        for key in ("state", "heard", "command", "reply"):   # what it heard (speech or typed), took as the command, answered
+            n.create_subscription(String, f"/voice/{key}", (lambda k: lambda m: self._voice_set(k, m.data))(key), 10, callback_group=self.cb)
         # publishers
         self.goal_pub = n.create_publisher(PoseStamped, "/goal_pose", latched)
         self.init_pub = n.create_publisher(PoseWithCovarianceStamped, "/initialpose", 10)
@@ -396,6 +395,17 @@ class RosBridge:
 
     def pose_fresh(self):
         return self.pose if time.time() - self.pose_t < FRAME_HOLD_S else None
+
+    # ---- the voice assistant
+    def _voice_set(self, key: str, value: str):
+        self.voice[key] = value
+        self.voice[key + "_t"] = time.time()          # so a page can tell a new reply from the previous one
+
+    def voice_text(self, text: str) -> dict:
+        """The Live tab's text box: the text reaches rd_voice on /voice/text_in exactly as a Whisper transcript
+        would (the wake phrase applies); listeners = 0 means the voice assistant is not running."""
+        self.voice_text_pub.publish(String(data=text))
+        return {"ok": True, "text": text, "listeners": self.voice_text_pub.get_subscription_count()}
 
     # ---- the drive pad
     def _drive_loop(self):

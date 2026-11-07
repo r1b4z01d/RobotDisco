@@ -1,8 +1,10 @@
 """Launch test: the manager in the rig with the loopback simulator, Nav2, fake cameras and the Say server.
 Checks what the pages need: a live pose, scans in the map frame, the map, camera JPEGs, a landmark captured
-at the robot with a stitched photo, GoToLandmark from the API, HALT, the WebSocket stream, a spoken sentence."""
+at the robot with a stitched photo, GoToLandmark from the API, HALT, the WebSocket stream, a spoken sentence,
+typed text reaching the voice assistant (ears and LLM off) and its reply coming back."""
 import json
 import os
+import re
 import tempfile
 import time
 import unittest
@@ -35,9 +37,11 @@ def generate_test_description():
                                    launch_arguments=[('use_sim_time', 'true'), ('tag_corrector', 'false')])
     cams = Node(package='rd_perception', executable='fake_cameras', name='fake_cameras', parameters=[{'use_sim_time': True}])
     say = Node(package='rd_audio', executable='say_server', name='say_server', parameters=[{'engine': 'fake', 'player': 'none', 'sink_watchdog': False, 'sink': ''}])
+    voice = Node(package='rd_voice', executable='voice', name='voice',
+                 parameters=[{'ears_enabled': False, 'llm_enabled': False, 'llm_backend': 'none', 'volume_sink': ''}])
     manager = Node(package='rd_manager', executable='manager', name='rd_manager', output='screen',
                    arguments=['--port', str(PORT), '--sim', 'true', '--data', str(TMP), '--landmarks-dir', str(TMP / 'landmarks'), '--routes-dir', str(TMP / 'routes')])
-    return launch.LaunchDescription([sim, nav, cams, say, manager, launch_testing.actions.ReadyToTest()]), {}
+    return launch.LaunchDescription([sim, nav, cams, say, voice, manager, launch_testing.actions.ReadyToTest()]), {}
 
 
 def get(path, raw=False):
@@ -116,6 +120,19 @@ class TestManager(unittest.TestCase):
         self.assertEqual(status, 200) and self.assertEqual(r['vx'], 0.2)
         status, r = post('/api/drive', {'vx': float('nan'), 'wz': 0.0})
         self.assertEqual(status, 400)
+
+    def test_6_voice_text(self):
+        # the Live tab's text box: typed text reaches rd_voice as a transcript (wake phrase and all), the reply comes back
+        self.wait_for(lambda: get('/api/voice').get('listeners'), 60, 'the voice assistant to listen on /voice/text_in')
+        status, r = post('/api/voice/text', {'text': '   '})
+        self.assertEqual(status, 400)
+        status, r = post('/api/voice/text', {'text': 'robot disco what time is it'})
+        self.assertEqual(status, 200)
+        self.assertGreaterEqual(r['listeners'], 1, r)
+        self.wait_for(lambda: get('/api/voice').get('heard') == 'robot disco what time is it', 10, 'the text to be heard')
+        self.wait_for(lambda: 'time' in get('/api/voice').get('command', ''), 10, 'the command after the wake phrase')
+        self.wait_for(lambda: re.search(r'\d', get('/api/voice').get('reply', '')), 20, 'a reply with the time in it')
+        self.assertGreater(get('/api/voice')['reply_t'], get('/api/voice')['heard_t'] - 1)
 
     def test_5_say_and_ws(self):
         status, r = post('/api/say', {'text': 'hello from the manager', 'wait': True})

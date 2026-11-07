@@ -288,6 +288,11 @@
           </span>
           <span id="map-status" class="mono muted">—</span>
           <a id="map-open" class="muted" href="#" target="_blank" title="open in its own tab">↗</a>
+          <form id="voice-form" class="voice-form" title="typed text goes to the voice assistant exactly as if Whisper had heard it, wake phrase and all: start with “Robot Disco”">
+            <input id="voice-text" class="ep-input" type="text" placeholder="Robot Disco, what time is it" autocomplete="off" spellcheck="false">
+            <button id="voice-send" class="btn tiny" type="submit" title="send the text to the voice assistant as if it had been heard">Say to robot</button>
+            <span id="voice-echo" class="mono muted"></span>
+          </form>
         </div>
         <iframe id="map-frame" class="robot-frame" title="map" allow="fullscreen; gamepad"></iframe>
         <div id="actlog" class="actlog collapsed">

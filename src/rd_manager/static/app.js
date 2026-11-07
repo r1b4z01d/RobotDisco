@@ -1177,6 +1177,44 @@ async function loadMapView() {
   mapTimer = setInterval(async () => { if (state.view !== "map") return; try { show(await api("/api/route_editor?scope=map")); } catch (e) { /* keep */ } }, 5000);
 }
 
+// ---- Live view: the voice box. Typed text reaches the voice assistant as if Whisper had heard it ----
+// POST /api/voice/text -> /voice/text_in (rd_voice), wake phrase and all. The node reports on /voice/heard,
+// /voice/command and /voice/reply; the manager mirrors them (with server-side timestamps) in /api/voice, which
+// is polled for a while after each send so only what came back AFTER the send is shown.
+var voiceEcho = { timer: null, until: 0, t0: {} };
+function voiceEchoRender(v) {
+  const e = $("#voice-echo"), fresh = (k) => v[k] && (v[k + "_t"] || 0) > (voiceEcho.t0[k] || 0);
+  const parts = [];
+  if (fresh("command")) parts.push(`heard: ${v.command}`); else if (fresh("heard")) parts.push(`heard: ${v.heard}`);
+  if (fresh("reply")) parts.push(`reply: ${v.reply}`);
+  else if (v.state && v.state !== "idle") parts.push(v.state);
+  e.textContent = parts.join(" · ");
+  e.className = "mono " + (fresh("reply") ? "ok" : "muted");
+}
+async function voiceEchoPoll() {
+  if (Date.now() > voiceEcho.until) { clearInterval(voiceEcho.timer); voiceEcho.timer = null; return; }
+  try { voiceEchoRender(await api("/api/voice")); } catch (e) { /* keep the last echo */ }
+}
+$("#voice-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const input = $("#voice-text"), btn = $("#voice-send"), text = input.value.trim();
+  if (!text) return;
+  btn.disabled = true;
+  try {
+    let v0 = {};
+    try { v0 = await api("/api/voice"); } catch (e) { /* no ROS: the POST below says so */ }
+    voiceEcho.t0 = { heard: v0.heard_t || 0, command: v0.command_t || 0, reply: v0.reply_t || 0 };
+    const r = await post("/api/voice/text", { text });
+    input.value = "";
+    if (r.listeners) ok(`sent to the voice assistant: “${text}”`);
+    else err("sent, but nothing is listening on /voice/text_in: is the voice assistant running? (Services tab)");
+    $("#voice-echo").textContent = `sent: ${text}`; $("#voice-echo").className = "mono muted";
+    voiceEcho.until = Date.now() + 25000;
+    if (!voiceEcho.timer) voiceEcho.timer = setInterval(voiceEchoPoll, 1000);
+  } catch (e) { err(e); }
+  finally { btn.disabled = false; input.focus(); }
+});
+
 // ---- Live view: collapsible activity log (what the robot's units are doing / waiting for) ----
 // /api/activity merges the supervisor log tails of the nav, collision monitor, localization, route, voice, face,
 // eval and inference units, noise removed. Fetched only while the pane is open and the Live tab is up.

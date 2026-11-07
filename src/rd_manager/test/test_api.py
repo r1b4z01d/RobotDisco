@@ -46,6 +46,9 @@ def test_map_and_pose_without_ros(client):
     assert p["pose"] is None and p["ros_up"] is False
     assert client.get("/api/scans").json()["scans"] == {}
     assert client.post("/api/drive", json={"vx": 0.1, "wz": 0}).status_code == 503
+    assert client.post("/api/voice/text", json={"text": "robot disco hello"}).status_code == 503
+    assert client.post("/api/voice/text", json={"text": "   "}).status_code == 400
+    assert client.get("/api/voice").json() == {}
     assert client.get("/api/cameras").json()["cameras"][0]["alive"] is False
 
 
