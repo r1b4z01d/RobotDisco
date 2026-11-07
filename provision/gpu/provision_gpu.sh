@@ -11,6 +11,10 @@
 #   Isaac Sim:  https://docs.isaacsim.omniverse.nvidia.com/latest/installation/install_python.html  (6.2.0, Python 3.12, pip)
 #   Isaac ROS:  https://nvidia-isaac-ros.github.io/v/release-4.6/getting_started/index.html         (apt repo, CLI, venv mode)
 set -euo pipefail
+# The box's ~/.local (v1 tooling) holds setuptools 84 and OpenCV 5: the first drops tests_require, so colcon
+# silently runs unittest instead of pytest (0 tests); the second shadows the cv_bridge-matching system OpenCV.
+# 5.0 runs on the system site-packages only, like the rig and the robot.
+export PYTHONNOUSERSITE=1
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 WS="${WS:-$HOME/RobotDisco}"
@@ -57,6 +61,7 @@ export CYCLONEDDS_URI="file://$WS/provision/cyclonedds.xml"
 export ROS_DOMAIN_ID=0
 export RD_ROBOT_CONFIG=$WS/config/robot.yaml
 export RD_DATA_DIR=$HOME/RobotDisco-data
+export PYTHONNOUSERSITE=1    # ~/.local (setuptools 84, OpenCV 5) must not shadow the system packages
 BASHRC
 }
 
@@ -73,7 +78,7 @@ phase_workspace() {
     rsync -a --ignore-existing "$HOME/VLA/outputs/datasets/" "$HOME/RobotDisco-data/outputs/datasets/" || true
     rsync -a --ignore-existing "$HOME/VLA/outputs/train/" "$HOME/RobotDisco-data/outputs/train/" || true
     rsync -a --ignore-existing "$HOME/VLA/outputs/evals/" "$HOME/RobotDisco-data/outputs/evals/" || true
-    [ -f "$HOME/VLA/outputs/home_pose.json" ] && cp -n "$HOME/VLA/outputs/home_pose.json" "$HOME/RobotDisco-data/" || true
+    [ -f "$HOME/VLA/outputs/home_pose.json" ] && cp --update=none "$HOME/VLA/outputs/home_pose.json" "$HOME/RobotDisco-data/" || true
   fi
 }
 

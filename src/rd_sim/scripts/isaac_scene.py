@@ -1,33 +1,43 @@
-"""Build the Robot Disco scene in Isaac Sim 6.2 and bridge it to ROS 2 (Jazzy). Run INSIDE Isaac Sim's python:
+"""Build the Robot Disco scene in Isaac Sim 6.2 and bridge it to ROS 2 (Jazzy). Run with the Isaac Sim pip venv's python
+(provision/gpu/provision_gpu.sh isaacsim), with the system Jazzy sourced first, RMW_IMPLEMENTATION=rmw_cyclonedds_cpp and
+OMNI_KIT_ACCEPT_EULA=YES in the environment:
 
-    ~/isaacsim/python.sh ~/RobotDisco/src/rd_sim/scripts/isaac_scene.py --urdf /tmp/robot_disco.urdf [--headless] [--world zone_one]
+    ~/isaacsim-venv/bin/python ~/RobotDisco/src/rd_sim/scripts/isaac_scene.py --urdf /tmp/robot_disco.urdf [--headless] [--world zone_one]
 
-What it does (Isaac Sim 6.2 / isaacsim.* API; written against the 6.2 docs, NOT yet run - phase 7 validates it):
-  1. imports the flat URDF (rd_sim export_urdf) as an articulation with the drive wheels velocity-driven and the
-     UR joints position-driven; the hand is the baked visual
+What it does (Isaac Sim 6.2 / isaacsim.* API, every call checked against the 6.2 docs on 2026-11-07, NOT yet run - phase 7
+validates it; the `# UNVERIFIED (6.2):` comments mark what the docs did not settle):
+  1. imports the flat URDF (rd_sim export_urdf) with URDFImporter as a floating-base articulation, the drive wheels
+     velocity-driven and the UR joints position-driven, and references the result into the stage; the hand is the baked visual
   2. builds the world: a ground plane and the active map's occupied cells as 2.5 m boxes (so the simulated lidars
      see the walls the map has) from rd_nav's maps folder
-  3. attaches sensors: two 2D PhysX lidars (frames rp_s1_lidar / rp_s2e_lidar, 360 deg, 1 deg, 0.1..20 m),
-     a Velodyne-like 3D lidar (velodyne_frame), an RGB-D camera (camera_link_optical, 1280x720), three RGB
-     cameras (scene / wrist / side)
-  4. wires the ROS 2 bridge OmniGraph: /clock, TF (odom->base_link from the articulation's chassis pose,
-     the robot's fixed frames), /joint_states (wheels + UR), /diff_cont/odom, the scans on
-     /rp_s1_lidar/scan_filtered and /rp_s2e_lidar/scan_filtered, /velodyne_points, the camera topics the
-     rest of 5.0 subscribes to, and subscribers: /diff_cont/cmd_vel (TwistStamped -> wheel velocities) and
-     /ur5e/forward_position_controller/commands + /ur5e/joint_trajectory_controller (positions -> UR drives)
+  3. attaches sensors: two 2D RTX lidars (frames rp_s1_lidar / rp_s2e_lidar, 360 deg, 10 Hz, 0.1..20 m), a Velodyne-like
+     3D RTX lidar (velodyne_frame), an RGB camera on camera_link_optical (1280x720) and three RGB webcams (scene / wrist /
+     side) - the PhysX lidar and isaacsim.sensors.camera are deprecated since 6.0
+  4. wires the ROS 2 bridge (isaacsim.ros2.bridge): /clock, odom->base_link TF from the chassis pose, /joint_states
+     (wheels + UR), /diff_cont/odom, the scans on /rp_s1_lidar/scan_filtered and /rp_s2e_lidar/scan_filtered,
+     /velodyne_points, the camera topics the rest of 5.0 subscribes to, and subscribers: /diff_cont/cmd_vel
+     (TwistStamped, as rd_nav / rd_manager send it to the real base; relayed to the bridge's Twist subscriber and zeroed
+     0.5 s after the last command) -> wheel velocities, and /ur5e/sim_joint_command (JointState from arm_mirror) -> UR drives.
+     The robot's own frames come from robot_state_publisher (sim.launch.py), so the sim publishes no link TF itself.
   5. runs the simulation loop until closed
 
-With this running, the 5.0 stack runs unchanged on the GPU box: rd_nav + rd_arm (sim_mode for the mock UR, or
-the UR driven by the bridge's joint command subscriber) + rd_vla + rd_manager. The base's own controller
-manager is NOT run (the bridge integrates cmd_vel itself); the arm's controller manager runs on mock hardware
-and the bridge mirrors its commanded joints.
+With this running, the 5.0 stack runs unchanged on the GPU box: rd_nav + rd_arm (sim_mode for the mock UR, mirrored into
+the simulated arm by arm_mirror) + rd_vla + rd_manager. The base's own controller manager is NOT run (the bridge
+integrates cmd_vel itself); the arm's controller manager runs on mock hardware and the bridge mirrors its commanded joints.
 """
 from __future__ import annotations
 
 import argparse
 import math
-import sys
+import threading
+import time
 from pathlib import Path
+
+WHEELS = ["left_wheel_joint", "right_wheel_joint"]
+UR = ["ur_shoulder_pan_joint", "ur_shoulder_lift_joint", "ur_elbow_joint", "ur_wrist_1_joint", "ur_wrist_2_joint", "ur_wrist_3_joint"]
+CMD_VEL_STAMPED = "/diff_cont/cmd_vel"               # what the stack publishes (geometry_msgs/TwistStamped)
+CMD_VEL_TWIST = "diff_cont/cmd_vel_unstamped"        # what the bridge's ROS2SubscribeTwist (geometry_msgs/Twist) reads
+ROBOT = "/World/RobotDisco"
 
 
 def parse():
@@ -71,153 +81,210 @@ def map_boxes(maps_dir: Path, name: str, height: float = 2.5, merge: int = 4):
     return boxes, height
 
 
+def start_cmd_vel_relay(timeout: float = 0.5):
+    """TwistStamped on /diff_cont/cmd_vel -> Twist on diff_cont/cmd_vel_unstamped for the bridge (its ROS2SubscribeTwist
+    node only takes geometry_msgs/Twist), zero after `timeout` s without a command, as the base's diff_drive_controller
+    does. rclpy next to the bridge is the pattern the 6.2 'ROS 2 Bridge in Standalone Workflow' page shows."""
+    try:  # UNVERIFIED (6.2): the system Jazzy rclpy (Python 3.12) imported from the Isaac venv's python
+        import rclpy
+        from geometry_msgs.msg import Twist, TwistStamped
+    except ImportError as e:  # noqa: BLE001
+        print(f"cmd_vel relay OFF ({e}): the bridge subscribes Twist on {CMD_VEL_STAMPED} directly, TwistStamped senders will be ignored")
+        return None
+    rclpy.init()
+    node = rclpy.create_node("rd_sim_cmd_vel_relay")
+    pub = node.create_publisher(Twist, CMD_VEL_TWIST, 10)
+    last = {"twist": Twist(), "t": 0.0}
+
+    def on_cmd(m):
+        last["twist"], last["t"] = m.twist, time.monotonic()
+
+    node.create_subscription(TwistStamped, CMD_VEL_STAMPED, on_cmd, 10)
+    node.create_timer(0.05, lambda: pub.publish(last["twist"] if time.monotonic() - last["t"] < timeout else Twist()))
+    threading.Thread(target=rclpy.spin, args=(node,), daemon=True).start()
+    return node
+
+
 def main():
     args = parse()
-    from isaacsim import SimulationApp  # noqa: PLC0415 - Isaac Sim's python only
-    app = SimulationApp({"headless": args.headless, "width": 1280, "height": 720})
+    from isaacsim import SimulationApp  # noqa: PLC0415 - Isaac Sim's python only; Omniverse imports must follow the app
+    app = SimulationApp({"headless": args.headless, "width": 1280, "height": 720, "renderer": "RayTracedLighting"})
     import numpy as np
     import omni.graph.core as og
-    from isaacsim.core.api import World
-    from isaacsim.core.utils.stage import add_reference_to_stage
-    from isaacsim.asset.importer.urdf import _urdf
-    from pxr import Gf, UsdGeom, UsdPhysics
+    import isaacsim.core.experimental.utils.app as app_utils
+    import isaacsim.core.experimental.utils.prim as prim_utils
+    import isaacsim.core.experimental.utils.stage as stage_utils
+    from isaacsim.asset.importer.urdf import URDFImporter, URDFImporterConfig
+    from isaacsim.core.experimental.objects import Cube, GroundPlane
+    from isaacsim.core.simulation_manager import SimulationManager
+    from isaacsim.sensors.experimental.rtx import Lidar, LidarSensor, RtxCamera
+    from pxr import Gf, Sdf, Usd, UsdGeom, UsdPhysics
 
-    world = World(stage_units_in_meters=1.0)
-    world.scene.add_default_ground_plane()
+    for ext in ("isaacsim.ros2.bridge", "isaacsim.ros2.nodes", "isaacsim.core.nodes", "isaacsim.sensors.physics.nodes",
+                "isaacsim.robot.wheeled_robots.nodes"):
+        app_utils.enable_extension(ext)
+    app.update()
+    stage_utils.set_stage_units(meters_per_unit=1.0)
+    stage = stage_utils.get_current_stage()
 
-    # 1. the robot
-    cfg = _urdf.ImportConfig()
-    cfg.merge_fixed_joints = False
-    cfg.fix_base = False
-    cfg.make_default_prim = False
-    cfg.default_drive_type = _urdf.UrdfJointTargetType.JOINT_DRIVE_POSITION
-    cfg.default_drive_strength = 1e4
-    cfg.default_position_drive_damping = 1e3
-    cfg.distance_scale = 1.0
-    ok, prim_path = _urdf.acquire_urdf_interface().import_robot(str(Path(args.urdf).parent), Path(args.urdf).name, cfg, "/World/RobotDisco")
-    assert ok, "URDF import failed"
-    stage = world.stage
-    robot = stage.GetPrimAtPath(prim_path)
+    # 1. the robot: URDF -> USD file (next to the URDF) -> referenced at /World/RobotDisco
+    wheels_v = {"left_wheel_joint": "velocity", "right_wheel_joint": "velocity"}
+    # UNVERIFIED (6.2): the dict form maps joint-name regexes to values; match mode and precedence are not documented,
+    # so the drives are re-asserted on the USD below
+    cfg = URDFImporterConfig(urdf_path=str(Path(args.urdf).resolve()), fix_base=False, merge_fixed_joints=False,
+                             joint_target_type={**wheels_v, "ur_.*": "position"},
+                             override_joint_stiffness={"left_wheel_joint": 0.0, "right_wheel_joint": 0.0, "ur_.*": 1e4},
+                             override_joint_damping={"left_wheel_joint": 1e4, "right_wheel_joint": 1e4, "ur_.*": 1e3})
+    usd_path = URDFImporter(cfg).import_urdf()
+    robot = stage_utils.add_reference_to_stage(usd_path, ROBOT)
+    assert robot and robot.GetChildren(), f"{usd_path}: nothing composed at {ROBOT} (no default prim?)"
     xf = UsdGeom.Xformable(robot)
     xf.ClearXformOpOrder()
     xf.AddTranslateOp().Set(Gf.Vec3d(args.x, args.y, 0.2))
     xf.AddRotateZOp().Set(math.degrees(args.yaw))
-    for wheel in ("left_wheel_joint", "right_wheel_joint"):          # the wheels are velocity driven
-        drive = UsdPhysics.DriveAPI.Get(stage.GetPrimAtPath(f"{prim_path}/joints/{wheel}"), "angular")
-        if drive:
-            drive.GetStiffnessAttr().Set(0.0)
-            drive.GetDampingAttr().Set(1e4)
 
-    # 2. the walls from the map
+    def prim_named(name, predicate=lambda p: True):
+        # UNVERIFIED (6.2): the importer's USD layout (links flat under the root or nested) - found by name, not by path
+        p = next((p for p in Usd.PrimRange(robot) if p.GetName() == name and predicate(p)), None)
+        assert p, f"{name}: not in the imported USD ({usd_path})"
+        return p
+
+    root = next((p for p in Usd.PrimRange(robot) if p.HasAPI(UsdPhysics.ArticulationRootAPI)), robot)
+    root_path = str(root.GetPath())
+    for name, stiffness, damping in [(w, 0.0, 1e4) for w in WHEELS] + [(j, 1e4, 1e3) for j in UR]:
+        jp = prim_named(name, lambda p: p.IsA(UsdPhysics.Joint))
+        drive = UsdPhysics.DriveAPI.Get(jp, "angular") or UsdPhysics.DriveAPI.Apply(jp, "angular")
+        drive.CreateStiffnessAttr().Set(stiffness)          # 0 stiffness + damping = velocity drive (the wheels)
+        drive.CreateDampingAttr().Set(damping)
+
+    # 2. the ground and the walls from the map
+    GroundPlane("/World/GroundPlane")                        # collision plane + rendered mesh
     if args.world:
         maps_dir = Path(args.maps_dir) if args.maps_dir else Path(__import__("rd_nav.maps_store", fromlist=["default_maps_dir"]).default_maps_dir())
         boxes, height = map_boxes(maps_dir, args.world)
-        from isaacsim.core.api.objects import FixedCuboid
-        for i, (cx, cy, size) in enumerate(boxes):
-            world.scene.add(FixedCuboid(prim_path=f"/World/Walls/w{i}", name=f"wall_{i}", position=np.array([cx, cy, height / 2]),
-                                        scale=np.array([size, size, height]), color=np.array([0.6, 0.6, 0.6])))
+        if boxes:
+            stage_utils.define_prim("/World/Walls", "Xform")
+            paths = [f"/World/Walls/w{i}" for i in range(len(boxes))]
+            Cube(paths, sizes=1.0, colors="gray", positions=np.array([[cx, cy, height / 2] for cx, cy, _ in boxes]),
+                 scales=np.array([[size, size, height] for _, _, size in boxes]))
+            for p in paths:                                  # static colliders (no rigid body = fixed)
+                UsdPhysics.CollisionAPI.Apply(stage.GetPrimAtPath(p))
         print(f"{len(boxes)} wall blocks from {args.world}")
 
-    # 3. sensors + 4. the ROS 2 bridge: one OmniGraph per sensor group (isaacsim.ros2.bridge nodes)
-    import omni.kit.commands
-    from isaacsim.core.utils import extensions
-    extensions.enable_extension("isaacsim.ros2.bridge")
-    extensions.enable_extension("isaacsim.sensors.physx")
-    for frame, topic in (("rp_s1_lidar", "/rp_s1_lidar/scan_filtered"), ("rp_s2e_lidar", "/rp_s2e_lidar/scan_filtered")):
-        omni.kit.commands.execute("RangeSensorCreateLidar", path=f"{prim_path}/{frame}/lidar", parent=None, min_range=0.1, max_range=20.0,
-                                  draw_points=False, draw_lines=False, horizontal_fov=360.0, vertical_fov=1.0, horizontal_resolution=1.0,
-                                  vertical_resolution=1.0, rotation_rate=10.0, high_lod=False, yaw_offset=0.0, enable_semantics=False)
-    omni.kit.commands.execute("RangeSensorCreateLidar", path=f"{prim_path}/velodyne_frame/lidar", parent=None, min_range=0.5, max_range=50.0,
-                              draw_points=False, draw_lines=False, horizontal_fov=360.0, vertical_fov=30.0, horizontal_resolution=0.4,
-                              vertical_resolution=2.0, rotation_rate=10.0, high_lod=True, yaw_offset=0.0, enable_semantics=False)
+    # 3. sensors: RTX lidars (isaacsim.sensors.experimental.rtx) under the URDF frames, scan rate = tick rate = 10 Hz
+    # UNVERIFIED (6.2): Example_Rotary as the Velodyne stand-in (no Velodyne profile documented in SUPPORTED_LIDAR_CONFIGS)
+    # and the near/far range overrides on the example profiles
+    lidars = {}
+    for frame, config, near, far in (("rp_s1_lidar", "Example_Rotary_2D", 0.1, 20.0), ("rp_s2e_lidar", "Example_Rotary_2D", 0.1, 20.0),
+                                     ("velodyne_frame", "Example_Rotary", 0.5, 50.0)):
+        lidars[frame] = Lidar.create(path=f"{prim_named(frame).GetPath()}/lidar", config=config, tick_rate=10.0,
+                                     attributes={"omni:sensor:Core:scanRateBaseHz": 10, "omni:sensor:Core:nearRangeM": near,
+                                                 "omni:sensor:Core:farRangeM": far})
+    SimulationManager.setup_simulation(dt=1.0 / 60.0, device="cpu")
+
+    def laser_scan_metadata(prim_path):                      # from the 6.2 'RTX Lidar Sensors' ROS 2 tutorial
+        rotation_rate = float(prim_utils.get_prim_attribute_value(prim_path, "omni:sensor:Core:scanRateBaseHz") or 0)
+        near_range = float(prim_utils.get_prim_attribute_value(prim_path, "omni:sensor:Core:nearRangeM") or 0)
+        far_range = float(prim_utils.get_prim_attribute_value(prim_path, "omni:sensor:Core:farRangeM") or 0)
+        firing_rate = int(prim_utils.get_prim_attribute_value(prim_path, "omni:sensor:Core:patternFiringRateHz") or 0)
+        if rotation_rate <= 0 or firing_rate <= 0:
+            raise RuntimeError(f"{prim_path}: scanRateBaseHz or patternFiringRateHz is 0")
+        return {"horizontalFov": 360.0, "horizontalResolution": 360.0 * rotation_rate / firing_rate,
+                "depthRange": [near_range, far_range], "rotationRate": rotation_rate, "azimuthRange": [-180.0, 180.0]}
+
+    sensors = []                                             # kept alive: a LidarSensor owns its render product
+    for frame, topic in (("rp_s1_lidar", "rp_s1_lidar/scan_filtered"), ("rp_s2e_lidar", "rp_s2e_lidar/scan_filtered")):
+        s = LidarSensor(lidars[frame], annotators=[])
+        s.attach_writer("RtxLidarROS2PublishLaserScan", topicName=topic, frameId=frame, **laser_scan_metadata(lidars[frame].paths[0]))
+        sensors.append(s)
+    s = LidarSensor(lidars["velodyne_frame"], annotators=[])
+    s.attach_writer("RtxLidarROS2PublishPointCloud", topicName="velodyne_points", frameId="velodyne_frame")
+    sensors.append(s)
+
+    # 4. the ROS 2 bridge OmniGraph (isaacsim.ros2.bridge.* node types; the 6.0+ publishers take their data from the
+    # Isaac Read Joint State / Isaac Compute Odometry nodes)
+    relay = start_cmd_vel_relay()
     keys = og.Controller.Keys
+    ros_nodes = ("clock", "joints", "odom", "odom_tf", "cmd_vel", "arm_cmd")
     og.Controller.edit({"graph_path": "/World/ROS2Bridge", "evaluator_name": "execution"}, {
         keys.CREATE_NODES: [
             ("tick", "omni.graph.action.OnPlaybackTick"),
             ("time", "isaacsim.core.nodes.IsaacReadSimulationTime"),
-            ("clock", "isaacsim.ros2.bridge.ROS2PublishClock"),
             ("context", "isaacsim.ros2.bridge.ROS2Context"),
+            ("clock", "isaacsim.ros2.bridge.ROS2PublishClock"),
+            ("read_joints", "isaacsim.sensors.physics.IsaacReadJointState"),
             ("joints", "isaacsim.ros2.bridge.ROS2PublishJointState"),
             ("odom_c", "isaacsim.core.nodes.IsaacComputeOdometry"),
             ("odom", "isaacsim.ros2.bridge.ROS2PublishOdometry"),
             ("odom_tf", "isaacsim.ros2.bridge.ROS2PublishRawTransformTree"),
-            ("tf", "isaacsim.ros2.bridge.ROS2PublishTransformTree"),
             ("cmd_vel", "isaacsim.ros2.bridge.ROS2SubscribeTwist"),
+            ("lin", "omni.graph.nodes.BreakVector3"), ("ang", "omni.graph.nodes.BreakVector3"),
             ("diff", "isaacsim.robot.wheeled_robots.DifferentialController"),
             ("wheels", "isaacsim.core.nodes.IsaacArticulationController"),
             ("arm_cmd", "isaacsim.ros2.bridge.ROS2SubscribeJointState"),
             ("arm", "isaacsim.core.nodes.IsaacArticulationController"),
-            ("scan_s1", "isaacsim.ros2.bridge.ROS2PublishLaserScan"), ("read_s1", "isaacsim.sensors.physx.IsaacReadLidarBeams"),
-            ("scan_s2e", "isaacsim.ros2.bridge.ROS2PublishLaserScan"), ("read_s2e", "isaacsim.sensors.physx.IsaacReadLidarBeams"),
-            ("cloud", "isaacsim.ros2.bridge.ROS2PublishPointCloud"), ("read_v", "isaacsim.sensors.physx.IsaacReadLidarPointCloud"),
         ],
         keys.SET_VALUES: [
             ("clock.inputs:topicName", "clock"),
-            ("joints.inputs:targetPrim", prim_path), ("joints.inputs:topicName", "joint_states"),
-            ("odom_c.inputs:chassisPrim", prim_path),
+            ("read_joints.inputs:prim", [Sdf.Path(root_path)]), ("joints.inputs:topicName", "joint_states"),
+            ("odom_c.inputs:chassisPrim", [Sdf.Path(root_path)]),
             ("odom.inputs:odomFrameId", "odom"), ("odom.inputs:chassisFrameId", "base_link"), ("odom.inputs:topicName", "diff_cont/odom"),
             ("odom_tf.inputs:parentFrameId", "odom"), ("odom_tf.inputs:childFrameId", "base_link"),
-            ("tf.inputs:parentPrim", prim_path), ("tf.inputs:targetPrims", [f"{prim_path}/rp_s1_lidar", f"{prim_path}/rp_s2e_lidar", f"{prim_path}/velodyne_frame",
-                                                                             f"{prim_path}/camera_link_optical", f"{prim_path}/ur_tool0", f"{prim_path}/base_footprint"]),
-            ("cmd_vel.inputs:topicName", "diff_cont/cmd_vel"),
+            ("cmd_vel.inputs:topicName", CMD_VEL_TWIST if relay else CMD_VEL_STAMPED),
             ("diff.inputs:wheelRadius", 0.1592), ("diff.inputs:wheelDistance", 0.563), ("diff.inputs:maxLinearSpeed", 1.0),
-            ("wheels.inputs:targetPrim", prim_path), ("wheels.inputs:jointNames", ["left_wheel_joint", "right_wheel_joint"]),
+            ("wheels.inputs:targetPrim", [Sdf.Path(root_path)]), ("wheels.inputs:jointNames", WHEELS),
             ("arm_cmd.inputs:topicName", "ur5e/sim_joint_command"),
-            ("arm.inputs:targetPrim", prim_path),
-            ("read_s1.inputs:lidarPrim", f"{prim_path}/rp_s1_lidar/lidar"), ("scan_s1.inputs:frameId", "rp_s1_lidar"), ("scan_s1.inputs:topicName", "rp_s1_lidar/scan_filtered"),
-            ("read_s2e.inputs:lidarPrim", f"{prim_path}/rp_s2e_lidar/lidar"), ("scan_s2e.inputs:frameId", "rp_s2e_lidar"), ("scan_s2e.inputs:topicName", "rp_s2e_lidar/scan_filtered"),
-            ("read_v.inputs:lidarPrim", f"{prim_path}/velodyne_frame/lidar"), ("cloud.inputs:frameId", "velodyne_frame"), ("cloud.inputs:topicName", "velodyne_points"),
+            ("arm.inputs:targetPrim", [Sdf.Path(root_path)]),
         ],
-        keys.CONNECT: [
+        keys.CONNECT: [("context.outputs:context", f"{n}.inputs:context") for n in ros_nodes] + [
             ("tick.outputs:tick", "clock.inputs:execIn"), ("time.outputs:simulationTime", "clock.inputs:timeStamp"),
-            ("tick.outputs:tick", "joints.inputs:execIn"), ("time.outputs:simulationTime", "joints.inputs:timeStamp"),
-            ("tick.outputs:tick", "odom_c.inputs:execIn"), ("odom_c.outputs:execOut", "odom.inputs:execIn"),
-            ("time.outputs:simulationTime", "odom.inputs:timeStamp"),
+            ("tick.outputs:tick", "read_joints.inputs:execIn"), ("read_joints.outputs:execOut", "joints.inputs:execIn"),
+            ("read_joints.outputs:jointNames", "joints.inputs:jointNames"), ("read_joints.outputs:jointPositions", "joints.inputs:jointPositions"),
+            ("read_joints.outputs:jointVelocities", "joints.inputs:jointVelocities"), ("read_joints.outputs:jointEfforts", "joints.inputs:jointEfforts"),
+            ("read_joints.outputs:jointDofTypes", "joints.inputs:jointDofTypes"), ("read_joints.outputs:stageMetersPerUnit", "joints.inputs:stageMetersPerUnit"),
+            ("read_joints.outputs:sensorTime", "joints.inputs:sensorTime"), ("time.outputs:simulationTime", "joints.inputs:timeStamp"),
+            ("tick.outputs:tick", "odom_c.inputs:execIn"), ("odom_c.outputs:execOut", "odom.inputs:execIn"), ("odom_c.outputs:execOut", "odom_tf.inputs:execIn"),
+            ("time.outputs:simulationTime", "odom.inputs:timeStamp"), ("time.outputs:simulationTime", "odom_tf.inputs:timeStamp"),
             ("odom_c.outputs:position", "odom.inputs:position"), ("odom_c.outputs:orientation", "odom.inputs:orientation"),
             ("odom_c.outputs:linearVelocity", "odom.inputs:linearVelocity"), ("odom_c.outputs:angularVelocity", "odom.inputs:angularVelocity"),
-            ("odom_c.outputs:execOut", "odom_tf.inputs:execIn"), ("time.outputs:simulationTime", "odom_tf.inputs:timeStamp"),
             ("odom_c.outputs:position", "odom_tf.inputs:translation"), ("odom_c.outputs:orientation", "odom_tf.inputs:rotation"),
-            ("tick.outputs:tick", "tf.inputs:execIn"), ("time.outputs:simulationTime", "tf.inputs:timeStamp"),
-            ("tick.outputs:tick", "cmd_vel.inputs:execIn"), ("cmd_vel.outputs:execOut", "diff.inputs:execIn"),
-            ("cmd_vel.outputs:linearVelocity", "diff.inputs:linearVelocity"), ("cmd_vel.outputs:angularVelocity", "diff.inputs:angularVelocity"),
+            ("tick.outputs:tick", "cmd_vel.inputs:execIn"), ("cmd_vel.outputs:execOut", "diff.inputs:execIn"), ("tick.outputs:deltaSeconds", "diff.inputs:dt"),
+            ("cmd_vel.outputs:linearVelocity", "lin.inputs:tuple"), ("lin.outputs:x", "diff.inputs:linearVelocity"),
+            ("cmd_vel.outputs:angularVelocity", "ang.inputs:tuple"), ("ang.outputs:z", "diff.inputs:angularVelocity"),
             ("diff.outputs:velocityCommand", "wheels.inputs:velocityCommand"), ("tick.outputs:tick", "wheels.inputs:execIn"),
-            ("tick.outputs:tick", "arm_cmd.inputs:execIn"), ("arm_cmd.outputs:execOut", "arm.inputs:execIn"),
+            ("tick.outputs:tick", "arm_cmd.inputs:execIn"), ("tick.outputs:tick", "arm.inputs:execIn"),
             ("arm_cmd.outputs:jointNames", "arm.inputs:jointNames"), ("arm_cmd.outputs:positionCommand", "arm.inputs:positionCommand"),
-            ("tick.outputs:tick", "read_s1.inputs:execIn"), ("read_s1.outputs:execOut", "scan_s1.inputs:execIn"),
-            ("read_s1.outputs:linearDepthData", "scan_s1.inputs:linearDepthData"), ("read_s1.outputs:numCols", "scan_s1.inputs:numCols"),
-            ("read_s1.outputs:numRows", "scan_s1.inputs:numRows"), ("read_s1.outputs:horizontalFov", "scan_s1.inputs:horizontalFov"),
-            ("read_s1.outputs:horizontalResolution", "scan_s1.inputs:horizontalResolution"), ("read_s1.outputs:depthRange", "scan_s1.inputs:depthRange"),
-            ("read_s1.outputs:rotationRate", "scan_s1.inputs:rotationRate"), ("read_s1.outputs:intensitiesData", "scan_s1.inputs:intensitiesData"),
-            ("time.outputs:simulationTime", "scan_s1.inputs:timeStamp"),
-            ("tick.outputs:tick", "read_s2e.inputs:execIn"), ("read_s2e.outputs:execOut", "scan_s2e.inputs:execIn"),
-            ("read_s2e.outputs:linearDepthData", "scan_s2e.inputs:linearDepthData"), ("read_s2e.outputs:numCols", "scan_s2e.inputs:numCols"),
-            ("read_s2e.outputs:numRows", "scan_s2e.inputs:numRows"), ("read_s2e.outputs:horizontalFov", "scan_s2e.inputs:horizontalFov"),
-            ("read_s2e.outputs:horizontalResolution", "scan_s2e.inputs:horizontalResolution"), ("read_s2e.outputs:depthRange", "scan_s2e.inputs:depthRange"),
-            ("read_s2e.outputs:rotationRate", "scan_s2e.inputs:rotationRate"), ("read_s2e.outputs:intensitiesData", "scan_s2e.inputs:intensitiesData"),
-            ("time.outputs:simulationTime", "scan_s2e.inputs:timeStamp"),
-            ("tick.outputs:tick", "read_v.inputs:execIn"), ("read_v.outputs:execOut", "cloud.inputs:execIn"),
-            ("read_v.outputs:data", "cloud.inputs:data"), ("time.outputs:simulationTime", "cloud.inputs:timeStamp"),
         ]})
-    # cameras: the RGB-D on camera_link_optical and the three webcams, each through a ROS2CameraHelper
-    from isaacsim.sensors.camera import Camera
-    for name, frame, topic, size in (("realsense", "camera_link_optical", "/camera/camera/color/image_raw", (1280, 720)),
-                                     ("scene", "camera_link_optical", "/cameras/scene/image", (960, 540)),
-                                     ("wrist", "ur_tool0", "/cameras/wrist/image", (960, 540)),
-                                     ("side", "camera_link_optical", "/cameras/side/image", (960, 540))):
-        cam = Camera(prim_path=f"{prim_path}/{frame}/cam_{name}", frequency=15, resolution=size)
-        cam.initialize()
+    # cameras: RtxCamera prims (tick_rate = publish rate) under the frames, each with a render product + ROS2CameraHelper.
+    # A USD camera looks down its -Z with +Y up; the ROS optical frames look down +Z with -Y up, hence the 180 deg about X.
+    cams = []
+    for name, frame, topic, (w, h) in (("realsense", "camera_link_optical", "/camera/camera/color/image_raw", (1280, 720)),
+                                       ("scene", "camera_link_optical", "/cameras/scene/image", (960, 540)),
+                                       ("wrist", "ur_tool0", "/cameras/wrist/image", (960, 540)),
+                                       ("side", "camera_link_optical", "/cameras/side/image", (960, 540))):
+        path = f"{prim_named(frame).GetPath()}/cam_{name}"
+        cams.append(RtxCamera(path, tick_rate=15.0))
+        cxf = UsdGeom.Xformable(stage.GetPrimAtPath(path))   # UNVERIFIED (6.2): replacing the xform ops RtxCamera authored
+        cxf.ClearXformOpOrder()
+        cxf.AddRotateXOp().Set(180.0)
         og.Controller.edit({"graph_path": f"/World/Cam_{name}", "evaluator_name": "execution"}, {
-            keys.CREATE_NODES: [("tick", "omni.graph.action.OnPlaybackTick"), ("rp", "isaacsim.core.nodes.IsaacCreateRenderProduct"),
-                                ("helper", "isaacsim.ros2.bridge.ROS2CameraHelper")],
-            keys.SET_VALUES: [("rp.inputs:cameraPrim", f"{prim_path}/{frame}/cam_{name}"), ("rp.inputs:width", size[0]), ("rp.inputs:height", size[1]),
+            keys.CREATE_NODES: [("tick", "omni.graph.action.OnPlaybackTick"), ("context", "isaacsim.ros2.bridge.ROS2Context"),
+                                ("rp", "isaacsim.core.nodes.IsaacCreateRenderProduct"), ("helper", "isaacsim.ros2.bridge.ROS2CameraHelper")],
+            keys.SET_VALUES: [("rp.inputs:cameraPrim", [Sdf.Path(path)]), ("rp.inputs:width", w), ("rp.inputs:height", h),
                               ("helper.inputs:type", "rgb"), ("helper.inputs:topicName", topic), ("helper.inputs:frameId", frame)],
             keys.CONNECT: [("tick.outputs:tick", "rp.inputs:execIn"), ("rp.outputs:execOut", "helper.inputs:execIn"),
-                           ("rp.outputs:renderProductPath", "helper.inputs:renderProductPath")]})
-    # 5. run
-    world.reset()
-    print("Robot Disco in Isaac Sim: ROS 2 bridge up (clock, tf, joint_states, odom, scans, cloud, cameras; cmd_vel + arm commands in)")
-    while app.is_running():
-        world.step(render=not args.headless)
+                           ("rp.outputs:renderProductPath", "helper.inputs:renderProductPath"), ("context.outputs:context", "helper.inputs:context")]})
+    # 5. run (the timeline plays, every update renders a frame - the RTX sensors need that, headless or not)
+    app_utils.play()
+    print(f"Robot Disco in Isaac Sim: ROS 2 bridge up (clock, odom->base_link tf, joint_states, odom, scans, cloud, cameras; "
+          f"{CMD_VEL_STAMPED} + ur5e/sim_joint_command in); articulation root {root_path}")
+    while app.is_running():  # UNVERIFIED (6.2): the RTX sensors rendering under SimulationApp(headless=True)
+        app.update()
+    app_utils.stop()
+    if relay:
+        import rclpy
+        relay.destroy_node()
+        rclpy.try_shutdown()
     app.close()
 
 
