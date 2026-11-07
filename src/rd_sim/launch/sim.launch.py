@@ -2,8 +2,8 @@
 5.0 stack in sim_mode with use_sim_time. Isaac Sim itself is launched by hand (or by the `isaac` arg):
 
     ros2 run rd_sim export_urdf /tmp/robot_disco.urdf
-    ~/isaacsim/python.sh $(ros2 pkg prefix rd_sim)/share/rd_sim/scripts/isaac_scene.py --urdf /tmp/robot_disco.urdf
-    ros2 launch rd_sim sim.launch.py            # nav + arm (mock UR mirrored into the sim) + vla (fake) + manager
+    ~/isaacsim-venv/bin/python $(ros2 pkg prefix rd_sim)/share/rd_sim/scripts/isaac_scene.py --urdf /tmp/robot_disco.urdf --headless
+    ros2 launch rd_sim sim.launch.py            # scan filters + nav + arm (mock UR mirrored into the sim) + vla (fake) + manager
 
 Not runnable in the Docker rig (no GPU): phase 7.
 """
@@ -27,6 +27,7 @@ def generate_launch_description():
         DeclareLaunchArgument('arm', default_value='true'),
         DeclareLaunchArgument('vla', default_value='true'),
         inc('rd_description', 'rsp.launch.py', sim_mode='true', use_sim_time='true'),
+        inc('rd_perception', 'lidars.launch.py', sim='true'),        # the body filter chains on the sim's raw scans, as on the robot
         inc('rd_nav', 'nav.launch.py', use_sim_time='true'),
         IncludeLaunchDescription(PythonLaunchDescriptionSource(share('rd_arm', 'launch', 'arm.launch.py')),
                                  launch_arguments=[('sim_mode', 'true'), ('use_sim_time', 'true')], condition=IfCondition(LaunchConfiguration('arm'))),

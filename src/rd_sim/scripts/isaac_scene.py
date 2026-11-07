@@ -14,7 +14,8 @@ validates it; the `# UNVERIFIED (6.2):` comments mark what the docs did not sett
      3D RTX lidar (velodyne_frame), an RGB camera on camera_link_optical (1280x720) and three RGB webcams (scene / wrist /
      side) - the PhysX lidar and isaacsim.sensors.camera are deprecated since 6.0
   4. wires the ROS 2 bridge (isaacsim.ros2.bridge): /clock, odom->base_link TF from the chassis pose, /joint_states
-     (wheels + UR), /diff_cont/odom, the scans on /rp_s1_lidar/scan_filtered and /rp_s2e_lidar/scan_filtered,
+     (wheels + UR), /diff_cont/odom, the RAW scans on /rp_s1_lidar/scan and /rp_s2e_lidar/scan (rd_perception's body
+     filter chains make the *_filtered topics, sim.launch.py runs them: the lidars see the robot's own body here too),
      /velodyne_points, the camera topics the rest of 5.0 subscribes to, and subscribers: /diff_cont/cmd_vel
      (TwistStamped, as rd_nav / rd_manager send it to the real base; relayed to the bridge's Twist subscriber and zeroed
      0.5 s after the last command) -> wheel velocities, and /ur5e/sim_joint_command (JointState from arm_mirror) -> UR drives.
@@ -80,6 +81,18 @@ def map_boxes(maps_dir: Path, name: str, height: float = 2.5, merge: int = 4):
                 cy = oy + (h - r - merge / 2.0) * res
                 boxes.append((cx, cy, merge * res))
     return boxes, height
+
+
+def arm_home():
+    """rd_arm's vla_home (poses.yaml, the recorded home the policies start from); zeros if rd_arm is not installed."""
+    try:
+        import yaml
+        from ament_index_python.packages import get_package_share_directory
+        poses = yaml.safe_load(open(Path(get_package_share_directory("rd_arm")) / "config" / "poses.yaml"))["poses"]
+        return [float(v) for v in poses["vla_home"]]
+    except Exception as e:  # noqa: BLE001
+        print(f"WARNING: no rd_arm vla_home ({e}): the simulated UR starts at zero joints")
+        return [0.0] * 6
 
 
 def start_cmd_vel_relay(timeout: float = 0.5):
@@ -166,11 +179,18 @@ def main():
     if len(roots) > 1:   # a massless URDF root link makes every child body its own articulation: export_urdf gives it a mass
         print(f"WARNING: {len(roots)} articulation roots: {[str(p.GetPath()) for p in roots]}; using the first")
     root_path = str(roots[0].GetPath())
+    home = arm_home()
     for name, stiffness, damping in [(w, 0.0, 1e4) for w in WHEELS] + [(j, 1e4, 1e3) for j in UR]:
         jp = prim_named(name, lambda p: p.IsA(UsdPhysics.Joint))
         drive = UsdPhysics.DriveAPI.Get(jp, "angular") or UsdPhysics.DriveAPI.Apply(jp, "angular")
         drive.CreateStiffnessAttr().Set(stiffness)          # 0 stiffness + damping = velocity drive (the wheels)
         drive.CreateDampingAttr().Set(damping)
+        if name in UR:                                       # start folded at the recorded home, as the robot and the mock do:
+            deg = math.degrees(home[UR.index(name)])         # at all-zero joints the UR lies stretched out sideways and tips the base
+            drive.CreateTargetPositionAttr().Set(deg)
+            for attr in ("state:angular:physics:position",):
+                a = jp.GetAttribute(attr) if jp.HasAttribute(attr) else jp.CreateAttribute(attr, Sdf.ValueTypeNames.Float)
+                a.Set(deg)
 
     # friction: the casters are fixed spheres here (on the robot they swivel and roll), so they must slide; the
     # tyres grip. PhysX combines two materials' friction by averaging unless one says "min".
@@ -238,7 +258,7 @@ def main():
                 "depthRange": [near_range, far_range], "rotationRate": rotation_rate, "azimuthRange": [-180.0, 180.0]}
 
     sensors = []                                             # kept alive: a LidarSensor owns its render product
-    for frame, topic in (("rp_s1_lidar", "rp_s1_lidar/scan_filtered"), ("rp_s2e_lidar", "rp_s2e_lidar/scan_filtered")):
+    for frame, topic in (("rp_s1_lidar", "rp_s1_lidar/scan"), ("rp_s2e_lidar", "rp_s2e_lidar/scan")):
         s = LidarSensor(lidars[frame], annotators=[])
         s.attach_writer("RtxLidarROS2PublishLaserScan", topicName=topic, frameId=frame, **laser_scan_metadata(lidars[frame].paths[0]))
         sensors.append(s)
