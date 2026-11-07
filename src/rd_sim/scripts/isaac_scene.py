@@ -219,11 +219,12 @@ def main():
     # stands in for the S1 too; no VLP-16 profile ships, so the Velodyne is a 32-channel 10 Hz Ouster OS1 stand-in
     # (Nav2's point cloud source only filters by height). The near/far range overrides sit on top of the profile.
     lidars = {}
-    for frame, config, near, far in (("rp_s1_lidar", "RPLIDAR_S2E", 0.1, 20.0), ("rp_s2e_lidar", "RPLIDAR_S2E", 0.1, 20.0),
-                                     ("velodyne_frame", "OS1_REV6_32ch10hz512res", 0.5, 50.0)):
+    for frame, config, variant, near, far in (("rp_s1_lidar", "RPLIDAR_S2E", None, 0.1, 20.0), ("rp_s2e_lidar", "RPLIDAR_S2E", None, 0.1, 20.0),
+                                              ("velodyne_frame", "OS1", "OS1_REV6_32ch10hz512res", 0.5, 50.0)):
+        kw = {"variant": variant} if variant else {}      # a config is a sensor family (OS1); its variant picks channels / rate / resolution
         lidars[frame] = Lidar.create(path=f"{prim_named(frame).GetPath()}/lidar", config=config, tick_rate=10.0,
                                      attributes={"omni:sensor:Core:scanRateBaseHz": 10, "omni:sensor:Core:nearRangeM": near,
-                                                 "omni:sensor:Core:farRangeM": far})
+                                                 "omni:sensor:Core:farRangeM": far}, **kw)
     SimulationManager.setup_simulation(dt=1.0 / 60.0, device="cpu")
 
     def laser_scan_metadata(prim_path):                      # from the 6.2 'RTX Lidar Sensors' ROS 2 tutorial
