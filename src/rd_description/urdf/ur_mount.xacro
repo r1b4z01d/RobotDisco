@@ -35,16 +35,12 @@
 
   <!-- UR5e arm: base 30 mm above the lidar, x/y centered. -->
   <xacro:include filename="$(find ur_description)/urdf/ur_macro.xacro"/>
-  <!-- generate_ros2_control_tag=false: the arm is driven by its own controller_manager (the
-       ur5e driver launched by rd_arm, ur_control.launch.py under /ur5e). With the tag the base
-       controller_manager tries to open the UR hardware itself and aborts
-       ("Failed to set the initial state of the component : ur5e to active") — seen with
-       ur_description 2.13 on the Jetson robot PC, 2026-10-10. Here the arm is visual + TF only. -->
+  <!-- Visual + TF only: on Jazzy ur_description's macro carries no ros2_control tag; the UR driver
+       (rd_arm) owns the arm's hardware interface in its own controller_manager under /ur5e. -->
   <xacro:ur_robot
       name="ur5e"
       tf_prefix="ur_"
       parent="rp_s2e_lidar"
-      generate_ros2_control_tag="false"
       joint_limits_parameters_file="$(find ur_description)/config/ur5e/joint_limits.yaml"
       kinematics_parameters_file="$(find ur_description)/config/ur5e/default_kinematics.yaml"
       physical_parameters_file="$(find ur_description)/config/ur5e/physical_parameters.yaml"

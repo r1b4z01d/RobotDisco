@@ -1,0 +1,4 @@
+# Map-frame poses of AprilTag landmarks, written by the
+# apriltag_relocalizer ~/teach_landmarks service. Re-teach after
+# re-mapping or moving a tag.
+landmarks: {}

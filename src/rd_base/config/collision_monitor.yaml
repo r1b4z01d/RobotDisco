@@ -1,0 +1,45 @@
+# Nav2 collision monitor (Jazzy), between twist_mux and the diff drive controller so every velocity source
+# (joystick, nav, the web pad, behaviours) is gated:  twist_mux -> cmd_vel_raw -> collision_monitor -> diff_cont.
+# Everything is geometry_msgs/TwistStamped: Jazzy's twist_mux speaks nothing else.
+# Ported from v1 (polygons re-measured 2026-11-03). Jazzy renamed Humble's max_points (3) to min_points (4).
+collision_monitor:
+  ros__parameters:
+    base_frame_id: "base_footprint"
+    odom_frame_id: "odom"
+    cmd_vel_in_topic: "cmd_vel_raw"
+    cmd_vel_out_topic: "/diff_cont/cmd_vel"
+    enable_stamped_cmd_vel: true
+    state_topic: "collision_monitor_state"
+    transform_tolerance: 0.5
+    source_timeout: 5.0
+    base_shift_correction: true
+    stop_pub_timeout: 2.0
+    polygons: ["PolygonSlow", "PolygonStop"]
+    PolygonStop:
+      type: "polygon"
+      # Nose at x=0.50: 5 cm past the footprint nose (0.45) and 3 cm past the body-filter outline (0.47).
+      # It was 0.60 until 2026-11-03: a thin object 0.56 m dead ahead then held the robot stopped for good.
+      points: "[[0.3, 0.3], [0.5, 0.0], [0.3, -0.3], [-0.35, -0.2], [-0.35, 0.2]]"
+      action_type: "stop"
+      min_points: 4
+      visualize: true
+      polygon_pub_topic: "polygon_stop"
+      enabled: true
+    PolygonSlow:
+      type: "polygon"
+      points: "[[0.8, 0.4], [0.8, -0.4], [-0.8, -0.4], [-0.8, 0.4]]"
+      action_type: "slowdown"
+      min_points: 4
+      slowdown_ratio: 0.3
+      visualize: true
+      polygon_pub_topic: "polygon_slowdown"
+      enabled: true
+    observation_sources: ["rp_s1_lidar", "rp_s2e_lidar"]
+    rp_s1_lidar:
+      type: "scan"
+      topic: "/rp_s1_lidar/scan_filtered"
+      enabled: true
+    rp_s2e_lidar:
+      type: "scan"
+      topic: "/rp_s2e_lidar/scan_filtered"
+      enabled: true

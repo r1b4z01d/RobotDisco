@@ -1,0 +1,34 @@
+# joy + teleop_twist_joy for the 8BitDo Ultimate 2C. Ported from v1 (indices measured 2026-10-31).
+joy_node:
+  ros__parameters:
+    # Match by SDL name, not index: the SpaceMouse / Stream Deck / receivers share the js numbering and it
+    # shifts on every USB re-enumeration. On the 2.4 GHz receiver with the rebuilt xpad the pad is
+    # "8BitDo Ultimate 2C Wireless Controller"; stock xpad bound via udev new_id calls it "Generic X-Box pad";
+    # over Bluetooth it is "8BitDo Ultimate 2C Wireless". base.launch.py overrides this from robot.yaml.
+    device_name: "8BitDo Ultimate 2C Wireless Controller"
+    deadzone: 0.05
+    autorepeat_rate: 20.0
+
+teleop_node:
+  ros__parameters:
+    axis_linear:
+      x: 1
+    scale_linear:
+      x: 0.25
+    scale_linear_turbo:
+      x: 1.0
+    axis_angular:
+      yaw: 0
+    scale_angular:
+      yaw: 0.5
+    scale_angular_turbo:
+      yaw: 2.0
+    # Button indices are joy's SDL joystick order; they differ per link:
+    #  - 2.4 GHz receiver, kernel xpad: 0 A, 1 B, 2 X, 3 Y, 4 LB, 5 RB, 6 back, 7 start, 8 guide, 9 LS, 10 RS;
+    #    sticks: axes 0/1 left, 3/4 right, 2/5 triggers, 6/7 d-pad.
+    #  - Bluetooth "8BitDo Ultimate 2C Wireless" (SDL-mapped): RB read 7 and LB 6.
+    # Re-measure with a /joy subscriber if the pad, link or joy version changes.
+    enable_button: 5          # RB = deadman
+    enable_turbo_button: 4    # LB = turbo
+    require_enable_button: true
+    publish_stamped_twist: true   # twist_mux (Jazzy) takes TwistStamped only

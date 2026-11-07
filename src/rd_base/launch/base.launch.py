@@ -1,0 +1,96 @@
+"""The mobile base: robot_state_publisher, ros2_control (RoboClaw diff drive or mock hardware), twist_mux,
+the Nav2 collision monitor and the gamepad.
+
+    ros2 launch rd_base base.launch.py                                   # the robot
+    ros2 launch rd_base base.launch.py sim_mode:=true joystick:=false    # the rig
+
+Velocity path:  cmd_vel_joy (100) / cmd_vel_web (90) / cmd_vel_nav (10)  -> twist_mux -> cmd_vel_raw
+                -> collision_monitor -> /diff_cont/cmd_vel -> diff_cont -> wheels, /odom, odom->base_link
+Every cmd_vel topic carries geometry_msgs/TwistStamped (Jazzy's twist_mux speaks nothing else).
+Lidar scans for the collision monitor come from rd_perception (/rp_s1_lidar/scan_filtered, /rp_s2e_lidar/scan_filtered).
+
+The URDF is generated here from the xacro (not read back from robot_state_publisher): v1 learned that the
+parameter read raced rsp and silently dropped the controller manager (RD, 2026-10-08).
+"""
+import os
+
+from ament_index_python.packages import get_package_share_directory
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, RegisterEventHandler, TimerAction
+from launch.conditions import IfCondition
+from launch.event_handlers import OnProcessStart
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import Command, LaunchConfiguration
+from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
+
+from rd_bringup import config
+
+
+def generate_launch_description():
+    share = get_package_share_directory('rd_base')
+    desc_share = get_package_share_directory('rd_description')
+    sim_mode = LaunchConfiguration('sim_mode')
+    use_sim_time = LaunchConfiguration('use_sim_time')
+    joystick = LaunchConfiguration('joystick')
+    collision_monitor = LaunchConfiguration('collision_monitor')
+    quiet = ['--ros-args', '--log-level', 'WARN']
+
+    rsp = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(os.path.join(desc_share, 'launch', 'rsp.launch.py')),
+        launch_arguments=[('use_sim_time', use_sim_time), ('sim_mode', sim_mode)])
+
+    xacro_file = os.path.join(desc_share, 'urdf', 'robot.urdf.xacro')
+    robot_description = ParameterValue(Command(['xacro ', xacro_file, ' sim_mode:=', sim_mode]), value_type=str)
+
+    # No respawn: v1 saw the OnProcessStart spawners re-run on a respawn and take the whole launch down.
+    controller_manager = Node(
+        package='controller_manager', executable='ros2_control_node',
+        parameters=[{'robot_description': robot_description, 'use_sim_time': use_sim_time},
+                    os.path.join(share, 'config', 'controllers.yaml')],
+        output='screen', arguments=quiet)
+    spawners = [
+        Node(package='controller_manager', executable='spawner',
+             arguments=[name, '--controller-manager-timeout', '30'] + quiet, output='screen')
+        for name in ('joint_broad', 'diff_cont')]
+
+    twist_mux = Node(
+        package='twist_mux', executable='twist_mux',
+        parameters=[os.path.join(share, 'config', 'twist_mux.yaml'), {'use_sim_time': use_sim_time}],
+        remappings=[('/cmd_vel_out', '/cmd_vel_raw')], arguments=quiet)
+
+    monitor = Node(
+        package='nav2_collision_monitor', executable='collision_monitor', name='collision_monitor',
+        parameters=[os.path.join(share, 'config', 'collision_monitor.yaml'), {'use_sim_time': use_sim_time}],
+        output='screen', condition=IfCondition(collision_monitor))
+    monitor_lifecycle = Node(
+        package='nav2_lifecycle_manager', executable='lifecycle_manager', name='lifecycle_manager_collision_monitor',
+        parameters=[{'use_sim_time': use_sim_time, 'autostart': True, 'node_names': ['collision_monitor']}],
+        output='screen', arguments=quiet, condition=IfCondition(collision_monitor))
+    joy_params = os.path.join(share, 'config', 'joystick.yaml')
+    joy = Node(
+        package='joy', executable='joy_node',
+        # joy 3.x (SDL2) segfaults when the pad re-enumerates while running (the 2.4 GHz receiver does that
+        # on every sleep/wake): come back by itself.
+        respawn=True, respawn_delay=1.0,
+        parameters=[joy_params, {'use_sim_time': use_sim_time,
+                                 'device_name': config.get('gamepad.device_name', '8BitDo Ultimate 2C Wireless Controller')}],
+        arguments=quiet, condition=IfCondition(joystick))
+    teleop = Node(
+        package='teleop_twist_joy', executable='teleop_node', name='teleop_node',
+        parameters=[joy_params, {'use_sim_time': use_sim_time}],
+        remappings=[('/cmd_vel', '/cmd_vel_joy')], arguments=quiet, condition=IfCondition(joystick))
+
+    return LaunchDescription([
+        DeclareLaunchArgument('sim_mode', default_value='false', description='mock ros2_control hardware'),
+        DeclareLaunchArgument('use_sim_time', default_value='false'),
+        DeclareLaunchArgument('joystick', default_value='true', description='joy + teleop_twist_joy'),
+        DeclareLaunchArgument('collision_monitor', default_value='true',
+                              description='gate cmd_vel through the Nav2 collision monitor (needs the lidar scans)'),
+        rsp,
+        TimerAction(period=2.0, actions=[controller_manager]),
+        RegisterEventHandler(OnProcessStart(target_action=controller_manager, on_start=spawners)),
+        twist_mux,
+        monitor, monitor_lifecycle,
+        joy, teleop,
+    ])

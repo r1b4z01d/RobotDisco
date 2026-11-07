@@ -1,0 +1,19 @@
+# Velocity sources, highest priority wins. Output goes to the collision monitor (cmd_vel_raw), never
+# straight to the controller.
+twist_mux:
+  ros__parameters:
+    topics:
+      navigation:
+        topic: cmd_vel_nav
+        timeout: 0.5
+        priority: 10
+      # The browser drive pad (rd_manager). Below the physical joystick on purpose: grabbing the 8BitDo
+      # always overrides whoever drives from a browser. 0.5 s is the last of three watchdogs.
+      web:
+        topic: cmd_vel_web
+        timeout: 0.5
+        priority: 90
+      joystick:
+        topic: cmd_vel_joy
+        timeout: 0.5
+        priority: 100

@@ -1,10 +1,27 @@
 # rd_base
 
-**Not started** (phase 1). Holds: ros2_control for the RoboClaw diff drive (`config/controllers.yaml`, v1's
-`my_controllers.yaml`), twist_mux (nav 10 < web 90 < joystick 100), the Nav2 collision monitor, joy +
-teleop_twist_joy with the 8BitDo deadman, and the base launch that brings them up under
-`rd_description`'s robot_state_publisher.
+The mobile base: ros2_control diff drive on the RoboClaw (mock hardware in `sim_mode`), twist_mux, the Nav2
+collision monitor, the 8BitDo gamepad.
 
-Ported from v1: `rd_ws/src/robot_disco/config/{my_controllers,twist_mux,joystick,collision_monitor_params}.yaml`,
-`launch/{launch_robot,joystick}.launch.py`. Hardware interface from `vendor/roboclaw_hardware_interface`.
-The `COLCON_IGNORE` file goes away when the package exists.
+```
+ros2 launch rd_base base.launch.py                                  # robot
+ros2 launch rd_base base.launch.py sim_mode:=true joystick:=false   # rig
+```
+
+Velocity path: `cmd_vel_joy` (100) / `cmd_vel_web` (90) / `cmd_vel_nav` (10) → twist_mux → `cmd_vel_raw` →
+collision_monitor (stop / slowdown polygons fed by `/rp_s1_lidar/scan_filtered` and `/rp_s2e_lidar/scan_filtered`)
+→ `/diff_cont/cmd_vel` → diff_cont → wheels, `/diff_cont/odom`, `odom → base_link`. Every cmd_vel topic is
+`geometry_msgs/TwistStamped`: Jazzy's twist_mux 4.5 speaks nothing else, so the controller, the collision monitor,
+Nav2, teleop and the web pad are all configured stamped.
+
+| File | From v1 |
+|---|---|
+| `config/controllers.yaml` | `my_controllers.yaml` (same wheel geometry and limits) |
+| `config/twist_mux.yaml` | `twist_mux.yaml` |
+| `config/collision_monitor.yaml` | `collision_monitor_params.yaml`, `max_points` → Jazzy's `min_points` |
+| `config/joystick.yaml` | `joystick.yaml`; the pad name comes from `robot.yaml` at launch |
+| `launch/base.launch.py` | `launch_robot.launch.py` minus the sensors (rd_perception) and the RTDE joint poller (the UR driver is always on in v2) |
+
+Tests (`rig/rig.sh test rd_base`): the YAML contracts, and a launch test on mock hardware that drives the
+robot through the whole velocity path and checks the collision monitor stops it for an object 0.35 m ahead.
+Only hardware can verify: the RoboClaw serial port, wheel direction, the gamepad name and button indices.

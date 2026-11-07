@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>rd_nav</name>
+  <version>2.0.0</version>
+  <description>Robot Disco navigation: Nav2 (Jazzy), maps and keepout, SLAM, landmarks, GoToLandmark, the AprilTag pose corrector</description>
+  <maintainer email="bryanribas@gmail.com">Bryan Ribas</maintainer>
+  <license>CC-BY-NC-SA-4.0</license>
+
+  <depend>rd_interfaces</depend>
+  <exec_depend>rd_bringup</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>nav2_bringup</exec_depend>
+  <exec_depend>nav2_map_server</exec_depend>
+  <exec_depend>nav2_amcl</exec_depend>
+  <exec_depend>nav2_lifecycle_manager</exec_depend>
+  <exec_depend>nav2_msgs</exec_depend>
+  <exec_depend>nav2_simple_commander</exec_depend>
+  <exec_depend>nav2_mppi_controller</exec_depend>
+  <exec_depend>slam_toolbox</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>std_srvs</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+
+  <test_depend>python3-pytest</test_depend>
+  <test_depend>launch_testing</test_depend>
+  <test_depend>nav2_loopback_sim</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

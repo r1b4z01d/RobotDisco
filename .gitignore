@@ -21,3 +21,6 @@ provision/snapshot-*/
 # editors
 .vscode/
 *.code-workspace
+
+# the test rig's colcon dirs
+rig/.colcon/

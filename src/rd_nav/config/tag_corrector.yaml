@@ -1,0 +1,20 @@
+# The AprilTag pose corrector (rd_nav/tag_corrector.py): watches rd_interfaces/TagDetectionArray, and when a
+# taught tag puts the robot somewhere else than AMCL says, publishes /initialpose. Ported from v1's
+# apriltag_relocalizer (same math and thresholds).
+tag_corrector:
+  ros__parameters:
+    detections_topic: /tags/detections
+    map_frame: map
+    base_frame: base_footprint
+    max_range: 3.0            # m, camera -> tag
+    min_detections: 3         # agreeing detections before acting
+    window_sec: 1.0
+    spread_xy: 0.15           # m, max disagreement inside the window
+    spread_yaw: 0.10          # rad
+    auto_correct: true
+    position_threshold: 0.30  # m, deviation from AMCL before correcting
+    yaw_threshold: 0.20       # rad
+    min_interval: 5.0         # s between automatic corrections
+    initial_pose_std_xy: 0.10
+    initial_pose_std_yaw: 0.10
+    tilt_warn: 0.25

@@ -1,0 +1,26 @@
+# landmarks.yaml - named places the robot can navigate to, each with the tasks that happen there.
+# Edited from rd_manager's Landmarks tab; read by rd_nav (GoToLandmark) and rd_voice (task phrases).
+# The live robot's own file (with photos) comes back with the phase 0 snapshot; this one is the rig's.
+landmarks:
+  - id: charger
+    name: Charger
+    map: zone_one
+    x: 0.6957
+    y: 0.9208
+    yaw: 0.0548
+    tasks: []
+  - id: dining-room
+    name: Dining Room
+    map: zone_one
+    x: 7.784
+    y: 2.521
+    yaw: 1.501
+    tasks:
+      - id: pick-up-tigger
+        name: pick up tigger
+        model: tigger_1_merged_smolvla_1
+        task: Grab and hold tigger
+        seconds: 60
+        done_when: closed
+        keep_grasp: true
+        home: true

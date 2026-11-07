@@ -15,5 +15,6 @@ Rules: a goal's empty string means "the server's configured default"; results al
 `message` naming why the goal ended; every server rejects a goal while another of its own is active rather
 than queueing it.
 
-`rmdir msg/` is deliberate: the hand, mouth and camera streams stay on standard `sensor_msgs` / `std_msgs`
-topics until a custom message is actually needed.
+| `msg/TagDetection`, `msg/TagDetectionArray` | rd_perception | the detector's own type (apriltag_msgs in v1, Isaac's in v2): the corrector and the rig see only this one |
+
+Everything else (hand, mouth, cameras, scans) stays on standard `sensor_msgs` / `std_msgs` topics.

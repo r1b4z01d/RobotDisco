@@ -1,0 +1,33 @@
+# ros2_control controllers for the base (controller_manager + diff_cont + joint_broad), Jazzy.
+# Ported from v1 my_controllers.yaml: same wheel geometry and limits.
+controller_manager:
+  ros__parameters:
+    update_rate: 30
+    diff_cont:
+      type: diff_drive_controller/DiffDriveController
+    joint_broad:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+diff_cont:
+  ros__parameters:
+    publish_rate: 50.0
+    base_frame_id: base_link
+    odom_frame_id: odom
+    left_wheel_names: ['left_wheel_joint']
+    right_wheel_names: ['right_wheel_joint']
+    wheel_separation: 0.563
+    wheel_radius: 0.1592
+    # TwistStamped on ~/cmd_vel. Jazzy's twist_mux (4.5) speaks TwistStamped only, so the whole velocity
+    # path is stamped (collision monitor, Nav2, teleop, the web pad); Kilted removes the unstamped option anyway.
+    use_stamped_vel: true
+    open_loop: false
+    enable_odom_tf: true
+    cmd_vel_timeout: 0.5
+    linear.x.has_velocity_limits: true
+    linear.x.has_acceleration_limits: true
+    linear.x.max_velocity: 0.5
+    linear.x.max_acceleration: 0.45
+    angular.z.has_velocity_limits: true
+    angular.z.has_acceleration_limits: true
+    angular.z.max_velocity: 0.5
+    angular.z.max_acceleration: 0.45
