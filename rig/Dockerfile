@@ -17,6 +17,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       python3-fastapi python3-uvicorn python3-httpx python3-pil \
     && rm -rf /var/lib/apt/lists/*
 
+# LeRobot (CPU torch) in its own venv for rd_vla's recorder / dataset tests and the SmolVLA backend's
+# import path. ~2 GB; the system python stays untouched.
+RUN python3 -m venv --system-site-packages /opt/vla && /opt/vla/bin/pip install --no-cache-dir -q \
+      --extra-index-url https://download.pytorch.org/whl/cpu "lerobot>=0.3,<0.5" && \
+    /opt/vla/bin/python -c "import lerobot, torch; print('lerobot', lerobot.__version__, 'torch', torch.__version__)"
+
 ENV RMW_IMPLEMENTATION=rmw_cyclonedds_cpp \
     ROS_DOMAIN_ID=0 \
     RCUTILS_COLORIZED_OUTPUT=0 \

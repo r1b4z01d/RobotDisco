@@ -1,0 +1,109 @@
+"""The robot as an observation: cameras (rgb8 Image topics), the arm's joints (/joint_states), the end
+effector pose (TF ur_base_link -> ur_tool0 as xyz + rotation vector) and the commanded hand curls
+(/hand/state). Produces the 16-D state + images of the schema at the policy's rate. rclpy; no cv_bridge
+(the v1 two-OpenCV trap), images are decoded from the message bytes directly.
+"""
+from __future__ import annotations
+
+import threading
+import time
+
+import numpy as np
+from rclpy.qos import QoSProfile, ReliabilityPolicy
+from sensor_msgs.msg import Image, JointState
+from std_msgs.msg import Float32MultiArray
+from tf2_ros import Buffer, TransformException, TransformListener
+
+from .geometry import quat_to_rotvec
+from .schema import CAMERA_KEYS, make_state
+
+UR_JOINTS = ["ur_shoulder_pan_joint", "ur_shoulder_lift_joint", "ur_elbow_joint", "ur_wrist_1_joint", "ur_wrist_2_joint", "ur_wrist_3_joint"]
+
+
+def image_to_rgb(m: Image) -> np.ndarray:
+    """sensor_msgs/Image (rgb8 / bgr8 / mono8) -> HxWx3 uint8 RGB."""
+    data = np.frombuffer(bytes(m.data), dtype=np.uint8)
+    if m.encoding in ("rgb8", "bgr8"):
+        a = data.reshape(m.height, m.step // 3, 3)[:, :m.width, :]
+        return np.ascontiguousarray(a[..., ::-1] if m.encoding == "bgr8" else a)
+    if m.encoding == "mono8":
+        a = data.reshape(m.height, m.step)[:, :m.width]
+        return np.ascontiguousarray(np.repeat(a[..., None], 3, axis=2))
+    raise ValueError(f"unsupported encoding {m.encoding}")
+
+
+class Observer:
+    def __init__(self, node, cameras=CAMERA_KEYS, camera_topic="/cameras/{name}/image", base_frame="ur_base_link",
+                 tool_frame="ur_tool0", callback_group=None):
+        self.node = node
+        self.cameras = tuple(cameras)
+        self.base_frame, self.tool_frame = base_frame, tool_frame
+        self._lock = threading.Lock()
+        self._images: dict[str, tuple[float, np.ndarray]] = {}
+        self._joints = None
+        self._curls = [0.0, 0.0, 0.0, 0.0]
+        self.tf = Buffer()
+        self.tfl = TransformListener(self.tf, node)
+        qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT)
+        for cam in self.cameras:
+            node.create_subscription(Image, camera_topic.format(name=cam), self._on_image(cam), qos, callback_group=callback_group)
+        node.create_subscription(JointState, "/joint_states", self._on_joints, 10, callback_group=callback_group)
+        node.create_subscription(Float32MultiArray, "/hand/state", self._on_hand, 10, callback_group=callback_group)
+
+    def _on_image(self, cam):
+        def cb(m):
+            try:
+                img = image_to_rgb(m)
+            except ValueError:
+                return
+            with self._lock:
+                self._images[cam] = (time.monotonic(), img)
+        return cb
+
+    def _on_joints(self, m: JointState):
+        pos = dict(zip(m.name, m.position))
+        if all(j in pos for j in UR_JOINTS):
+            with self._lock:
+                self._joints = [float(pos[j]) for j in UR_JOINTS]
+
+    def _on_hand(self, m: Float32MultiArray):
+        if len(m.data) >= 4:
+            with self._lock:
+                self._curls = [float(v) for v in m.data[:4]]
+
+    def ee_pose(self):
+        """[x, y, z, rx, ry, rz] of the tool in the base frame, or None."""
+        try:
+            t = self.tf.lookup_transform(self.base_frame, self.tool_frame, self.node.get_clock().now(),
+                                         timeout=__import__("rclpy").duration.Duration(seconds=0.0))
+        except TransformException:
+            try:
+                t = self.tf.lookup_transform(self.base_frame, self.tool_frame, __import__("rclpy").time.Time())
+            except TransformException:
+                return None
+        tr, q = t.transform.translation, t.transform.rotation
+        return [tr.x, tr.y, tr.z] + quat_to_rotvec([q.x, q.y, q.z, q.w])
+
+    def ready(self, max_age: float = 1.0) -> tuple[bool, str]:
+        now = time.monotonic()
+        with self._lock:
+            missing = [c for c in self.cameras if c not in self._images or now - self._images[c][0] > max_age]
+            joints = self._joints
+        if missing:
+            return False, f"no fresh image from {missing}"
+        if joints is None:
+            return False, "no UR joint states"
+        if self.ee_pose() is None:
+            return False, f"no TF {self.base_frame} -> {self.tool_frame}"
+        return True, ""
+
+    def observe(self):
+        """(state[16], images{cam: rgb}, age_s) or None."""
+        pose = self.ee_pose()
+        with self._lock:
+            if pose is None or self._joints is None or any(c not in self._images for c in self.cameras):
+                return None
+            images = {c: self._images[c][1] for c in self.cameras}
+            age = max(time.monotonic() - self._images[c][0] for c in self.cameras)
+            state = make_state(pose, self._joints, self._curls)
+        return state, images, age

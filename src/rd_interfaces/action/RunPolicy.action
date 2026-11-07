@@ -8,6 +8,8 @@ uint32 max_steps 0          # 0 = no limit
 bool home_first true        # move the arm to the VLA home pose before the first observation
 bool record false           # also write the rollout as a LeRobot episode (datasets/evals tab)
 string landmark             # the landmark this run happens at, recorded on the eval
+string done_when            # "" | closed | open: end by the grasp level (mean commanded curl >= 0.7 held still_seconds = closed; <= 0.2 after a close = open)
+float32 still_seconds 3.0   # how long the grasp level must hold
 ---
 bool success
 string message              # why it ended: "done", "timeout", "cancelled", "protective_stop", ...

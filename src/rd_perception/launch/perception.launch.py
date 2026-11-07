@@ -41,6 +41,8 @@ def generate_launch_description():
         inc('rd_perception', 'isaac.launch.py', _real('isaac'),
             apriltag=LaunchConfiguration('apriltag'), grid_localizer=LaunchConfiguration('grid_localizer'),
             nvblox=LaunchConfiguration('nvblox'), visual_slam=LaunchConfiguration('visual_slam')),
+        Node(package='rd_perception', executable='fake_cameras', name='fake_cameras', output='screen',
+             parameters=[{'use_sim_time': True}], condition=IfCondition(LaunchConfiguration('sim_mode'))),
         Node(package='rd_perception', executable='fake_tags', name='fake_tags', output='screen',
              parameters=[{'use_sim_time': True, 'tags': PythonExpression([LaunchConfiguration('fake_tags')])}],
              condition=IfCondition(LaunchConfiguration('sim_mode'))),

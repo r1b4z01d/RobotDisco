@@ -25,7 +25,7 @@ from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
 from shape_msgs.msg import SolidPrimitive
-from std_srvs.srv import SetBool
+from std_srvs.srv import SetBool, Trigger
 
 from rd_interfaces.action import Wave
 from rd_interfaces.srv import ArmPower
@@ -59,6 +59,7 @@ class WaveServer(Node):
         self.poses = motions.load_poses(self.get_parameter("poses_file").value or None)
         self._scene_done = False
         self.create_timer(2.0, self.publish_keepout, callback_group=self.cb)
+        self.create_service(Trigger, "/arm/go_home", self.on_go_home, callback_group=self.cb)
         self.get_logger().info(f"motions: {sorted(motions.list_motions())}; poses: {sorted(self.poses)}")
 
     # ---- state
@@ -100,6 +101,37 @@ class WaveServer(Node):
         res = self.scene.call(ApplyPlanningScene.Request(scene=scene))
         self._scene_done = bool(res.success)
         self.get_logger().info(f"planning scene: {[o['id'] for o in objects]} {'added' if res.success else 'NOT added'}")
+
+    # ---- /arm/go_home: a MoveIt-planned move to vla_home (policies start there; the runner calls it)
+    def on_go_home(self, req, res):
+        with self._lock:
+            if self._active is not None:
+                res.success, res.message = False, "a wave is running"
+                return res
+        q = self.current_q()
+        if q is None:
+            res.success, res.message = False, "no joint states"
+            return res
+        ok, note = self.arm_ready()
+        if not ok:
+            res.success, res.message = False, note
+            return res
+        if not self.moveit.ready(timeout=5.0):
+            res.success, res.message = False, "move_group or the trajectory controller is not up"
+            return res
+        home = self.poses["vla_home"]
+        if motions.joint_distance(q, home) < float(self.get_parameter("start_tolerance").value):
+            res.success, res.message = True, "already home"
+            return res
+        vel = float(self.get_parameter("approach_velocity_scale").value)
+        traj = self.moveit.plan_to_joints(home, q_start=q, velocity_scale=vel, accel_scale=vel)
+        if traj is None:
+            res.success, res.message = False, self.moveit.message
+            return res
+        res.success, res.message = self.moveit.execute(traj.joint_trajectory)
+        if res.success:
+            res.message = "home"
+        return res
 
     # ---- goal gating
     def on_goal(self, goal):

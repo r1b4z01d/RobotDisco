@@ -25,5 +25,6 @@ setup(
         'tag_adapter = rd_perception.tag_adapter:main',
         'fake_tags = rd_perception.fake_tags:main',
         'image_rotate = rd_perception.image_rotate:main',
+        'fake_cameras = rd_perception.fake_cameras:main',
     ]},
 )

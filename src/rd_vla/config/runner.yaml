@@ -1,0 +1,12 @@
+policy_runner:
+  ros__parameters:
+    fps: 12.0
+    cameras: [scene, wrist, side]
+    camera_topic: /cameras/{name}/image
+    max_step_m: 0.03
+    workspace_min: [-1.0, -1.0, -0.2]
+    workspace_max: [1.0, 1.0, 1.0]
+    obs_max_age_s: 0.5
+    done_closed_level: 0.7
+    done_open_level: 0.2
+    done_still_s: 3.0
