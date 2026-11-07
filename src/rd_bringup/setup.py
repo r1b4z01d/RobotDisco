@@ -16,7 +16,7 @@ setup(
     ],
     install_requires=['setuptools', 'pyyaml'],
     zip_safe=True,
-    tests_require=['pytest'],
+    tests_require=['pytest'], extras_require={'test': ['pytest']},
     maintainer='Bryan Ribas',
     maintainer_email='bryanribas@gmail.com',
     description='Robot Disco top-level launch files, the robot.yaml config loader, supervisor units',

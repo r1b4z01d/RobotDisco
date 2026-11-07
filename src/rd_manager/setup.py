@@ -21,7 +21,7 @@ setup(
                 ('share/' + package_name + '/launch', glob('launch/*.launch.py')),
                 ('share/' + package_name + '/routes', glob('routes/*.yaml'))] + tree('static', 'share/' + package_name + '/static'),
     install_requires=['setuptools', 'numpy', 'pyyaml'], zip_safe=True,
-    tests_require=['pytest'],
+    tests_require=['pytest'], extras_require={'test': ['pytest']},
     maintainer='Bryan Ribas', maintainer_email='bryanribas@gmail.com', description='Robot Disco web manager', license='CC-BY-NC-SA-4.0',
     entry_points={'console_scripts': ['manager = rd_manager.main:main']},
 )

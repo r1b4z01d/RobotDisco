@@ -12,7 +12,7 @@ setup(
                 ('share/' + package_name + '/config', glob('config/*.yaml')),
                 ('share/' + package_name + '/models', glob('models/*.onnx') + glob('models/README.md'))],
     install_requires=['setuptools', 'numpy'], zip_safe=True,
-    tests_require=['pytest'],
+    tests_require=['pytest'], extras_require={'test': ['pytest']},
     maintainer='Bryan Ribas', maintainer_email='bryanribas@gmail.com', description='Robot Disco face', license='CC-BY-NC-SA-4.0',
     entry_points={'console_scripts': ['face = rd_face.face_node:main', 'faceid_worker = rd_face.faceid_worker:main']},
 )

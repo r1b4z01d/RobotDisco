@@ -10,7 +10,7 @@ setup(
                 ('share/' + package_name, ['package.xml']),
                 ('share/' + package_name + '/launch', glob('launch/*.launch.py'))],
     install_requires=['setuptools', 'numpy'], zip_safe=True,
-    tests_require=['pytest'],
+    tests_require=['pytest'], extras_require={'test': ['pytest']},
     maintainer='Bryan Ribas', maintainer_email='bryanribas@gmail.com', description='Robot Disco audio', license='CC-BY-NC-SA-4.0',
     entry_points={'console_scripts': ['say_server = rd_audio.say_server:main', 'kokoro_worker = rd_audio.kokoro_worker:main']},
 )
