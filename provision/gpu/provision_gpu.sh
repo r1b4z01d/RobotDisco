@@ -23,6 +23,9 @@ warn() { printf '\033[1;33mWARN: %s\033[0m\n' "$*" >&2; }
 die()  { printf '\033[1;31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
 pkglist() { sed -e 's/#.*//' -e '/^[[:space:]]*$/d' "$1" | tr '\n' ' '; }
 apt_install() { sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends "$@"; }
+# the ROS setup files reference unset variables: source them with -u off
+src_ros() { set +u; source /opt/ros/jazzy/setup.bash; set -u; }
+src_ws()  { set +u; source "$WS/install/setup.bash"; set -u; }
 
 phase_preflight() {
   [ "$(uname -m)" = x86_64 ] || die "the GPU box script; this is $(uname -m)"
@@ -61,7 +64,7 @@ phase_workspace() {
   log "colcon build $WS"
   cd "$WS"
   git submodule update --init --recursive
-  source /opt/ros/jazzy/setup.bash
+  src_ros
   colcon build --symlink-install --event-handlers console_cohesion+ 2>&1 | tail -3
   mkdir -p "$HOME/RobotDisco-data/outputs"/{datasets,train,evals}
   # the v1 data the 5.0 manager and trainer read: a mirror, not a move (v1's ~/VLA keeps working)
@@ -77,7 +80,7 @@ phase_workspace() {
 phase_test() {
   log "colcon test (every package, sequential: the launch tests share topics)"
   cd "$WS"
-  source /opt/ros/jazzy/setup.bash && source install/setup.bash
+  src_ros && src_ws
   export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp CYCLONEDDS_URI="file://$WS/provision/cyclonedds.xml" ROS_DOMAIN_ID=0 RD_ROBOT_CONFIG="$WS/config/robot.yaml"
   colcon test --executor sequential --pytest-args --timeout=900 2>&1 | grep -E 'Finished|Failed' || true
   colcon test-result --verbose | tail -15
