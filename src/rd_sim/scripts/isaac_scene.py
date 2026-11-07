@@ -251,6 +251,11 @@ def main():
                                      attributes={"omni:sensor:Core:scanRateBaseHz": 10, "omni:sensor:Core:nearRangeM": near,
                                                  "omni:sensor:Core:farRangeM": far, "omni:sensor:Core:outputFrameOfReference": "SENSOR"}, **kw)
     SimulationManager.setup_simulation(dt=1.0 / 60.0, device="cpu")
+    for frame, lidar in lidars.items():                      # what the profile left on the prim (the cloud frame question)
+        lp = stage.GetPrimAtPath(lidar.paths[0])
+        print(f"lidar {frame}: type {lp.GetTypeName()}, outputFrameOfReference="
+              f"{lp.GetAttribute('omni:sensor:Core:outputFrameOfReference').Get() if lp.HasAttribute('omni:sensor:Core:outputFrameOfReference') else 'NO SUCH ATTRIBUTE'}, "
+              f"attrs with Frame: {[a.GetName() for a in lp.GetAttributes() if 'rame' in a.GetName()]}")
 
     def laser_scan_metadata(prim_path):                      # from the 6.2 'RTX Lidar Sensors' ROS 2 tutorial
         rotation_rate = float(prim_utils.get_prim_attribute_value(prim_path, "omni:sensor:Core:scanRateBaseHz") or 0)
