@@ -1,4 +1,4 @@
-# Provisioning the v2 robot PC
+# Provisioning the 5.0 robot PC
 
 Turns a Jetson AGX Orin flashed with **JetPack 7.2.1** (Jetson Linux 39.2.1, Ubuntu 24.04, CUDA 13.2, root
 filesystem on the 512 GB NVMe) into the Robot Disco robot PC: user `rd`, hostname `robotdisco`,
@@ -8,7 +8,7 @@ built at `~/RobotDisco`, everything under supervisor.
 **Status 2026-11-06:** skeleton. `provision.sh` runs `preflight`, `base`, `ros`, `groups`, `udev`, `sysctl`
 and `workspace`; the other phases print what they must do and skip. They get written on the freshly flashed
 robot in phase 1 of the plan, ported from v1's `rd_ws/provision/` (which also keeps the USB port photos,
-the xpad rebuild and the two-OpenCV patch that v2 no longer needs).
+the xpad rebuild and the two-OpenCV patch that 5.0 no longer needs).
 
 ## Order of operations
 

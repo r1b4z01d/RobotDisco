@@ -1,5 +1,5 @@
 """Landmark tasks: a policy run tied to the place it happens at ("Robot Disco, pick up tigger" = drive to the
-dining room, run the tigger model). v1 spawned vla_action.py; v2 calls rd_nav's GoToLandmark and rd_vla's
+dining room, run the tigger model). v1 spawned vla_action.py; 5.0 calls rd_nav's GoToLandmark and rd_vla's
 RunPolicy through callables the node provides (`navigate(landmark) -> (ok, why)`, `run_policy(lm, task) ->
 (ok, why)`, both blocking and cancellable through `cancel()`), so the matching and the state machine are
 ROS-free and tested with fakes. The landmarks come from rd_nav.landmarks.LandmarkStore.

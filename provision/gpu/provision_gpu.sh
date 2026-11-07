@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Provision the GPU box (RTX 4090, Ubuntu 24.04, ROS 2 Jazzy already installed) for phase 7: the v2 workspace,
+# Provision the GPU box (RTX 4090, Ubuntu 24.04, ROS 2 Jazzy already installed) for phase 7: the 5.0 workspace,
 # its tests, the LeRobot venv, Isaac Sim 6.2 (pip) and Isaac ROS 4.6 (host venv mode). Run ON the box as bryan:
 #
 #   git clone --recurse-submodules https://github.com/r1b4z01d/RobotDisco.git ~/RobotDisco
 #   ~/RobotDisco/provision/gpu/provision_gpu.sh all        # = ros workspace test vla isaacsim      (isaacros is NOT in "all")
 #   ~/RobotDisco/provision/gpu/provision_gpu.sh isaacros   # Isaac ROS 4.6 host install: replaces the host OpenCV, read the phase first
 #
-# Nothing here touches ~/VLA, ~/rd_ws or the v1 supervisor units (vla_webui on :8081 keeps running): v2 lives in
+# Nothing here touches ~/VLA, ~/rd_ws or the v1 supervisor units (vla_webui on :8081 keeps running): 5.0 lives in
 # ~/RobotDisco, /opt/vla and ~/isaacsim-venv. Sources (read 2026-11-07):
 #   Isaac Sim:  https://docs.isaacsim.omniverse.nvidia.com/latest/installation/install_python.html  (6.2.0, Python 3.12, pip)
 #   Isaac ROS:  https://nvidia-isaac-ros.github.io/v/release-4.6/getting_started/index.html         (apt repo, CLI, venv mode)
@@ -46,7 +46,7 @@ phase_ros() {
   rosdep update >/dev/null 2>&1 || warn "rosdep update failed (offline?)"
   grep -q "RobotDisco/install/setup.bash" "$HOME/.bashrc" || cat >> "$HOME/.bashrc" <<BASHRC
 
-# Robot Disco v2 (provision_gpu.sh)
+# Robot Disco 5.0 (provision_gpu.sh)
 source /opt/ros/jazzy/setup.bash
 [ -f $WS/install/setup.bash ] && source $WS/install/setup.bash
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
@@ -64,7 +64,7 @@ phase_workspace() {
   source /opt/ros/jazzy/setup.bash
   colcon build --symlink-install --event-handlers console_cohesion+ 2>&1 | tail -3
   mkdir -p "$HOME/RobotDisco-data/outputs"/{datasets,train,evals}
-  # the v1 data the v2 manager and trainer read: a mirror, not a move (v1's ~/VLA keeps working)
+  # the v1 data the 5.0 manager and trainer read: a mirror, not a move (v1's ~/VLA keeps working)
   if [ -d "$HOME/VLA/outputs" ]; then
     log "mirroring ~/VLA/outputs (datasets, train, evals) into ~/RobotDisco-data/outputs"
     rsync -a --ignore-existing "$HOME/VLA/outputs/datasets/" "$HOME/RobotDisco-data/outputs/datasets/" || true

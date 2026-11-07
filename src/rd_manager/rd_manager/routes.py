@@ -1,6 +1,6 @@
 """Routes: a YAML of waypoints with per-waypoint actions (v1 path.py's format, kept so the editor pages and the
 old route files work), and the runner that drives them with Nav2's FollowWaypoints and runs the actions
-through the actions the rest of v2 exposes: `vla:` -> RunPolicy, `say:` -> Say, `pause:` -> a wait.
+through the actions the rest of 5.0 exposes: `vla:` -> RunPolicy, `say:` -> Say, `pause:` -> a wait.
 
     waypoints:
       - name: Charger

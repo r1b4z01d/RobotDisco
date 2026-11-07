@@ -21,7 +21,7 @@ xacro urdf/robot.urdf.xacro > /tmp/robot_disco.urdf       # the flat URDF (Isaac
 
 Ported from v1 (`rd_ws/src/robot_disco/description`) on 2026-11-06 with the same frames and offsets, so v1
 maps, AprilTag landmark poses and the UR mount calibration carry over. The Gazebo sensor plugins are gone:
-v2 simulates in Isaac Sim (`rd_sim`), which imports the flat URDF.
+5.0 simulates in Isaac Sim (`rd_sim`), which imports the flat URDF.
 
 The hand's finger meshes are the baked open pose. Re-bake with v1's
 `src/robot_disco/scripts/bake_amazing_hand.py` if the CAD in `firmware/AmazingHand` changes.

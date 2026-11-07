@@ -20,7 +20,7 @@ Nav2, teleop and the web pad are all configured stamped.
 | `config/twist_mux.yaml` | `twist_mux.yaml` |
 | `config/collision_monitor.yaml` | `collision_monitor_params.yaml`, `max_points` → Jazzy's `min_points` |
 | `config/joystick.yaml` | `joystick.yaml`; the pad name comes from `robot.yaml` at launch |
-| `launch/base.launch.py` | `launch_robot.launch.py` minus the sensors (rd_perception) and the RTDE joint poller (the UR driver is always on in v2) |
+| `launch/base.launch.py` | `launch_robot.launch.py` minus the sensors (rd_perception) and the RTDE joint poller (the UR driver is always on in 5.0) |
 
 Tests (`rig/rig.sh test rd_base`): the YAML contracts, and a launch test on mock hardware that drives the
 robot through the whole velocity path and checks the collision monitor stops it for an object 0.35 m ahead.

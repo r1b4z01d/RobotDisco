@@ -214,7 +214,7 @@ phase_udev() {
 }
 
 phase_sysctl() {
-  # v1 raised UDP receive buffers for the multicast camera stream; v2 cameras are ROS topics. Cyclone DDS still
+  # v1 raised UDP receive buffers for the multicast camera stream; 5.0 cameras are ROS topics. Cyclone DDS still
   # wants a larger buffer for point clouds: net.core.rmem_max.
   printf 'net.core.rmem_max=8388608\nnet.core.rmem_default=8388608\n' | sudo tee /etc/sysctl.d/60-robot-disco.conf >/dev/null
   sudo sysctl --system >/dev/null

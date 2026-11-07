@@ -1,15 +1,15 @@
 # Robot Disco
 
-The v2 workspace for Robot Disco: a differential-drive mobile robot (RoboClaw base, RPLiDAR S1 + S2E and a
+The 5.0 workspace for Robot Disco: a differential-drive mobile robot (RoboClaw base, RPLiDAR S1 + S2E and a
 Velodyne, a RealSense D435) carrying a UR5e with the 8-DOF AmazingHand, an animated face, a microphone and
 a speaker. The robot PC is a Jetson AGX Orin on **JetPack 7.2.1 / Ubuntu 24.04**, the stack is **ROS 2
 Jazzy + Isaac ROS 4.6**, and the whole robot is driven from one web console, `rd_manager`. A GPU box
 (RTX 4090) trains the policies, runs Isaac Sim and mirrors the manager.
 
-v2 is a rebuild of [rd_ws](https://github.com/r1b4z01d/rd_ws) (v1: Humble on JetPack 6, a patched
+5.0 is a rebuild of [rd_ws](https://github.com/r1b4z01d/rd_ws) (v1: Humble on JetPack 6, a patched
 `apriltag_ros`, Foxglove, scripts spawning scripts). It keeps every v1 feature and drops Foxglove. The plan,
 the feature-by-feature mapping, the phases and the risks are in the
-[Robot Disco v2 Rebuild Plan](https://claude.ai/artifact/T2mFGJhZuEiFKGtLmpHvPM).
+[Robot Disco 5.0 Rebuild Plan](https://claude.ai/artifact/T2mFGJhZuEiFKGtLmpHvPM).
 
 **Status 2026-11-07: every package written and passing its tests in the rig.** The robot still runs v1;
 nothing here has run on hardware. Next: the GPU box (Isaac Sim, Isaac ROS), then the robot.
@@ -61,7 +61,7 @@ the GPU box).
 | 10 | retire v1 | |
 
 The detailed plan, risks and decisions live in the
-[Robot Disco v2 Rebuild Plan](https://claude.ai/artifact/T2mFGJhZuEiFKGtLmpHvPM).
+[Robot Disco 5.0 Rebuild Plan](https://claude.ai/artifact/T2mFGJhZuEiFKGtLmpHvPM).
 
 ## Build and test
 

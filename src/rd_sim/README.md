@@ -2,7 +2,7 @@
 
 Robot Disco in Isaac Sim 6.2 on the GPU box (phase 7): the robot from `rd_description`, walls from the active
 nav map, two 2D lidars, a 3D lidar, the RealSense and the three webcams, and the ROS 2 bridge publishing the
-same topics the robot does, so the whole v2 stack runs against it unchanged.
+same topics the robot does, so the whole 5.0 stack runs against it unchanged.
 
 ```
 ros2 run rd_sim export_urdf /tmp/robot_disco.urdf                       # the flat URDF the importer takes

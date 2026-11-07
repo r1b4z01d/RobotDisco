@@ -1,5 +1,5 @@
 """The dev stack against Isaac Sim on the GPU box: Isaac Sim (its own python) with rd_sim's scene, then the
-v2 stack in sim_mode with use_sim_time. Isaac Sim itself is launched by hand (or by the `isaac` arg):
+5.0 stack in sim_mode with use_sim_time. Isaac Sim itself is launched by hand (or by the `isaac` arg):
 
     ros2 run rd_sim export_urdf /tmp/robot_disco.urdf
     ~/isaacsim/python.sh $(ros2 pkg prefix rd_sim)/share/rd_sim/scripts/isaac_scene.py --urdf /tmp/robot_disco.urdf

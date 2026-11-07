@@ -13,11 +13,11 @@ What it does (Isaac Sim 6.2 / isaacsim.* API; written against the 6.2 docs, NOT 
   4. wires the ROS 2 bridge OmniGraph: /clock, TF (odom->base_link from the articulation's chassis pose,
      the robot's fixed frames), /joint_states (wheels + UR), /diff_cont/odom, the scans on
      /rp_s1_lidar/scan_filtered and /rp_s2e_lidar/scan_filtered, /velodyne_points, the camera topics the
-     rest of v2 subscribes to, and subscribers: /diff_cont/cmd_vel (TwistStamped -> wheel velocities) and
+     rest of 5.0 subscribes to, and subscribers: /diff_cont/cmd_vel (TwistStamped -> wheel velocities) and
      /ur5e/forward_position_controller/commands + /ur5e/joint_trajectory_controller (positions -> UR drives)
   5. runs the simulation loop until closed
 
-With this running, the v2 stack runs unchanged on the GPU box: rd_nav + rd_arm (sim_mode for the mock UR, or
+With this running, the 5.0 stack runs unchanged on the GPU box: rd_nav + rd_arm (sim_mode for the mock UR, or
 the UR driven by the bridge's joint command subscriber) + rd_vla + rd_manager. The base's own controller
 manager is NOT run (the bridge integrates cmd_vel itself); the arm's controller manager runs on mock hardware
 and the bridge mirrors its commanded joints.

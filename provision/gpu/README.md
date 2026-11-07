@@ -1,7 +1,7 @@
 # GPU box (4090TI)
 
 Trains the policies, runs Isaac Sim and mirrors the manager. `provision_gpu.sh` sets it up (run it on the box
-as bryan; it leaves v1's `~/VLA` and the `vla_webui` supervisor unit alone, v2 lives in `~/RobotDisco`,
+as bryan; it leaves v1's `~/VLA` and the `vla_webui` supervisor unit alone, 5.0 lives in `~/RobotDisco`,
 `/opt/vla` and `~/isaacsim-venv`):
 
 ```
@@ -39,4 +39,4 @@ the placeholder in `src/rd_arm/config/poses.yaml` (phase `workspace` copies it t
   `src/rd_sim/README.md` for the API changes already known.
 - `ros2 launch rd_perception isaac.launch.py apriltag:=true` against `fake_cameras` once Isaac ROS is in.
 - Training: `/opt/vla/bin/python -m lerobot.scripts.train ...` on the mirrored datasets, checkpoints under
-  `~/RobotDisco-data/outputs/train`; the v2 manager serves them with `manager --no-ros --data ~/RobotDisco-data`.
+  `~/RobotDisco-data/outputs/train`; the 5.0 manager serves them with `manager --no-ros --data ~/RobotDisco-data`.
