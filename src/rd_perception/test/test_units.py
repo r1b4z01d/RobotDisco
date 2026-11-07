@@ -48,7 +48,7 @@ def test_rotate():
 
 def test_filter_configs_are_laser_filters_chains():
     for name in ('s1_filter.yaml', 's2e_filter.yaml'):
-        c = yaml.safe_load((CFG / name).read_text())['scan_to_scan_filter_chain']['ros__parameters']
+        c = yaml.safe_load((CFG / name).read_text())['/**']['ros__parameters']      # any node name (the launch names the chains)
         assert c['filter1']['type'] == 'laser_filters/LaserScanPolygonFilter'
         poly = yaml.safe_load(c['filter1']['params']['polygon'].replace('] [', '], ['))
         assert len(poly) >= 4

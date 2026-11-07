@@ -27,6 +27,7 @@ def generate_launch_description():
     share = get_package_share_directory('rd_perception')
     quiet = ['--ros-args', '--log-level', 'WARN']
     s1, s2e, velo, sim = LaunchConfiguration('s1'), LaunchConfiguration('s2e'), LaunchConfiguration('velodyne'), LaunchConfiguration('sim')
+    sim_time = {'use_sim_time': LaunchConfiguration('use_sim_time')}
     real = lambda on: IfCondition(PythonExpression(["'", on, "' == 'true' and '", sim, "' != 'true'"]))   # a driver: that lidar on, not the sim
     s1_cfg = config.get('sensors.rplidar_s1')
     s2e_cfg = config.get('sensors.rplidar_s2e')
@@ -45,7 +46,7 @@ def generate_launch_description():
                           'offset': float(s1_cfg.get('range_offset_m', 0.0))}]),
         Node(package='laser_filters', executable='scan_to_scan_filter_chain', name='rp_s1_filter', condition=IfCondition(s1),
              remappings=[('/scan', '/rp_s1_lidar/scan'), ('/scan_filtered', '/rp_s1_lidar/scan_filtered')],
-             parameters=[os.path.join(share, 'config', 's1_filter.yaml')], arguments=quiet),
+             parameters=[os.path.join(share, 'config', 's1_filter.yaml'), sim_time], arguments=quiet),
     ]
     s2e_nodes = [
         Node(package='rplidar_ros', executable='rplidar_node', name='rplidar_s2e_node', output='screen',
@@ -56,7 +57,7 @@ def generate_launch_description():
                           'topic_name': 'rp_s2e_lidar/scan'}]),
         Node(package='laser_filters', executable='scan_to_scan_filter_chain', name='rp_s2e_filter', condition=IfCondition(s2e),
              remappings=[('/scan', '/rp_s2e_lidar/scan'), ('/scan_filtered', '/rp_s2e_lidar/scan_filtered')],
-             parameters=[os.path.join(share, 'config', 's2e_filter.yaml')], arguments=quiet),
+             parameters=[os.path.join(share, 'config', 's2e_filter.yaml'), sim_time], arguments=quiet),
     ]
     convert_share = get_package_share_directory('velodyne_pointcloud')
     with open(os.path.join(convert_share, 'config', 'VLP16-velodyne_transform_node-params.yaml')) as f:
@@ -79,5 +80,6 @@ def generate_launch_description():
         DeclareLaunchArgument('s2e', default_value='true'),
         DeclareLaunchArgument('velodyne', default_value='true'),
         DeclareLaunchArgument('sim', default_value='false'),
+        DeclareLaunchArgument('use_sim_time', default_value='false'),
         *s1_nodes, *s2e_nodes, *velo_nodes,
     ])

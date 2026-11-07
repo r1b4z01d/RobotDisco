@@ -46,10 +46,11 @@ def generate_launch_description():
         DeclareLaunchArgument('initial_x', default_value='0.0'),
         DeclareLaunchArgument('initial_y', default_value='0.0'),
         DeclareLaunchArgument('initial_yaw', default_value='0.0'),
+        # nav2.yaml has no use_sim_time keys for the rewrite to hit: passed explicitly (see navigation.launch.py)
         Node(package='nav2_map_server', executable='map_server', name='map_server', output='screen',
-             parameters=[params], arguments=quiet),
+             parameters=[params, {'use_sim_time': use_sim_time}], arguments=quiet),
         Node(package='nav2_amcl', executable='amcl', name='amcl', output='screen',
-             parameters=[params, initial], arguments=quiet),
+             parameters=[params, {'use_sim_time': use_sim_time}, initial], arguments=quiet),
         Node(package='nav2_lifecycle_manager', executable='lifecycle_manager', name='lifecycle_manager_localization',
              output='screen', arguments=quiet,
              parameters=[{'use_sim_time': use_sim_time, 'autostart': LaunchConfiguration('autostart'),

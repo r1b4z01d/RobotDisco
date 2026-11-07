@@ -27,6 +27,9 @@ def generate_launch_description():
     params = RewrittenYaml(
         source_file=os.path.join(share, 'config', 'nav2.yaml'), root_key='',
         param_rewrites={'use_sim_time': use_sim_time, 'autostart': autostart}, convert_types=True)
+    # nav2.yaml carries no use_sim_time keys, so the rewrite above sets none: every node gets it explicitly (under
+    # Isaac's clock a wall-time node stamps goals the others cannot transform; the loopback sim's clock hid this)
+    sim_time = {'use_sim_time': use_sim_time}
     quiet = ['--ros-args', '--log-level', 'WARN']
     lifecycle_nodes = ['filter_mask_server', 'costmap_filter_info_server', 'controller_server',
                        'smoother_server', 'planner_server', 'behavior_server', 'bt_navigator',
@@ -34,7 +37,7 @@ def generate_launch_description():
 
     def nav2(package, executable, name=None, remappings=(), extra_params=()):
         return Node(package=package, executable=executable, name=name or executable, output='screen',
-                    respawn=True, respawn_delay=2.0, parameters=[params, *extra_params],
+                    respawn=True, respawn_delay=2.0, parameters=[params, sim_time, *extra_params],
                     arguments=quiet, remappings=list(remappings))
 
     return LaunchDescription([
