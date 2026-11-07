@@ -429,7 +429,8 @@ def add_dataset(datasets_dir: str, *, source: str | None = None,
         dest = os.path.join(datasets_dir, name)
         if os.path.exists(dest):
             raise ValueError(f"{name} already exists")
-        src = f"rd@192.168.11.80:~/rd_ws/VLA/outputs/datasets/{remote}/"
+        from rd_bringup import config as _cfg
+        src = f"{_cfg.get('robot.user', 'rd')}@{_cfg.get('robot.ip')}:{_cfg.get('robot.data', '/mnt/data')}/outputs/datasets/{remote}/"
         r = subprocess.run(["rsync", "-a", "--info=stats1", src, dest + "/"],
                            capture_output=True, text=True, timeout=1800)
         if r.returncode != 0:

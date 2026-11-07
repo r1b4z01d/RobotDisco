@@ -2,7 +2,7 @@
 
     from rd_bringup import config
     cfg = config.load()                     # the whole file as a dict (cached)
-    config.get("arm.ip")                    # "192.168.11.21"
+    config.get("arm.ip")                    # the UR's address
     config.get("hand.ports.udp", 8766)      # with a default
     config.get("robot.ports.manager", as_type=int)
 
