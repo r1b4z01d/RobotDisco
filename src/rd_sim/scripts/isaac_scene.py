@@ -244,9 +244,12 @@ def main():
     for frame, config, variant, near, far in (("rp_s1_lidar", "RPLIDAR_S2E", None, 0.1, 20.0), ("rp_s2e_lidar", "RPLIDAR_S2E", None, 0.1, 20.0),
                                               ("velodyne_frame", "OS1", "OS1_REV6_32ch10hz512res", 0.5, 50.0)):
         kw = {"variant": variant} if variant else {}      # a config is a sensor family (OS1); its variant picks channels / rate / resolution
+        # outputFrameOfReference: the point cloud writer publishes the points as the sensor outputs them, and the
+        # profiles default to WORLD coordinates, which the costmap then transforms a second time (phantom walls
+        # across the corridor on 2026-11-07). SENSOR = points relative to the lidar, as a real one reports them.
         lidars[frame] = Lidar.create(path=f"{prim_named(frame).GetPath()}/lidar", config=config, tick_rate=10.0,
                                      attributes={"omni:sensor:Core:scanRateBaseHz": 10, "omni:sensor:Core:nearRangeM": near,
-                                                 "omni:sensor:Core:farRangeM": far}, **kw)
+                                                 "omni:sensor:Core:farRangeM": far, "omni:sensor:Core:outputFrameOfReference": "SENSOR"}, **kw)
     SimulationManager.setup_simulation(dt=1.0 / 60.0, device="cpu")
 
     def laser_scan_metadata(prim_path):                      # from the 6.2 'RTX Lidar Sensors' ROS 2 tutorial
