@@ -55,8 +55,14 @@ the placeholder in `src/rd_arm/config/poses.yaml` (phase `workspace` copies it t
 - Running it detached, so an ssh drop does not kill it:
   `(setsid nohup timeout 3000 ~/isaacsim-venv/bin/python src/rd_sim/scripts/isaac_scene.py --urdf /tmp/robot_disco.urdf --headless > ~/isaac.log 2>&1 < /dev/null & echo $! > ~/isaac.pid)`,
   stop with `kill -INT -- -$(cat ~/isaac.pid)`. The first start takes ~100 s (extension cache); the log is
-  line-buffered. Then `ros2 launch rd_sim sim.launch.py` for the stack. Never `pkill -f isaac_scene` from an ssh
-  command that itself contains that text: it kills the shell running the command.
+  line-buffered. Then `ros2 launch rd_sim sim.launch.py` for the stack, started together with a fresh sim (it seeds
+  AMCL with the spawn pose). Run `colcon test` under another `ROS_DOMAIN_ID` while a sim is up (its clock, odometry
+  and scans leak into the launch tests otherwise). Never `pkill -f isaac_scene` from an ssh command that itself
+  contains that text: it kills the shell running the command.
+- Found by the sim on 2026-11-07 and fixed for the robot too: the body filter configs were keyed on the default node
+  name (`/**` now), so no scan filter ever applied; the S2E polygon lacked a comma; nav2.yaml has no `use_sim_time`
+  keys, so every Nav2 node ran on wall time whatever the launch said (now passed explicitly); the sim stack needs
+  the base's twist_mux + collision monitor (`base.launch.py controllers:=false`) or Nav2's commands reach nothing.
 
 ## After the script
 

@@ -7,8 +7,13 @@ same topics the robot does, so the whole 5.0 stack runs against it unchanged.
 ```
 ros2 run rd_sim export_urdf /tmp/robot_disco.urdf                       # the flat URDF the importer takes
 ~/isaacsim-venv/bin/python $(ros2 pkg prefix rd_sim)/share/rd_sim/scripts/isaac_scene.py --urdf /tmp/robot_disco.urdf   # Jazzy sourced, Cyclone, EULA accepted
-ros2 launch rd_sim sim.launch.py                                        # nav + arm + vla (fake) + manager, use_sim_time
+ros2 launch rd_sim sim.launch.py                                        # base command path + filters + nav + arm + vla (fake) + manager
 ```
+
+Start the two together: the stack seeds AMCL with the spawn pose (the Charger landmark), so a sim whose robot has
+already driven somewhere needs a restart first, or AMCL believes the dock and Nav2 sits boxed in by walls that are
+not where the map has them. While a sim runs, `colcon test` must use another `ROS_DOMAIN_ID`: the sim's /clock,
+odometry and scans otherwise leak into the launch tests.
 
 `scripts/isaac_scene.py` was rewritten on 2026-11-07 against the Isaac Sim 6.2 docs (every API name it uses was
 checked there; it has still not run - phase 7 does that). The pip install in a Python 3.12 venv
