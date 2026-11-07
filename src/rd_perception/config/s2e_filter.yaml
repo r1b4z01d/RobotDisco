@@ -6,7 +6,10 @@ scan_to_scan_filter_chain:
       type: laser_filters/LaserScanPolygonFilter
       params:
         polygon_frame: base_link
-        polygon: "[[0.32, 0.32], [0.45, 0.25], [0.45, -0.25],[0.32, -0.32] [-0.45, -0.32],[-0.45, -0.1] ,[-0.6, -0.1] ,[-0.6, 0.1] ,[-0.45, 0.1] ,[-0.45, 0.32]]"
+        # the robot's outline seen from the rear lidar (base_link frame). v1's string lacked the comma after [0.32, -0.32]:
+        # laser_filters then parsed no polygon and the S2E body points went through to the costmaps (found by the
+        # rd_perception sim-mode test, 2026-11-07).
+        polygon: "[[0.32, 0.32], [0.45, 0.25], [0.45, -0.25], [0.32, -0.32], [-0.45, -0.32], [-0.45, -0.1], [-0.6, -0.1], [-0.6, 0.1], [-0.45, 0.1], [-0.45, 0.32]]"
         invert: false
     filter2:
       name: speckle_filter
