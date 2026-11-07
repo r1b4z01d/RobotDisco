@@ -66,6 +66,8 @@ export RD_ROBOT_CONFIG=$WS/config/robot.yaml
 export RD_DATA_DIR=$HOME/RobotDisco-data
 export PYTHONNOUSERSITE=1    # ~/.local (setuptools 84, OpenCV 5) must not shadow the system packages
 BASHRC
+  # a bashrc block written by an earlier version of this script lacks the line above
+  grep -q 'PYTHONNOUSERSITE' "$HOME/.bashrc" || echo 'export PYTHONNOUSERSITE=1    # Robot Disco 5.0: ~/.local must not shadow the system packages' >> "$HOME/.bashrc"
 }
 
 phase_workspace() {

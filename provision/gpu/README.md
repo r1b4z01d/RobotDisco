@@ -64,6 +64,33 @@ the placeholder in `src/rd_arm/config/poses.yaml` (phase `workspace` copies it t
   keys, so every Nav2 node ran on wall time whatever the launch said (now passed explicitly); the sim stack needs
   the base's twist_mux + collision monitor (`base.launch.py controllers:=false`) or Nav2's commands reach nothing.
 
+## Manual session: the GUI and the sim
+
+On the box's desktop (or over ssh with `DISPLAY=:1` for the Isaac window), two terminals; every new terminal gets
+the environment from the bashrc block (ROS, Cyclone DDS, the RD_* variables, `PYTHONNOUSERSITE=1`).
+
+```
+cd ~/RobotDisco && GIT_SSH_COMMAND="ssh -i ~/.ssh/github -o IdentitiesOnly=yes" git pull && colcon build --symlink-install   # after a pull
+ros2 run rd_sim export_urdf /tmp/robot_disco.urdf
+~/isaacsim-venv/bin/python src/rd_sim/scripts/isaac_scene.py --urdf /tmp/robot_disco.urdf      # the Isaac Sim window; --headless for none
+```
+
+The first start takes about 100 s and ends with "Robot Disco in Isaac Sim: ROS 2 bridge up". Then, in the second
+terminal:
+
+```
+ros2 launch rd_sim sim.launch.py
+```
+
+That is the robot's stack against the sim: the base command path (twist_mux + collision monitor), the scan filters,
+Nav2 seeded at the dock, the mock UR mirrored into the sim, the fake VLA server, the voice assistant (rules only,
+no microphone) and the manager. Open http://4090TI.local:8092 from any browser on the network (v1's `vla_webui` keeps
+:8081). On the Live tab: the map with the robot, the drive pad (arm it first; a gamepad shows up after a button
+press), the sim cameras, and the voice box ("Robot Disco, what time is it"; "Robot Disco, pick up tigger" drives to
+the Dining Room and runs the fake policy). The Landmarks tab's Go buttons drive; `/arm` has the wave and the hand.
+Stop with Ctrl-C in both terminals, and always start the sim again before the stack: Nav2 is told the robot is at
+the dock.
+
 ## After the script
 
 - `ros2 run rd_sim export_urdf /tmp/robot_disco.urdf`, the detached Isaac scene run above, then

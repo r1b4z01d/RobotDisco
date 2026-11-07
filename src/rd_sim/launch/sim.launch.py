@@ -3,7 +3,7 @@
 
     ros2 run rd_sim export_urdf /tmp/robot_disco.urdf
     ~/isaacsim-venv/bin/python $(ros2 pkg prefix rd_sim)/share/rd_sim/scripts/isaac_scene.py --urdf /tmp/robot_disco.urdf --headless
-    ros2 launch rd_sim sim.launch.py            # base command path + scan filters + nav + arm (mock UR mirrored) + vla (fake) + manager
+    ros2 launch rd_sim sim.launch.py            # base command path + scan filters + nav + arm (mock UR mirrored) + vla (fake) + voice + manager
 
 Not runnable in the Docker rig (no GPU): phase 7.
 """
@@ -26,6 +26,7 @@ def generate_launch_description():
         DeclareLaunchArgument('manager', default_value='true'),
         DeclareLaunchArgument('arm', default_value='true'),
         DeclareLaunchArgument('vla', default_value='true'),
+        DeclareLaunchArgument('voice', default_value='true', description='the voice assistant (ears and LLM off: the rules and the landmark tasks) and a silent Say server, so the manager\'s text box and /api/say work'),
         # rsp + twist_mux + collision monitor: the robot's own command path (cmd_vel_nav / web / joy -> mux -> monitor ->
         # /diff_cont/cmd_vel), which the sim's bridge then integrates; no ros2_control, Isaac moves the wheels
         inc('rd_base', 'base.launch.py', sim_mode='true', use_sim_time='true', joystick='false', controllers='false'),
@@ -40,6 +41,12 @@ def generate_launch_description():
         IncludeLaunchDescription(PythonLaunchDescriptionSource(share('rd_vla', 'launch', 'vla.launch.py')),
                                  launch_arguments=[('backend', 'fake'), ('python', 'python3'), ('device', 'cpu'), ('use_sim_time', 'true')],
                                  condition=IfCondition(LaunchConfiguration('vla'))),
+        Node(package='rd_audio', executable='say_server', name='say_server', output='screen',
+             parameters=[{'engine': 'fake', 'player': 'none', 'sink_watchdog': False, 'sink': '', 'use_sim_time': True}],
+             condition=IfCondition(LaunchConfiguration('voice'))),
+        Node(package='rd_voice', executable='voice', name='voice', output='screen',
+             parameters=[{'ears_enabled': False, 'llm_enabled': False, 'llm_backend': 'none', 'volume_sink': '', 'use_sim_time': True}],
+             condition=IfCondition(LaunchConfiguration('voice'))),
         Node(package='rd_manager', executable='manager', name='rd_manager', output='screen', arguments=['--sim', 'true'],
              parameters=[{'use_sim_time': True}],       # its stamps and TF ages follow Isaac's /clock
              condition=IfCondition(LaunchConfiguration('manager'))),
