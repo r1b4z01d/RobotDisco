@@ -11,6 +11,7 @@ setup(
                 ('share/' + package_name + '/launch', glob('launch/*.launch.py')),
                 ('share/' + package_name + '/config', glob('config/*.yaml'))],
     install_requires=['setuptools', 'pyyaml'], zip_safe=True,
+    tests_require=['pytest'],
     maintainer='Bryan Ribas', maintainer_email='bryanribas@gmail.com', description='Robot Disco voice assistant', license='CC-BY-NC-SA-4.0',
     entry_points={'console_scripts': ['voice = rd_voice.voice_node:main']},
 )

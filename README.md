@@ -11,8 +11,8 @@ v2 is a rebuild of [rd_ws](https://github.com/r1b4z01d/rd_ws) (v1: Humble on Jet
 the feature-by-feature mapping, the phases and the risks are in the
 [Robot Disco v2 Rebuild Plan](https://claude.ai/artifact/T2mFGJhZuEiFKGtLmpHvPM).
 
-**Status 2026-11-06: phase 0.** The skeleton below exists; the robot still runs v1. Nothing here has run
-on hardware.
+**Status 2026-11-07: every package written and passing its tests in the rig.** The robot still runs v1;
+nothing here has run on hardware. Next: the GPU box (Isaac Sim, Isaac ROS), then the robot.
 
 ## Layout
 
@@ -40,32 +40,39 @@ RobotDisco/
 └── provision/             JetPack 7.2 provisioning phases, package lists, udev, netplan, DDS profile
 ```
 
-Packages marked done build; the others hold a README saying what they will contain and where in v1 the
-code comes from, plus a `COLCON_IGNORE` until they exist.
+Every package builds and has tests; `rig/` holds the Docker test rig (`rig/rig.sh image|build|test|sh`) and
+says what stands in for each piece of hardware. `rd_sim` is the one package still to write (Isaac Sim, on
+the GPU box).
 
 ## Phases
 
-| Phase | Delivers | Done when |
+| Phase | Delivers | Status |
 |---|---|---|
-| 0 | v1 snapshot + NVMe copy on the GPU box, `rd_ws` tagged v1, this skeleton | the GPU box holds a verified copy of everything on the robot |
-| 1 | JetPack 7.2 flash, Jazzy + Isaac ROS, rd_base, rd_nav, rd_perception, rd_bringup | localizes on boot, drives a v1 route, gamepad deadman works |
-| 2 | rd_manager | every v1 page function with no second server |
-| 3 | rd_arm | collision-aware wave; 50 Hz stream as smooth as v1's servoJ |
-| 4 | rd_vla | "pick up tigger" from a landmark task end to end |
-| 5 | rd_audio, rd_face, rd_voice | greets by name, waves, answers, runs a task by voice |
-| 6 | rd_sim | the stack runs against Isaac Sim |
-| 7 | optional: visual odometry, GR00T backend, docking | measured against SmolVLA |
-| 8 | retire v1 | rd_ws archived, wiki rewritten |
+| 0 | skeleton, `rd_ws` tagged v1 | done |
+| 1 | the Docker rig (Jazzy, loopback sim, mock UR, fakes) | done |
+| 2 | rd_bringup, rd_base, rd_nav, rd_perception | done, launch tests pass |
+| 3 | rd_manager | done, launch test passes |
+| 4 | rd_arm | done, launch test passes |
+| 5 | rd_vla | done, launch test passes |
+| 6 | rd_audio, rd_face, rd_voice | done, launch tests pass |
+| 7 | rd_sim (Isaac Sim) + Isaac ROS validated on the GPU box | next |
+| 8 | the robot: snapshot + `/mnt/data` copy (the gate), JetPack 7.2.1 flash, `provision.sh all`, hardware checks | after 7 |
+| 9 | optional: visual odometry, GR00T, docking | |
+| 10 | retire v1 | |
 
-## Build
+The detailed plan, risks and decisions live in the
+[Robot Disco v2 Rebuild Plan](https://claude.ai/artifact/T2mFGJhZuEiFKGtLmpHvPM).
+
+## Build and test
 
 ```
-cd ~/RobotDisco
-rosdep install --from-paths src vendor --ignore-src -r -y
-colcon build --symlink-install
-source install/setup.bash
-ros2 launch rd_description rsp.launch.py sim_mode:=true
+rig/rig.sh image && rig/rig.sh build && rig/rig.sh test      # on the Mac, in Docker
+cd ~/RobotDisco && colcon build --symlink-install              # on the robot or the GPU box (Jazzy sourced)
+ros2 launch rd_bringup robot.launch.py sim_mode:=true          # the base; each package has its own launch
 ```
+
+On the robot every launch is a supervisor unit (`src/rd_bringup/services/`), and `provision/deploy_to_rd.sh`
+pushes this tree there.
 
 ## License
 

@@ -17,6 +17,7 @@ setup(
     ],
     install_requires=['setuptools', 'pyyaml', 'numpy'],
     zip_safe=True,
+    tests_require=['pytest'],
     maintainer='Bryan Ribas',
     maintainer_email='bryanribas@gmail.com',
     description='Robot Disco arm and hand',
