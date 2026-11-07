@@ -14,8 +14,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ros-jazzy-launch-testing ros-jazzy-launch-testing-ros ros-jazzy-ament-cmake-pytest \
       ros-jazzy-rmw-cyclonedds-cpp ros-jazzy-ros2controlcli ros-jazzy-tf2-geometry-msgs \
       python3-pytest python3-pytest-timeout python3-yaml python3-numpy python3-opencv python3-websockets \
-      python3-fastapi python3-uvicorn python3-httpx python3-pil \
+      python3-fastapi python3-uvicorn python3-httpx python3-pil python3-pandas python3-pip \
     && rm -rf /var/lib/apt/lists/*
+# rd_manager's dataset reader: pyarrow (no deb on 24.04; >= 21 needs numpy 2, the system numpy is 1.26)
+RUN pip3 install --no-cache-dir -q --break-system-packages "pyarrow<21"
 
 # LeRobot (CPU torch) in its own venv for rd_vla's recorder / dataset tests and the SmolVLA backend's
 # import path. ~2 GB; the system python stays untouched.

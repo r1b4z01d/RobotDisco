@@ -160,6 +160,9 @@ phase_ros() {
     sudo apt-get update
   fi
   apt_install $(pkglist "$HERE/ros-packages.txt")
+  # rd_manager reads LeRobot parquet (datasets tab): no python3-pyarrow deb on 24.04, and pyarrow >= 21 needs numpy 2
+  # while the system numpy is 1.26 -> the newest that fits, into /usr/local (nothing apt-managed is touched)
+  sudo pip3 install -q --break-system-packages "pyarrow<21"
   sudo rosdep init 2>/dev/null || true
   rosdep update
   if ! grep -q "RobotDisco/install/setup.bash" "$RD_HOME/.bashrc"; then

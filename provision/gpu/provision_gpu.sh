@@ -48,7 +48,10 @@ phase_ros() {
     ros-jazzy-nav2-loopback-sim ros-jazzy-launch-testing ros-jazzy-launch-testing-ros ros-jazzy-ament-cmake-pytest \
     ros-jazzy-ros2controlcli ros-jazzy-tf2-geometry-msgs ros-jazzy-rmw-cyclonedds-cpp \
     python3-pytest python3-pytest-timeout python3-yaml python3-numpy python3-opencv python3-websockets \
-    python3-fastapi python3-uvicorn python3-httpx python3-pil python3-colcon-common-extensions python3-rosdep python3-venv
+    python3-fastapi python3-uvicorn python3-httpx python3-pil python3-colcon-common-extensions python3-rosdep python3-venv python3-pip
+  # rd_manager reads LeRobot parquet (datasets tab): no python3-pyarrow deb on 24.04, and pyarrow >= 21 needs numpy 2
+  # while the system numpy is 1.26 -> the newest that fits, into /usr/local (nothing apt-managed is touched)
+  sudo pip3 install -q --break-system-packages "pyarrow<21"
   sudo rosdep init 2>/dev/null || true
   rosdep update >/dev/null 2>&1 || warn "rosdep update failed (offline?)"
   grep -q "RobotDisco/install/setup.bash" "$HOME/.bashrc" || cat >> "$HOME/.bashrc" <<BASHRC
@@ -93,7 +96,7 @@ phase_test() {
 
 phase_vla() {
   # LeRobot with CUDA torch for training and the SmolVLA backend (the same /opt/vla path as the robot).
-  # pyarrow (rd_manager reads LeRobot parquet) comes with it: 24.04 has no python3-pyarrow deb.
+  # (pyarrow for the manager is the system one from phase ros; this venv resolves its own numpy 2 stack, keep it so)
   log "LeRobot venv /opt/vla"
   [ -x /opt/vla/bin/python ] || { sudo python3 -m venv --system-site-packages /opt/vla && sudo chown -R "$USER:$USER" /opt/vla; }
   /opt/vla/bin/pip install -q --upgrade pip

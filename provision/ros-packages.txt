@@ -56,3 +56,5 @@ ros-jazzy-moveit-servo
 
 # misc
 ros-jazzy-rosbag2
+python3-pandas                 # rd_manager's dataset reader (with pyarrow from pip, see provision.sh phase ros)
+python3-pip
