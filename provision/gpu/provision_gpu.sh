@@ -41,7 +41,7 @@ phase_ros() {
     ros-jazzy-nav2-loopback-sim ros-jazzy-launch-testing ros-jazzy-launch-testing-ros ros-jazzy-ament-cmake-pytest \
     ros-jazzy-ros2controlcli ros-jazzy-tf2-geometry-msgs ros-jazzy-rmw-cyclonedds-cpp \
     python3-pytest python3-pytest-timeout python3-yaml python3-numpy python3-opencv python3-websockets \
-    python3-fastapi python3-uvicorn python3-httpx python3-pil python3-pyarrow python3-colcon-common-extensions python3-rosdep python3-venv
+    python3-fastapi python3-uvicorn python3-httpx python3-pil python3-colcon-common-extensions python3-rosdep python3-venv
   sudo rosdep init 2>/dev/null || true
   rosdep update >/dev/null 2>&1 || warn "rosdep update failed (offline?)"
   grep -q "RobotDisco/install/setup.bash" "$HOME/.bashrc" || cat >> "$HOME/.bashrc" <<BASHRC
@@ -84,7 +84,8 @@ phase_test() {
 }
 
 phase_vla() {
-  # LeRobot with CUDA torch for training and the SmolVLA backend (the same /opt/vla path as the robot)
+  # LeRobot with CUDA torch for training and the SmolVLA backend (the same /opt/vla path as the robot).
+  # pyarrow (rd_manager reads LeRobot parquet) comes with it: 24.04 has no python3-pyarrow deb.
   log "LeRobot venv /opt/vla"
   [ -x /opt/vla/bin/python ] || { sudo python3 -m venv --system-site-packages /opt/vla && sudo chown -R "$USER:$USER" /opt/vla; }
   /opt/vla/bin/pip install -q --upgrade pip
