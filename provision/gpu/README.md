@@ -5,7 +5,7 @@ as bryan; it leaves v1's `~/VLA` and the `vla_webui` supervisor unit alone, 5.0 
 `/opt/vla` and `~/isaacsim-venv`):
 
 ```
-git clone --recurse-submodules https://github.com/r1b4z01d/RobotDisco.git ~/RobotDisco
+GIT_SSH_COMMAND="ssh -i ~/.ssh/github -o IdentitiesOnly=yes" git clone --recurse-submodules git@github.com:r1b4z01d/RobotDisco.git ~/RobotDisco   # private repo: the box's GitHub key
 ~/RobotDisco/provision/gpu/provision_gpu.sh all        # Jazzy packages, colcon build, the test suite, /opt/vla, Isaac Sim 6.2 (pip)
 ~/RobotDisco/provision/gpu/provision_gpu.sh isaacros   # Isaac ROS 4.6 host install: replaces the host OpenCV, read the phase first
 ```
@@ -32,11 +32,36 @@ the placeholder in `src/rd_arm/config/poses.yaml` (phase `workspace` copies it t
   NVIDIA recommends Docker; the host mode replaces the host OpenCV packages. Debs: isaac-ros-image-proc,
   -apriltag, -nvblox, -visual-slam; cuMotion has no 4.6 deb (source build).
 
+## Done on the box 2026-11-07
+
+- `ros workspace test` ran clean once two traps were out of the way: the box's `~/.local` holds setuptools 84 and
+  OpenCV 5 (v1 tooling), so the script and the bashrc block set `PYTHONNOUSERSITE=1` (setuptools 84 drops
+  `tests_require`, and colcon then silently runs unittest: every package "exited with code 5", 0 tests), and the
+  packages also declare `extras_require['test']`. The whole suite passes here: 86 tests, the same as the rig.
+- The system python got `python3-pandas` (apt) and `pyarrow<21` (pip, `--break-system-packages`: no deb on 24.04
+  and pyarrow 21+ needs numpy 2 while the system numpy is 1.26): rd_manager's dataset reader needs both. The
+  manager runs here with `ros2 run rd_manager manager -- --no-ros --data ~/RobotDisco-data --port 8092` and lists
+  the mirrored v1 datasets (episode counts from the parquet metadata), models and evals; v1's `vla_webui` keeps :8081.
+- `/opt/vla`: torch 2.10 cu128, lerobot 0.4.4, numpy 2.2 — its own consistent stack, leave numpy alone there (the
+  venv's cv2 is its own 4.12; the system cv_bridge is never imported from it).
+- Isaac Sim 6.2 (pip) runs headless. What the first runs taught, all applied in `src/rd_sim`: the URDF converter
+  writes the joints into an unselected `Physics` variant set (the script selects `physx`); a massless URDF root
+  link makes every child body its own articulation with the wheels jointed to the world (`export_urdf` gives the
+  root a token mass); the description had the casters floating 0.10 m above the floor and a 0.5 kg chassis under a
+  20 kg arm (fixed in `rd_description`); the fixed caster spheres need a frictionless material; at all-zero joints
+  the UR lies stretched out sideways and tips the base (the sim starts it at `vla_home`); the 2D lidars use the
+  shipped `RPLIDAR_S2E` profile, the Velodyne a 32-channel Ouster `OS1` variant (no VLP-16 profile ships); the
+  sim publishes the RAW scans and `lidars.launch.py sim:=true` runs the robot's body filter chains on them.
+- Running it detached, so an ssh drop does not kill it:
+  `(setsid nohup timeout 3000 ~/isaacsim-venv/bin/python src/rd_sim/scripts/isaac_scene.py --urdf /tmp/robot_disco.urdf --headless > ~/isaac.log 2>&1 < /dev/null & echo $! > ~/isaac.pid)`,
+  stop with `kill -INT -- -$(cat ~/isaac.pid)`. The first start takes ~100 s (extension cache); the log is
+  line-buffered. Then `ros2 launch rd_sim sim.launch.py` for the stack. Never `pkill -f isaac_scene` from an ssh
+  command that itself contains that text: it kills the shell running the command.
+
 ## After the script
 
-- `ros2 run rd_sim export_urdf /tmp/robot_disco.urdf` then `~/isaacsim-venv/bin/python
-  src/rd_sim/scripts/isaac_scene.py --urdf /tmp/robot_disco.urdf`: the first run of the Isaac scene, see
-  `src/rd_sim/README.md` for the API changes already known.
+- `ros2 run rd_sim export_urdf /tmp/robot_disco.urdf`, the detached Isaac scene run above, then
+  `ros2 launch rd_sim sim.launch.py`; `src/rd_sim/README.md` has the sensor and bridge details.
 - `ros2 launch rd_perception isaac.launch.py apriltag:=true` against `fake_cameras` once Isaac ROS is in.
 - Training: `/opt/vla/bin/python -m lerobot.scripts.train ...` on the mirrored datasets, checkpoints under
   `~/RobotDisco-data/outputs/train`; the 5.0 manager serves them with `manager --no-ros --data ~/RobotDisco-data`.
