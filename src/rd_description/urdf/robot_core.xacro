@@ -6,18 +6,22 @@
     <xacro:property name="chassis_length" value="0.41"/>
     <xacro:property name="chassis_width" value="0.402"/>
     <xacro:property name="chassis_height" value="0.8"/>
-    <xacro:property name="chassis_mass" value="10.0"/>
+    <!-- masses: estimates until phase 8 weighs the base (frame, batteries, PC, lidars); v1 carried the template's 0.5 kg
+         chassis under a 20 kg arm, which tips over in simulation. Nothing on the robot reads these. -->
+    <xacro:property name="chassis_mass" value="30.0"/>
     <xacro:property name="wheel_radius" value="0.1592"/>
     <xacro:property name="wheel_thickness" value="0.07"/>
-    <xacro:property name="wheel_mass" value="0.05"/>
+    <xacro:property name="wheel_mass" value="1.5"/>
     <xacro:property name="wheel_offset_x" value="0.0"/>
     <xacro:property name="wheel_offset_y" value="0.272"/>
     <xacro:property name="wheel_offset_z" value="0.1"/>
     <xacro:property name="caster_wheel_radius" value="0.065"/>
-    <xacro:property name="caster_wheel_mass" value="0.01"/>
+    <xacro:property name="caster_wheel_mass" value="0.2"/>
     <xacro:property name="caster_wheel_offset_x" value="0.361"/>
     <xacro:property name="caster_wheel_offset_y" value="0.115"/>
-    <xacro:property name="caster_wheel_offset_z" value="${wheel_offset_z - wheel_radius + caster_wheel_radius}"/>
+    <!-- the chassis joint sits at the axle, so a caster touches the floor with its centre caster_wheel_radius above
+         the wheel's bottom: the old wheel_offset_z form floated them 0.10 m (the robot rocked on its drive wheels in sim) -->
+    <xacro:property name="caster_wheel_offset_z" value="${caster_wheel_radius - wheel_radius}"/>
 
     <material name="white">
         <color rgba="1 1 1 1" />
@@ -83,7 +87,7 @@
                 <box size="${chassis_length} ${chassis_width} ${chassis_height}"/>
             </geometry>
         </collision>
-        <xacro:inertial_box mass="0.5" x="${chassis_length}" y="${chassis_width}" z="${chassis_height}">
+        <xacro:inertial_box mass="${chassis_mass}" x="${chassis_length}" y="${chassis_width}" z="${chassis_height}">
             <origin xyz="${chassis_length/2} 0 ${chassis_height/2}" rpy="0 0 0"/>
         </xacro:inertial_box>
     </link>

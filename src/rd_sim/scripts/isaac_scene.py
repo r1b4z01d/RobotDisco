@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import sys
 import threading
 import time
 from pathlib import Path
@@ -107,6 +108,7 @@ def start_cmd_vel_relay(timeout: float = 0.5):
 
 def main():
     args = parse()
+    sys.stdout.reconfigure(line_buffering=True)        # the prints reach a log file while the sim runs
     from isaacsim import SimulationApp  # noqa: PLC0415 - Isaac Sim's python only; Omniverse imports must follow the app
     app = SimulationApp({"headless": args.headless, "width": 1280, "height": 720, "renderer": "RayTracedLighting"})
     import numpy as np
@@ -118,7 +120,7 @@ def main():
     from isaacsim.core.experimental.objects import Cube, GroundPlane
     from isaacsim.core.simulation_manager import SimulationManager
     from isaacsim.sensors.experimental.rtx import Lidar, LidarSensor, RtxCamera
-    from pxr import Gf, Sdf, Usd, UsdGeom, UsdPhysics
+    from pxr import Gf, Sdf, Usd, UsdGeom, UsdPhysics, UsdShade
 
     for ext in ("isaacsim.ros2.bridge", "isaacsim.ros2.nodes", "isaacsim.core.nodes", "isaacsim.sensors.physics.nodes",
                 "isaacsim.robot.wheeled_robots.nodes"):
@@ -170,6 +172,34 @@ def main():
         drive.CreateStiffnessAttr().Set(stiffness)          # 0 stiffness + damping = velocity drive (the wheels)
         drive.CreateDampingAttr().Set(damping)
 
+    # friction: the casters are fixed spheres here (on the robot they swivel and roll), so they must slide; the
+    # tyres grip. PhysX combines two materials' friction by averaging unless one says "min".
+    def physics_material(path, friction):
+        mat = UsdShade.Material.Define(stage, path)
+        api = UsdPhysics.MaterialAPI.Apply(mat.GetPrim())
+        api.CreateStaticFrictionAttr().Set(friction)
+        api.CreateDynamicFrictionAttr().Set(friction)
+        api.CreateRestitutionAttr().Set(0.0)
+        try:
+            from pxr import PhysxSchema
+            PhysxSchema.PhysxMaterialAPI.Apply(mat.GetPrim()).CreateFrictionCombineModeAttr().Set("min" if friction == 0.0 else "average")
+        except Exception as e:  # noqa: BLE001
+            print(f"no PhysxMaterialAPI ({e}): caster friction averages with the floor's")
+        return mat
+
+    def bind_material(link_name, mat):
+        n = 0
+        for p in Usd.PrimRange(prim_named(link_name)):
+            if p.HasAPI(UsdPhysics.CollisionAPI):
+                UsdShade.MaterialBindingAPI.Apply(p).Bind(mat, UsdShade.Tokens.weakerThanDescendants, "physics")
+                n += 1
+        assert n, f"{link_name}: no collision prim to bind a material to"
+    slick, grip = physics_material("/World/PhysicsMaterials/caster", 0.0), physics_material("/World/PhysicsMaterials/tyre", 1.0)
+    for name in ("caster_wheel_fl", "caster_wheel_fr", "caster_wheel_bl", "caster_wheel_br"):
+        bind_material(name, slick)
+    for name in ("left_wheel", "right_wheel"):
+        bind_material(name, grip)
+
     # 2. the ground and the walls from the map
     GroundPlane("/World/GroundPlane")                        # collision plane + rendered mesh
     if args.world:
@@ -185,11 +215,12 @@ def main():
         print(f"{len(boxes)} wall blocks from {args.world}")
 
     # 3. sensors: RTX lidars (isaacsim.sensors.experimental.rtx) under the URDF frames, scan rate = tick rate = 10 Hz
-    # UNVERIFIED (6.2): Example_Rotary as the Velodyne stand-in (no Velodyne profile documented in SUPPORTED_LIDAR_CONFIGS)
-    # and the near/far range overrides on the example profiles
+    # Profiles shipped with 6.2 (isaacsim.sensors.rtx data/lidar_configs): RPLIDAR_S2E is the robot's own rear lidar and
+    # stands in for the S1 too; no VLP-16 profile ships, so the Velodyne is a 32-channel 10 Hz Ouster OS1 stand-in
+    # (Nav2's point cloud source only filters by height). The near/far range overrides sit on top of the profile.
     lidars = {}
-    for frame, config, near, far in (("rp_s1_lidar", "Example_Rotary_2D", 0.1, 20.0), ("rp_s2e_lidar", "Example_Rotary_2D", 0.1, 20.0),
-                                     ("velodyne_frame", "Example_Rotary", 0.5, 50.0)):
+    for frame, config, near, far in (("rp_s1_lidar", "RPLIDAR_S2E", 0.1, 20.0), ("rp_s2e_lidar", "RPLIDAR_S2E", 0.1, 20.0),
+                                     ("velodyne_frame", "OS1_REV6_32ch10hz512res", 0.5, 50.0)):
         lidars[frame] = Lidar.create(path=f"{prim_named(frame).GetPath()}/lidar", config=config, tick_rate=10.0,
                                      attributes={"omni:sensor:Core:scanRateBaseHz": 10, "omni:sensor:Core:nearRangeM": near,
                                                  "omni:sensor:Core:farRangeM": far})
