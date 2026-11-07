@@ -1,0 +1,52 @@
+# The face node on the robot (v1 combined_face_hand_defaults.yaml, minus TTS / wave / Folks page / hand relay,
+# which moved to rd_audio, rd_arm and rd_manager).
+face:
+  ros__parameters:
+    image_topic: /camera/camera/color/image_raw
+    renderer: gl
+    fullscreen: true
+    width: 1080
+    height: 1900
+    render_fps: 30.0
+    camera_timeout: 3.0
+    blink_min: 2.5
+    blink_max: 15.5
+    blink_duration: 0.14
+    blink_closed_hold: 0.05
+    gaze_speed: 0.3
+    gaze_idle_speed: 0.01
+    mouth_enabled: true
+    mouth_gain: 1.0
+    mouth_attack: 0.6
+    mouth_release: 0.12
+    mouth_timeout: 0.4
+    mouth_smile: 25.0
+    mouth_smile_happy: 70.0
+    mouth_gestures: true
+    greeting_enabled: true
+    greeting_text: hello
+    greeting_known_text: "hello {name}"
+    greeting_late_text: "oh, hi {name}"
+    greeting_wait: 2.0
+    greeting_name_window: 10.0
+    greeting_happy_seconds: 30.0
+    greeting_cooldown: 3600.0
+    wave_enabled: true
+    wave_known_only: true
+    wave_cooldown: 20.0
+    wink_eye: right
+    wink_duration: 0.7
+    wink_depth: 0.9
+    face_id_enabled: true
+    face_id_backend: auto                   # auto = ArcFace (the faceid venv) if present, else OpenCV YuNet + SFace
+    face_id_python: ~/.robot_face/faceid-venv/bin/python
+    face_id_gallery: ~/.robot_face/people.json
+    face_thumb_dir: ~/.robot_face/faces
+    face_id_min_period: 0.5
+    face_id_auto_enroll: true
+    face_id_min_face_px: 40
+    face_id_enroll_min_face_px: 64
+    face_id_enroll_frames: 6
+    face_id_gpu: true
+    face_id_det_size: 640
+    face_id_threads: 2

@@ -143,5 +143,10 @@ def test_recorder_lerobot(tmp_path):
     info = w.save_episode()
     assert info["backend"] == "lerobot" and info["frames"] == 4
     assert (tmp_path / "demo_lr" / "meta").is_dir()
+    w.close()                                   # finalize: the parquet footers, else it cannot be re-opened
     w2 = EpisodeWriter(tmp_path, "demo_lr", fps=10, width=64, height=32, cameras=("scene",), use_videos=False)
     assert w2.episodes == 1
+    for i in range(3):
+        w2.add_frame({"scene": img}, [0.0] * 16, [0.0] * 10, "pick")
+    assert w2.save_episode()["episode"] == 1
+    w2.close()

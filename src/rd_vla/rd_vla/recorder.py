@@ -107,6 +107,15 @@ class EpisodeWriter:
         self.episodes = ep + 1
         return {"episode": ep, "frames": self.frames, "backend": "npz", "path": str(self.path)}
 
+    def close(self) -> None:
+        """Finish writing (LeRobot's finalize closes the parquet writers; without it the dataset cannot be re-opened)."""
+        if self.backend == "lerobot" and self.dataset is not None:
+            try:
+                self.dataset.finalize()
+            except Exception as e:  # noqa: BLE001
+                print(f"[recorder] finalize failed: {e}", flush=True)
+            self.dataset = None
+
     def discard_episode(self) -> None:
         if self.backend == "lerobot":
             self.dataset.clear_episode_buffer()

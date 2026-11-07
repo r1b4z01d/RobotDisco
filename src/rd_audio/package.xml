@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>rd_audio</name>
+  <version>2.0.0</version>
+  <description>Robot Disco audio: the one copy of the speaker sink watchdog, playback, the TTS engines and the Say action with the mouth waveform</description>
+  <maintainer email="bryanribas@gmail.com">Bryan Ribas</maintainer>
+  <license>CC-BY-NC-SA-4.0</license>
+  <depend>rd_interfaces</depend>
+  <exec_depend>rd_bringup</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>std_srvs</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <test_depend>python3-pytest</test_depend>
+  <test_depend>launch_testing</test_depend>
+  <export><build_type>ament_python</build_type></export>
+</package>

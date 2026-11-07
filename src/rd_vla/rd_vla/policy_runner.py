@@ -249,6 +249,7 @@ class PolicyRunner(Node):
                 self.get_logger().info(f"episode saved: {saved}")
             else:
                 writer.discard_episode()
+            writer.close()
         reg.create(run_name, {"task": goal.task, "dataset": out.get("dataset", ""), "model": goal.checkpoint or info.get("checkpoint") or "", "checkpoint": str(info.get("resolved") or ""),
                               "backend": info.get("backend", ""), "steps": step, "duration_s": round(time.monotonic() - t0, 1),
                               "fps": fps, "ended": ended, "landmark": goal.landmark, "operator": p("operator"), "episodes": 1,
