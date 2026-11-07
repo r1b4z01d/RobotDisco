@@ -48,9 +48,9 @@ def parse():
     ap.add_argument("--world", default="zone_one", help="a map from rd_nav/maps to build walls from ('' = empty)")
     ap.add_argument("--maps-dir", default="")
     ap.add_argument("--headless", action="store_true")
-    ap.add_argument("--x", type=float, default=0.7)
-    ap.add_argument("--y", type=float, default=0.9)
-    ap.add_argument("--yaw", type=float, default=0.0)
+    ap.add_argument("--x", type=float, default=0.6957)      # the Charger landmark (rd_nav landmarks.yaml), where the robot docks;
+    ap.add_argument("--y", type=float, default=0.9208)      # sim.launch.py hands AMCL the same pose
+    ap.add_argument("--yaw", type=float, default=0.0548)
     return ap.parse_args()
 
 
