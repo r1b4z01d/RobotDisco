@@ -1,0 +1,13 @@
+# Velodyne VLP-16 driver (rd_perception lidars.launch.py sets device_ip / port from robot.yaml).
+velodyne_driver_node:
+  ros__parameters:
+    gps_time: false
+    time_offset: 0.0
+    enabled: true
+    read_once: false
+    read_fast: false
+    repeat_delay: 0.0
+    frame_id: velodyne_frame
+    model: VLP16
+    rpm: 600.0
+    timestamp_first_packet: false

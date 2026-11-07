@@ -324,7 +324,7 @@ local_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 0.1
-        inflation_radius: 0.45
+        inflation_radius: 0.65     # >= the footprint's circumscribed radius (0.62): MPPI's CostCritic needs it (v1 DWB ran 0.45)
       always_send_full_costmap: true
 
 # Keepout filter servers: the mask map and the filter info the costmaps' keepout_filter use.

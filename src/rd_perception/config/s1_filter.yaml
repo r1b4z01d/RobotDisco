@@ -1,0 +1,28 @@
+scan_to_scan_filter_chain:
+  ros__parameters:
+    HW_ID: none
+    filter1:
+      name: polygon_filter
+      type: laser_filters/LaserScanPolygonFilter
+      params:
+        polygon_frame: base_link
+        # base_link frame. Re-measured 2026-11-02 from the S1 scan with the robot parked (after the S1's near field
+        # came back — see the note in the repo history): the drive wheels and front casters return at |y| 0.42-0.49
+        # for x -0.3..0.5, and the rear corners at x -0.55..-0.6, |y| up to 0.3 — all just outside the old outline
+        # (|y| 0.42, rear -0.5). Now a plain box |y| <= 0.52, x -0.62..0.55, with the centre front kept at x=0.47
+        # so the collision monitor's stop polygon nose (x=0.6, |y|<0.2 near the tip) isn't blinded.
+        # 2026-11-02 evening: the S1 turned out to add a constant +0.33 m to every range (now corrected by
+        # scan_range_offset.py in rplidar_s1_launch.py), which is why the "wheels" kept moving outwards (0.42 -> 0.49 ->
+        # 0.60) and the robot painted lethal cells beside its own path. With corrected ranges nothing of the body
+        # survives at |y| 0.47 / rear -0.62 (measured). Keep the outline tight: it also hides real obstacles inside it.
+        polygon: "[[0.47, 0.2], [0.47, -0.2], [0.55, -0.2], [0.55, -0.47], [-0.62, -0.47], [-0.62, 0.47], [0.55, 0.47], [0.55, 0.2]]"
+        invert: false
+        #footprint_topic: base_footprint_exclude
+    filter2:
+      name: speckle_filter
+      type: laser_filters/LaserScanSpeckleFilter
+      params:
+        filter_type: 0
+        max_range: 2.0
+        max_range_difference: 0.1
+        filter_window: 3

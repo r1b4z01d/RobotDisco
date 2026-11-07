@@ -24,3 +24,10 @@ landmarks:
         done_when: closed
         keep_grasp: true
         home: true
+  - id: hallway
+    name: Hallway
+    map: zone_one
+    x: 2.7181
+    y: 1.9097
+    yaw: 0.0903
+    tasks: []

@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>rd_perception</name>
+  <version>2.0.0</version>
+  <description>Robot Disco sensors: the two RPLiDARs (+ the S1 range correction and the body filters), the Velodyne, the RealSense D435, the three USB cameras as ROS topics, the Isaac ROS launches and the tag adapter</description>
+  <maintainer email="bryanribas@gmail.com">Bryan Ribas</maintainer>
+  <license>CC-BY-NC-SA-4.0</license>
+
+  <depend>rd_interfaces</depend>
+  <exec_depend>rd_bringup</exec_depend>
+  <exec_depend>rd_nav</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>rplidar_ros</exec_depend>
+  <exec_depend>laser_filters</exec_depend>
+  <exec_depend>velodyne_driver</exec_depend>
+  <exec_depend>velodyne_pointcloud</exec_depend>
+  <exec_depend>velodyne_laserscan</exec_depend>
+  <exec_depend>realsense2_camera</exec_depend>
+  <exec_depend>usb_cam</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+
+  <test_depend>python3-pytest</test_depend>
+  <test_depend>launch_testing</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

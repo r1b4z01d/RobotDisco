@@ -26,5 +26,6 @@ setup(
         'go_to_landmark = rd_nav.go_to_landmark:main',
         'tag_corrector = rd_nav.tag_corrector:main',
         'rd_keepout = rd_nav.keepout:main',
+        'scan_relay = rd_nav.scan_relay:main',
     ]},
 )

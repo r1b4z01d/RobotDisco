@@ -61,20 +61,29 @@ sensors:
   velodyne:
     ip: 192.168.11.46
     port: 2368
-  rplidar_s1:
-    port: /dev/rplidar_s1         # by-id symlink to add to udev/99-robot-disco.rules in phase 1 (v1: a /dev/serial/by-id path; the S1 re-enumerates as ttyUSB1 after a USB drop)
-    range_offset_m: 0.33          # the faulty S1 reads +0.33 m in every mode (2026-11-02); rd_perception corrects it
-  rplidar_s2e:
-    port: /dev/rplidar_s2e
+  rplidar_s1:                     # front, serial over a CP2102; by-id, not ttyUSBn (it re-enumerates after a USB drop)
+    serial_port: /dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0
+    baudrate: 256000
+    frame: rp_s1_lidar
+    range_offset_m: -0.33         # ADDED to every range: the faulty S1 reads +0.33 m in every mode (2026-11-02); 0.0 for a healthy unit
+  rplidar_s2e:                    # back, Ethernet (UDP)
+    ip: 192.168.11.2
+    udp_port: 8089
+    frame: rp_s2e_lidar
+    scan_mode: DenseBoost
   roboclaw:
     port: /dev/ttyACM0
     address: 128
   realsense_d435:
     serial: ""                    # "" = the only one attached
-  usb_cameras:                    # Jetson USB port -> role (provision/jetson/usb-layout.png)
-    scene: "2.4"
-    wrist: "1.1"
-    side: "4.2"
+  usb_cameras:                    # three identical UVC webcams, addressed by USB PORT (no serials); one per USB bus
+    by_path: /dev/v4l/by-path/platform-3610000.usb-usb-0:{port}:1.0-video-index0   # the Orin's xHCI
+    width: 1280
+    height: 720
+    fps: 30
+    scene: {port: "4.2", rotate: 270}     # bookshelf straight on, arm entering top-right (a USB-A jack)
+    wrist: {port: "1.1", rotate: 0}       # eye-in-hand, fingers at the top (the VIA dock on USB-C)
+    side:  {port: "2.4", rotate: 90}      # close shelf view with the window at the right (hub on the other USB-C, port 4)
 
 audio:
   sink: alsa_output.usb-C-Media_Electronics_Inc._USB_Audio_Device-00.analog-stereo
