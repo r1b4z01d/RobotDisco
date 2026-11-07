@@ -3,6 +3,8 @@ the Nav2 collision monitor and the gamepad.
 
     ros2 launch rd_base base.launch.py                                   # the robot
     ros2 launch rd_base base.launch.py sim_mode:=true joystick:=false    # the rig
+    ros2 launch rd_base base.launch.py sim_mode:=true joystick:=false controllers:=false   # rd_sim: Isaac drives the wheels,
+                                                                          # only rsp + twist_mux + collision monitor run
 
 Velocity path:  cmd_vel_joy (100) / cmd_vel_web (90) / cmd_vel_nav (10)  -> twist_mux -> cmd_vel_raw
                 -> collision_monitor -> /diff_cont/cmd_vel -> diff_cont -> wheels, /odom, odom->base_link
@@ -34,6 +36,7 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time')
     joystick = LaunchConfiguration('joystick')
     collision_monitor = LaunchConfiguration('collision_monitor')
+    controllers = LaunchConfiguration('controllers')
     quiet = ['--ros-args', '--log-level', 'WARN']
 
     rsp = IncludeLaunchDescription(
@@ -48,7 +51,7 @@ def generate_launch_description():
         package='controller_manager', executable='ros2_control_node',
         parameters=[{'robot_description': robot_description, 'use_sim_time': use_sim_time},
                     os.path.join(share, 'config', 'controllers.yaml')],
-        output='screen', arguments=quiet)
+        output='screen', arguments=quiet, condition=IfCondition(controllers))
     spawners = [
         Node(package='controller_manager', executable='spawner',
              arguments=[name, '--controller-manager-timeout', '30'] + quiet, output='screen')
@@ -87,6 +90,8 @@ def generate_launch_description():
         DeclareLaunchArgument('joystick', default_value='true', description='joy + teleop_twist_joy'),
         DeclareLaunchArgument('collision_monitor', default_value='true',
                               description='gate cmd_vel through the Nav2 collision monitor (needs the lidar scans)'),
+        DeclareLaunchArgument('controllers', default_value='true',
+                              description='ros2_control (controller manager + diff_cont): false when a simulator moves the wheels'),
         rsp,
         TimerAction(period=2.0, actions=[controller_manager]),
         RegisterEventHandler(OnProcessStart(target_action=controller_manager, on_start=spawners)),

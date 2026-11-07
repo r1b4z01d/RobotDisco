@@ -3,7 +3,7 @@
 
     ros2 run rd_sim export_urdf /tmp/robot_disco.urdf
     ~/isaacsim-venv/bin/python $(ros2 pkg prefix rd_sim)/share/rd_sim/scripts/isaac_scene.py --urdf /tmp/robot_disco.urdf --headless
-    ros2 launch rd_sim sim.launch.py            # scan filters + nav + arm (mock UR mirrored into the sim) + vla (fake) + manager
+    ros2 launch rd_sim sim.launch.py            # base command path + scan filters + nav + arm (mock UR mirrored) + vla (fake) + manager
 
 Not runnable in the Docker rig (no GPU): phase 7.
 """
@@ -26,7 +26,9 @@ def generate_launch_description():
         DeclareLaunchArgument('manager', default_value='true'),
         DeclareLaunchArgument('arm', default_value='true'),
         DeclareLaunchArgument('vla', default_value='true'),
-        inc('rd_description', 'rsp.launch.py', sim_mode='true', use_sim_time='true'),
+        # rsp + twist_mux + collision monitor: the robot's own command path (cmd_vel_nav / web / joy -> mux -> monitor ->
+        # /diff_cont/cmd_vel), which the sim's bridge then integrates; no ros2_control, Isaac moves the wheels
+        inc('rd_base', 'base.launch.py', sim_mode='true', use_sim_time='true', joystick='false', controllers='false'),
         inc('rd_perception', 'lidars.launch.py', sim='true', use_sim_time='true'),   # the body filter chains on the sim's raw scans, as on the robot
         # AMCL starts at the spawn pose (isaac_scene.py's defaults = the Charger landmark): Nav2's costmaps give the
         # map frame 60 s to appear at bringup, and in the sim nothing else sets the initial pose
