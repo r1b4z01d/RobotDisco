@@ -41,8 +41,8 @@ RobotDisco/
 ```
 
 Every package builds and has tests; `rig/` holds the Docker test rig (`rig/rig.sh image|build|test|sh`) and
-says what stands in for each piece of hardware. `rd_sim` is the one package still to write (Isaac Sim, on
-the GPU box).
+says what stands in for each piece of hardware. `rd_sim` runs the robot in Isaac Sim on the GPU box; see
+*Run the sim* below.
 
 ## Phases
 
@@ -55,7 +55,7 @@ the GPU box).
 | 4 | rd_arm | done, launch test passes |
 | 5 | rd_vla | done, launch test passes |
 | 6 | rd_audio, rd_face, rd_voice | done, launch tests pass |
-| 7 | rd_sim (Isaac Sim) + Isaac ROS validated on the GPU box | next |
+| 7 | rd_sim (Isaac Sim) + Isaac ROS validated on the GPU box | Isaac Sim drives the whole stack (2026-11-07); Isaac ROS host install pending |
 | 8 | the robot: snapshot + `/mnt/data` copy (the gate), JetPack 7.2.1 flash, `provision.sh all`, hardware checks | after 7 |
 | 9 | optional: visual odometry, GR00T, docking | |
 | 10 | retire v1 | |
@@ -63,7 +63,36 @@ the GPU box).
 The detailed plan, risks and decisions live in the
 [Robot Disco 5.0 Rebuild Plan](https://claude.ai/artifact/T2mFGJhZuEiFKGtLmpHvPM).
 
+## Run the sim (GPU box)
+
+The runbook is `provision/gpu/README.md` (*Manual session: the GUI and the sim*) with the sensor and bridge
+details in `src/rd_sim/README.md`. The short form, from a shell with the workspace sourced:
+
+```
+ros2 run rd_sim export_urdf /tmp/robot_disco.urdf                        # after a pull + colcon build
+~/isaacsim-venv/bin/python src/rd_sim/scripts/isaac_scene.py --urdf /tmp/robot_disco.urdf [--headless]
+                                                                         # ~100 s, ends with "ROS 2 bridge up"
+ros2 launch rd_sim sim.launch.py                                         # the robot's stack against it, in a second shell
+```
+
+Then `http://4090TI.local:8092/live`. Start the sim before the stack every time: the stack seeds AMCL at the
+dock, so a robot that already drove somewhere needs a fresh sim first. Detached (survives an ssh drop):
+
+```
+(setsid nohup timeout 3000 ~/isaacsim-venv/bin/python src/rd_sim/scripts/isaac_scene.py --urdf /tmp/robot_disco.urdf --headless > ~/isaac.log 2>&1 < /dev/null & echo $! > ~/isaac.pid)
+(setsid nohup ros2 launch rd_sim sim.launch.py > ~/sim-stack.log 2>&1 < /dev/null & echo $! > ~/sim-stack.pid)
+kill -INT $(cat ~/sim-stack.pid); kill -INT -- -$(cat ~/isaac.pid)     # stop: the stack by its launch pid, the sim by its group
+```
+
+Stop the stack by signalling the `ros2 launch` process only, never its whole process group and never with
+`-9`: a group signal kills the Nav2 nodes before the launch knows it is shutting down, so it respawns them
+(seen 2026-11-07), and a hard-killed launch leaves its Python nodes running (`rd_bringup.process`).
+
 ## Build and test
+
+Run the tests one package at a time (`colcon test --executor sequential`, which `rig/rig.sh test` does): the launch
+tests share one ROS domain and the fakes' fixed ports (the UR dashboard on 29999, the hand on 8766), so two
+packages tested in parallel fail each other.
 
 ```
 rig/rig.sh image && rig/rig.sh build && rig/rig.sh test      # on the Mac, in Docker
