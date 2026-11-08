@@ -339,18 +339,19 @@ class RosBridge:
                         frame_names = []
                 fr = {"map": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]}
                 prev = self.frames
+                ros_now = self.node.get_clock().now().nanoseconds * 1e-9   # ROS time (= sim time under use_sim_time): TF stamps are ROS time, never wall time
                 dbg = {"frames_in_buffer": len(frame_names), "t": round(now, 1)}
                 for a, b, key in (("odom", "base_footprint", "odom_base_age_s"), ("map", "odom", "map_odom_age_s")):
                     try:
                         tf = self.buf.lookup_transform(a, b, rclpy.time.Time())
-                        dbg[key] = round(now - (tf.header.stamp.sec + tf.header.stamp.nanosec * 1e-9), 2)
+                        dbg[key] = round(ros_now - (tf.header.stamp.sec + tf.header.stamp.nanosec * 1e-9), 2)
                     except Exception as e:  # noqa: BLE001
                         dbg[key] = str(e)[:80]
                 self.tf_debug = dbg
                 for f in frame_names:
                     try:
                         tf = self.buf.lookup_transform("map", f, rclpy.time.Time())
-                        if now - (tf.header.stamp.sec + tf.header.stamp.nanosec * 1e-9) > FRAME_FRESH_S:
+                        if ros_now - (tf.header.stamp.sec + tf.header.stamp.nanosec * 1e-9) > FRAME_FRESH_S:
                             raise RuntimeError("stale")
                         t, q = tf.transform.translation, tf.transform.rotation
                         fr[f] = [round(t.x, 4), round(t.y, 4), round(t.z, 4), round(q.x, 5), round(q.y, 5), round(q.z, 5), round(q.w, 5)]
