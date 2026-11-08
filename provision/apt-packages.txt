@@ -48,3 +48,6 @@ net-tools
 iproute2
 ethtool
 network-manager
+
+# vendor/roboclaw_serial builds its gtests (include(CTest) defaults BUILD_TESTING on): find_package(GTest) needs this
+libgtest-dev
