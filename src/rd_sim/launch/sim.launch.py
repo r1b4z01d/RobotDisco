@@ -47,7 +47,7 @@ def generate_launch_description():
         Node(package='rd_voice', executable='voice', name='voice', output='screen',
              parameters=[{'ears_enabled': False, 'llm_enabled': False, 'llm_backend': 'none', 'volume_sink': '', 'use_sim_time': True}],
              condition=IfCondition(LaunchConfiguration('voice'))),
-        Node(package='rd_manager', executable='manager', name='rd_manager', output='screen', arguments=['--sim', 'true'],
+        Node(package='rd_manager', executable='manager', output='screen', arguments=['--sim', 'true'],
              parameters=[{'use_sim_time': True}],       # its stamps and TF ages follow Isaac's /clock
              condition=IfCondition(LaunchConfiguration('manager'))),
     ])
