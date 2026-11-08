@@ -25,6 +25,7 @@ setup(
         'scan_range_offset = rd_perception.scan_range_offset:main',
         'tag_adapter = rd_perception.tag_adapter:main',
         'fake_tags = rd_perception.fake_tags:main',
+        'fake_tag_image = rd_perception.fake_tag_image:main',
         'image_rotate = rd_perception.image_rotate:main',
         'fake_cameras = rd_perception.fake_cameras:main',
     ]},

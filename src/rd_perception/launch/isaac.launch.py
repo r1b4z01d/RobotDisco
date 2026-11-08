@@ -15,6 +15,7 @@ the GPU box is expected to need adjustment, which is why nothing else depends on
 """
 import os
 
+import yaml
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
@@ -22,6 +23,7 @@ from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import ComposableNodeContainer, Node
 from launch_ros.descriptions import ComposableNode
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
@@ -30,6 +32,11 @@ def generate_launch_description():
     grid = LaunchConfiguration('grid_localizer')
     nvblox = LaunchConfiguration('nvblox')
     vslam = LaunchConfiguration('visual_slam')
+    # the localizer reads the nav map's own keys (image, resolution, origin, thresholds) as ROS parameters, like
+    # nav2's map_server, and joins `image` to the yaml's directory: with only map_yaml_path set it opens the bare directory
+    map_yaml = os.path.join(get_package_share_directory('rd_nav'), 'maps', 'zone_one.yaml')
+    with open(map_yaml) as f:
+        map_params = yaml.safe_load(f)
 
     container = ComposableNodeContainer(
         name='isaac_container', namespace='', package='rclcpp_components', executable='component_container_mt',
@@ -49,12 +56,17 @@ def generate_launch_description():
                            remappings=[('image', '/camera/color/image_rect'), ('camera_info', '/camera/color/camera_info_rect'),
                                        ('tag_detections', '/tag_detections')],
                            condition=IfCondition(apriltag)),
+            # the localizer takes isaac_ros_pointcloud_interfaces/FlatScan, not LaserScan: convert the lidar scan first
+            ComposableNode(package='isaac_ros_pointcloud_utils',
+                           plugin='nvidia::isaac_ros::pointcloud_utils::LaserScantoFlatScanNode', name='laserscan_to_flatscan',
+                           remappings=[('scan', '/rp_s2e_lidar/scan_filtered')],
+                           condition=IfCondition(grid)),
             ComposableNode(package='isaac_ros_occupancy_grid_localizer',
                            plugin='nvidia::isaac_ros::occupancy_grid_localizer::OccupancyGridLocalizerNode',
                            name='occupancy_grid_localizer',
-                           parameters=[{'loc_result_frame': 'map', 'map_yaml_path': os.path.join(share, '..', 'rd_nav', 'maps', 'zone_one.yaml'),
-                                        'use_sim_time': False}],
-                           remappings=[('flatscan_localization', '/rp_s2e_lidar/scan_filtered'),
+                           parameters=[{**map_params, 'loc_result_frame': 'map', 'map_yaml_path': map_yaml,
+                                        'use_sim_time': ParameterValue(LaunchConfiguration('use_sim_time'), value_type=bool)}],
+                           remappings=[('flatscan_localization', '/flatscan'),
                                        ('localization_result', '/initialpose')],
                            condition=IfCondition(grid)),
             ComposableNode(package='isaac_ros_visual_slam', plugin='nvidia::isaac_ros::visual_slam::VisualSlamNode',
@@ -83,5 +95,6 @@ def generate_launch_description():
         DeclareLaunchArgument('grid_localizer', default_value='false'),
         DeclareLaunchArgument('nvblox', default_value='false'),
         DeclareLaunchArgument('visual_slam', default_value='false'),
+        DeclareLaunchArgument('use_sim_time', default_value='false'),
         container, nvblox_node, adapter,
     ])
