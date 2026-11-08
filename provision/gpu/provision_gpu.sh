@@ -4,7 +4,7 @@
 #
 #   git clone --recurse-submodules https://github.com/r1b4z01d/RobotDisco.git ~/RobotDisco
 #   ~/RobotDisco/provision/gpu/provision_gpu.sh all        # = ros workspace test vla isaacsim      (isaacros is NOT in "all")
-#   ~/RobotDisco/provision/gpu/provision_gpu.sh isaacros   # Isaac ROS 4.6 host install: replaces the host OpenCV, read the phase first
+#   ~/RobotDisco/provision/gpu/provision_gpu.sh isaacros   # Isaac ROS 4.6 host install (venv mode): NVIDIA repos, CUDA 13.2, the CLI, the four debs
 #
 # Nothing here touches ~/VLA, ~/rd_ws or the v1 supervisor units (vla_webui on :8081 keeps running): 5.0 lives in
 # ~/RobotDisco, /opt/vla and ~/isaacsim-venv. Sources (read 2026-11-07):
@@ -129,8 +129,10 @@ NOTE
 
 phase_isaacros() {
   # Isaac ROS 4.6 host install, venv mode (Docker is NVIDIA's recommended mode; no Docker on this box).
-  # READ FIRST: the host OpenCV packages are removed and replaced by NVIDIA's 4.6.0 build (the 2026-11 docs);
-  # python3-opencv and ros-jazzy-cv-bridge are reinstalled afterwards from NVIDIA's/ROS's repos.
+  # The host modes do NOT replace OpenCV (checked on the box 2026-11-08): NVIDIA's x86 repos ship no libopencv
+  # package at all, the Isaac debs depend on Ubuntu's 4.6, and `apt-get remove 'libopencv*'` would have taken 61
+  # packages with it (navigation2, nav2-waypoint-follower, cv_bridge, image_geometry, the image transports,
+  # usb_cam, realsense2_camera). Only NVIDIA's Docker image carries its own OpenCV build.
   log "Isaac ROS 4.6 (host, venv mode)"
   sudo apt-get update -qq && apt_install curl gnupg software-properties-common locales
   sudo locale-gen en_US en_US.UTF-8 >/dev/null && sudo update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
@@ -160,8 +162,6 @@ phase_isaacros() {
   apt_install isaac-ros-cli
   mkdir -p "$HOME/workspaces/isaac_ros-dev/src"
   grep -q ISAAC_ROS_WS "$HOME/.bashrc" || echo 'export ISAAC_ROS_WS="${ISAAC_ROS_WS:-${HOME}/workspaces/isaac_ros-dev/}"' >> "$HOME/.bashrc"
-  warn "removing the host OpenCV packages now (NVIDIA's 4.6.0 build replaces them)"
-  sudo apt-get remove -y -qq 'libopencv*' 'opencv*' >/dev/null 2>&1 || true
   sudo isaac-ros init venv --yes 2>&1 | tail -5 || sudo isaac-ros init venv
   apt_install $(pkglist "$ROOT/provision/isaac-packages.txt") python3-opencv ros-jazzy-cv-bridge || warn "some Isaac packages did not install: check provision/isaac-packages.txt against the 4.6 package pages"
   echo "Isaac ROS packages:"; dpkg -l | grep -E 'ros-jazzy-isaac-ros' | awk '{print "  " $2, $3}'

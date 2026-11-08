@@ -7,7 +7,7 @@ as bryan; it leaves v1's `~/VLA` and the `vla_webui` supervisor unit alone, 5.0 
 ```
 GIT_SSH_COMMAND="ssh -i ~/.ssh/github -o IdentitiesOnly=yes" git clone --recurse-submodules git@github.com:r1b4z01d/RobotDisco.git ~/RobotDisco   # private repo: the box's GitHub key
 ~/RobotDisco/provision/gpu/provision_gpu.sh all        # Jazzy packages, colcon build, the test suite, /opt/vla, Isaac Sim 6.2 (pip)
-~/RobotDisco/provision/gpu/provision_gpu.sh isaacros   # Isaac ROS 4.6 host install: replaces the host OpenCV, read the phase first
+~/RobotDisco/provision/gpu/provision_gpu.sh isaacros   # Isaac ROS 4.6 host install (venv mode): NVIDIA repos, CUDA 13.2, the CLI, the four debs
 ```
 
 Phases can run one at a time (`provision_gpu.sh ros workspace test`). Each is re-runnable.
@@ -29,7 +29,8 @@ the placeholder in `src/rd_arm/config/poses.yaml` (phase `workspace` copies it t
 - Isaac ROS 4.6 on x86: apt repo `https://isaac.download.nvidia.com/isaac-ros/release-4.6 noble main` (key
   `/usr/share/keyrings/nvidia-isaac-ros.gpg`), needs CUDA 13.2+ (cuda-keyring repo) and NVIDIA's Jetson x86 repo
   (`repo.download.nvidia.com/jetson/x86_64/noble r39.2`), then `isaac-ros-cli` + `isaac-ros init venv`.
-  NVIDIA recommends Docker; the host mode replaces the host OpenCV packages. Debs: isaac-ros-image-proc,
+  NVIDIA recommends Docker; the host mode keeps Ubuntu's OpenCV (NVIDIA ships none for x86 hosts, and the Isaac
+  debs depend on Ubuntu's 4.6; the CLI's `init venv` only sets the mode and a group). Debs: isaac-ros-image-proc,
   -apriltag, -nvblox, -visual-slam; cuMotion has no 4.6 deb (source build).
 
 ## Done on the box 2026-11-07
