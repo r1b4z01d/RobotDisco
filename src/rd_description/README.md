@@ -12,7 +12,7 @@ xacro urdf/robot.urdf.xacro > /tmp/robot_disco.urdf       # the flat URDF (Isaac
 |---|---|
 | `urdf/robot.urdf.xacro` | the entry point; includes everything below |
 | `urdf/robot_core.xacro` | chassis, drive wheels, four casters, materials |
-| `urdf/ros2_control.xacro` | the base's ros2_control system: RoboClaw, or mock hardware in `sim_mode` (`base_control:=false` leaves it out) |
+| `urdf/ros2_control.xacro` | the base's ros2_control system: RoboClaw (`roboclaw_port`, `roboclaw_baud` args: the header UART `/dev/ttyTHS1` at 115200 since 2026-11-08, from `robot.yaml` via rd_base's launch), or mock hardware in `sim_mode` (`base_control:=false` leaves it out) |
 | `ur_control:=true` | adds the UR driver's ros2_control tag (`ur_robot_driver` macro, mock hardware in `sim_mode`) for rd_arm's controller manager under `/ur5e` |
 | `urdf/rp_s1_lidar.xacro`, `rp_s2e_lidar.xacro`, `velodyne.xacro` | the three lidars and their frames |
 | `urdf/realsense_d435.xacro` | the D435 and its optical frame |

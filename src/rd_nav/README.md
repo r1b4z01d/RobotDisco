@@ -17,7 +17,7 @@ rd_keepout                                            # rebuild maps/keepout_mas
 |---|---|---|
 | `config/nav2.yaml` | `nav2_params.yaml` | Jazzy names; every cmd_vel stamped; FollowPath = MPPI, v1's DWB kept as `FollowPathDWB`; global costmap at the map's 0.05 m |
 | `config/slam.yaml` | `mapper_params_online_async.yaml` | |
-| `maps/` | `robot_disco/maps` | `zone_one`, `keepout_zones.yaml` → mask, `active_map` |
+| `maps/` | `robot_disco/maps` | `zone_one` (+ `zone_one.xcf`, the GIMP source of the pgm, not installed), `keepout_zones.yaml` → mask, `active_map` |
 | `rd_nav/maps_store.py` | `Scripts/maps_store.py` | shared by the launches and rd_manager |
 | `rd_nav/landmarks.py` | `Scripts/route_editor.py` + `robot_voice/tasks.py` | one store for places and their tasks |
 | `rd_nav/go_to_landmark.py` | `path.py` + the voice assistant's own Nav2 client | the `GoToLandmark` server over `navigate_to_pose` |

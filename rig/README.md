@@ -6,7 +6,7 @@ and CUDA. What each package's tests stand in for:
 
 | Real thing | In the rig |
 |---|---|
-| RoboClaw base | ros2_control mock hardware (`rd_description` `sim_mode:=true`) |
+| RoboClaw base | ros2_control mock hardware (`rd_description` `sim_mode:=true`); the real plugin (`vendor/roboclaw_hardware_interface`, UART patches applied) is compiled here and its serial layer's gtests run, but no port is opened |
 | The world, lidars, odometry | `nav2_loopback_sim` (drives the TF tree from cmd_vel, fakes a scan from the map) |
 | UR5e | `ur_robot_driver` with `use_mock_hardware:=true`; MoveIt plans with OMPL where the Orin uses cuMotion |
 | AmazingHand ESP32 | a UDP loopback echo that speaks the firmware's line protocol |
@@ -24,5 +24,6 @@ rig/rig.sh sh             # a shell with the workspace sourced
 ```
 
 What only the GPU box can test (phase 7): Isaac Sim, every Isaac ROS node, SmolVLA inference speed.
-What only the robot can test (phase 8): USB enumeration, the lidar range offset, the audio sink, the
-8BitDo receiver, the real UR dashboard, PolyScope's remote-control mode, servo smoothness.
+What only the robot can test (phase 8): USB enumeration, the RoboClaw's header-UART link (ttyTHS1 in PIO mode
+on kernel 6.8), the lidar range offset, the audio sink, the 8BitDo receiver, the real UR dashboard, PolyScope's
+remote-control mode, servo smoothness.

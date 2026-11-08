@@ -71,9 +71,13 @@ sensors:
     udp_port: 8089
     frame: rp_s2e_lidar
     scan_mode: DenseBoost
-  roboclaw:
-    port: /dev/ttyACM0
-    address: 128
+  roboclaw:                       # 2x15A, firmware 4.4.9. Packet serial on the Jetson's 40-pin header since 2026-11-08:
+                                  # pin 8 (TX) -> S1, pin 10 (RX) <- S2, pin 6 GND, 3.3 V. The USB jack is mechanically bad
+                                  # and its ground reset the Jetson once the board shared a DC-DC with the audio amp.
+    port: /dev/ttyTHS1            # serial@3100000 (uarta); on JetPack 6 it needs the PIO device tree (provision.sh jetson)
+    baud: 115200                  # the board's packet-serial rate (set and saved with Motion Studio over USB)
+    address: 128                  # packet-serial mode 7
+    serial_timeout_s: 1.0         # board-side watchdog, saved with Motion Studio: the motors stop 1 s after the link dies
   realsense_d435:
     serial: ""                    # "" = the only one attached
   usb_cameras:                    # three identical UVC webcams, addressed by USB PORT (no serials); one per USB bus

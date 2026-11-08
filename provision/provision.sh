@@ -62,7 +62,9 @@ phase_preflight() {
 }
 
 phase_jetson() {
-  # v1 jetson/provision_jetson.sh phase_jetson: boot into MAXN, pin the clocks, nvidia docker runtime, xpad, jtop.
+  # v1 jetson/provision_jetson.sh phase_jetson: boot into MAXN, pin the clocks, nvidia docker runtime, xpad, jtop,
+  # and the header UART the RoboClaw hangs off (uart1_pio_dtb).
+  [ -f "$HERE/jetson/apt-packages-jetson.txt" ] && apt_install $(pkglist "$HERE/jetson/apt-packages-jetson.txt") || true
   log "Jetson power mode and clocks"
   if [ -f /etc/nvpmodel.conf ]; then
     sudo sed -i -E "s/^< PM_CONFIG DEFAULT=[0-9]+ >/< PM_CONFIG DEFAULT=$NVPMODEL >/" /etc/nvpmodel.conf
@@ -94,7 +96,57 @@ UNIT
     warn "kernel $(uname -r) predates xpad support for the 8BitDo 2C (2dc8:310a): build provision/xpad (see its README) or rely on the udev new_id rule"
   fi
   sudo python3 -m pip install -U --break-system-packages jetson-stats 2>/dev/null || warn "jetson-stats install failed"
-  [ -f "$HERE/jetson/apt-packages-jetson.txt" ] && apt_install $(pkglist "$HERE/jetson/apt-packages-jetson.txt") || true
+  log "ttyTHS1 (header UART, the RoboClaw link) in PIO mode"
+  uart1_pio_dtb
+  # a login console on the RoboClaw's UART would eat its replies; the stock units target other ports, so this acts only if one does not
+  if systemctl is-enabled nvgetty.service >/dev/null 2>&1 && systemctl cat nvgetty.service 2>/dev/null | grep -q ttyTHS1; then
+    sudo systemctl disable --now nvgetty.service && log "nvgetty disabled: it was a login console on ttyTHS1"
+  fi
+}
+
+# The RoboClaw's packet-serial link is the 40-pin header UART (pins 8 TX / 10 RX / 6 GND = /dev/ttyTHS1 =
+# serial@3100000) since 2026-11-08 (v1: its USB jack is bad and its USB ground reset the Jetson). On JetPack 6
+# that UART's receive DMA handed back zeroed bytes (NVIDIA forum "DMA on /dev/ttyTHS1 corrupts receiving data");
+# ttyTHS2 ships without DMA bindings and was fine, so v1 boots a copy of the stock device tree with the two DMA
+# properties removed, through an FDT line in extlinux.conf (the mechanism jetson-io uses). Whether kernel 6.8
+# (JetPack 7.2) still has the bug is unknown: this only acts when the stock DTB binds DMA to that UART, and
+# `dmesg | grep 3100000.serial` must say "RX in PIO mode" after the reboot. Idempotent: rebuilds the PIO copy when
+# the stock DTB is newer (kernel/dtb package update), leaves an extlinux.conf that already has an FDT line alone,
+# keeps the stock entry as a boot-menu fallback.
+uart1_pio_dtb() {
+  local base pio conf=/boot/extlinux/extlinux.conf node=/bus@0/serial@3100000
+  command -v fdtget >/dev/null || apt_install device-tree-compiler
+  base=$(ls /boot/dtb/kernel_tegra234-*.dtb /boot/dtb/tegra234-*.dtb 2>/dev/null | grep -v -- '-uart1-pio' | head -1)
+  [ -n "$base" ] || { warn "no tegra234 DTB under /boot/dtb: ttyTHS1 PIO device tree skipped; check 'dmesg | grep 3100000.serial' for 'RX in PIO mode'"; return 0; }
+  if ! fdtget "$base" "$node" dmas >/dev/null 2>&1; then log "$base binds no DMA to $node: ttyTHS1 already runs in PIO mode"; return 0; fi
+  pio="${base%.dtb}-uart1-pio.dtb"
+  if [ ! -f "$pio" ] || [ "$base" -nt "$pio" ]; then
+    sudo cp "$base" "$pio"
+    sudo fdtput -d "$pio" "$node" dma-names
+    sudo fdtput -d "$pio" "$node" dmas
+    log "built $pio (stock tree minus $node dmas/dma-names)"
+  fi
+  [ -f "$conf" ] || { warn "no $conf: boot $pio by hand (the boot layout changed?)"; return 0; }
+  if grep -q "FDT $pio" "$conf"; then
+    log "extlinux.conf already boots $pio"
+  elif grep -qE '^\s*FDT ' "$conf"; then
+    warn "extlinux.conf already has an FDT line (jetson-io?): not touched; drop dmas/dma-names from $node in that DTB instead"
+  else
+    sudo cp -n "$conf" "$conf.pre-uart1-pio"
+    sudo python3 - "$conf" "$pio" <<'PY' || warn "extlinux.conf not edited: add 'FDT $pio' under the primary LINUX line by hand"
+import re, sys
+conf, pio = sys.argv[1], sys.argv[2]
+s = open(conf).read()
+m = re.search(r"^(\s*)LINUX /boot/Image\n", s, re.M)
+a = re.search(r"^\s*APPEND .*$", s, re.M)
+if not m or not a:
+    sys.exit("no 'LINUX /boot/Image' + APPEND pair found")
+s = s[:m.end()] + m.group(1) + "FDT " + pio + "\n" + s[m.end():]
+s = s.rstrip("\n") + "\n\nLABEL stock\n      MENU LABEL stock device tree (ttyTHS1 with DMA)\n      LINUX /boot/Image\n      INITRD /boot/initrd\n" + a.group(0) + "\n"
+open(conf, "w").write(s)
+PY
+    log "extlinux.conf: primary entry boots $pio ('stock' entry kept, backup $conf.pre-uart1-pio); reboot to apply"
+  fi
 }
 
 phase_data() {
@@ -228,13 +280,10 @@ phase_workspace() {
   if [ ! -d "$WS/.git" ]; then git clone "$REPO" "$WS"; fi
   git -C "$WS" fetch --all --tags && git -C "$WS" checkout "$REF" && git -C "$WS" pull --ff-only || true
   git -C "$WS" submodule update --init --recursive || warn "a submodule failed; check vendor/ and firmware/"
-  for p in "$HERE"/patches/*.patch; do
-    [ -f "$p" ] || continue
-    local sub="${p##*/}"; sub="${sub%%-*}"
-    if [ -d "$WS/vendor/$sub" ] && ! git -C "$WS/vendor/$sub" apply --check --reverse "$p" >/dev/null 2>&1; then
-      git -C "$WS/vendor/$sub" apply "$p" && log "patched vendor/$sub with $(basename "$p")" || warn "patch $(basename "$p") did not apply"
-    fi
-  done
+  # roboclaw_serial-baud-rate.patch + roboclaw_hardware_interface-baud-rate.patch: the RoboClaw is on a real UART
+  # (header ttyTHS1): a `baud_rate` hardware parameter sets the tty speed, a failed open fails on_init instead of
+  # aborting controller_manager, and a reply is read until the line goes quiet (a UART delivers it in pieces).
+  "$WS/provision/apply_patches.sh" || warn "a vendor patch did not apply: the base's hardware interface may not build"
   cd "$WS"
   rosdep install --from-paths src vendor --ignore-src -r -y || warn "rosdep left something unresolved"
   colcon build --symlink-install

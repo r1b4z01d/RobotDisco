@@ -42,7 +42,9 @@ r 'cat /etc/sysctl.d/*.conf 2>/dev/null' > "$OUT/inventory/sysctl.txt" || true
 r 'cat /etc/gdm3/custom.conf 2>/dev/null' > "$OUT/inventory/gdm-custom.conf" || true
 r 'crontab -l 2>/dev/null; systemctl list-unit-files --state=enabled --no-pager' > "$OUT/inventory/units-cron.txt" || true
 r 'sudo -n docker images 2>&1' > "$OUT/inventory/docker-images.txt" || true
-r 'lsusb; ls -l /dev/ttyACM* /dev/ttyUSB* /dev/video* /dev/hidraw* 2>/dev/null' > "$OUT/inventory/devices.txt" || true
+r 'lsusb; ls -l /dev/ttyACM* /dev/ttyUSB* /dev/ttyTHS* /dev/video* /dev/hidraw* 2>/dev/null' > "$OUT/inventory/devices.txt" || true
+# the RoboClaw's header UART (ttyTHS1 since 2026-11-08): PIO device tree in use, extlinux entries, DTB files
+r 'sudo -n dmesg 2>/dev/null | grep -iE "3100000.serial|ttyTHS"; echo; cat /boot/extlinux/extlinux.conf 2>/dev/null; echo; ls -l /boot/dtb/ 2>/dev/null' > "$OUT/inventory/uart-boot.txt" || true
 r 'cat ~/.bashrc' > "$OUT/inventory/bashrc" || true
 r 'cat ~/start_face.sh 2>/dev/null' > "$OUT/inventory/start_face.sh" || true
 r 'cat ~/rd_ws/VLA/run.sh 2>/dev/null' > "$OUT/inventory/vla-run.sh" || true

@@ -74,6 +74,7 @@ phase_workspace() {
   log "colcon build $WS"
   cd "$WS"
   git submodule update --init --recursive
+  "$WS/provision/apply_patches.sh"
   src_ros
   colcon build --symlink-install --event-handlers console_cohesion+ 2>&1 | tail -3
   mkdir -p "$HOME/RobotDisco-data/outputs"/{datasets,train,evals}

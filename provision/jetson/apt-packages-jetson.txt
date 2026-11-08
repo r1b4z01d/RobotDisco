@@ -1,5 +1,5 @@
 # Extra apt packages for the Jetson Orin robot PC, on top of ../apt-packages.txt.
-# Installed by provision_jetson.sh phase "base".
+# Installed by provision.sh phase "jetson".
 
 # ur_rtde and moderngl have no arm64 wheels on PyPI and build from source inside the venv
 libboost-all-dev
@@ -13,3 +13,6 @@ python3-dev
 
 # NOT nvidia-jetpack: the SDK Manager flash already installs cuda-toolkit-12-6, cuDNN 9 and cuBLAS, which is
 # all the torch wheels need; the metapackage would add TensorRT/VPI/OpenCV-CUDA and several GB on a 64 GB eMMC.
+
+# fdtget/fdtput: the ttyTHS1 PIO device tree for the RoboClaw link (provision.sh uart1_pio_dtb)
+device-tree-compiler

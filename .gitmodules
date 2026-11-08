@@ -1,3 +1,9 @@
 [submodule "firmware/AmazingHand"]
 	path = firmware/AmazingHand
 	url = https://github.com/r1b4z01d/AmazingHand.git
+[submodule "vendor/roboclaw_serial"]
+	path = vendor/roboclaw_serial
+	url = https://github.com/dumbotics/roboclaw_serial.git
+[submodule "vendor/roboclaw_hardware_interface"]
+	path = vendor/roboclaw_hardware_interface
+	url = https://github.com/dumbotics/roboclaw_hardware_interface.git

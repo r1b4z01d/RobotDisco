@@ -1,5 +1,6 @@
 # Robot Disco robot PC device permissions. Installed by provision.sh phase "udev" to /etc/udev/rules.d/.
-# Serial devices (RoboClaw on /dev/ttyACM0, RPLiDAR on /dev/ttyUSB0) are covered by the dialout group.
+# Serial devices are covered by the dialout group: the RoboClaw on the header UART /dev/ttyTHS1 (since
+# 2026-11-08; its USB jack is bad), the RPLiDAR S1 on its CP2102 (/dev/serial/by-id/..., see robot.yaml).
 
 # 3Dconnexion SpaceMouse. VLA's teleop uses the `hidapi` pip package (hid.device API), whose Linux
 # wheel uses the LIBUSB backend: it opens the USB device node, so that needs the permission too.

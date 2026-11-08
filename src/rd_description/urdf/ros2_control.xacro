@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <!-- ros2_control system for the base. The controllers (diff_cont, joint_broad) are configured in
      rd_base/config/controllers.yaml and loaded by rd_base's launch, not from here.
-     Real robot: the RoboClaw hardware interface (vendor/roboclaw_hardware_interface).
+     Real robot: the RoboClaw hardware interface (vendor/roboclaw_hardware_interface, patched for a real UART).
      sim_mode:   ros2_control's mock hardware, so the same controllers run with no RoboClaw attached;
                  Isaac Sim publishes joint states through its own bridge. -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
@@ -10,7 +10,14 @@
         <ros2_control name="RealRobot" type="system">
             <hardware>
                 <plugin>roboclaw_hardware_interface/RoboClawHardwareInterface</plugin>
-                <param name="serial_port">/dev/ttyACM0</param>
+                <!-- Packet serial on the Jetson's 40-pin header UART since 2026-11-08: pin 8 (TX) -> S1, pin 10
+                     (RX) <- S2, pin 6 GND, 3.3 V, /dev/ttyTHS1 (serial@3100000), 115200 8N1, address 128. The
+                     board's USB jack is mechanically bad and, once it shared a DC-DC with the audio amp, its USB
+                     ground reset the Jetson. The values come from robot.yaml sensors.roboclaw through
+                     rd_base's launch; baud_rate is the vendored driver's patched parameter (provision/patches), and
+                     ttyTHS1 needs the PIO device tree (provision.sh jetson). -->
+                <param name="serial_port">$(arg roboclaw_port)</param>
+                <param name="baud_rate">$(arg roboclaw_baud)</param>
             </hardware>
             <joint name="left_wheel_joint">
                 <command_interface name="velocity"/>

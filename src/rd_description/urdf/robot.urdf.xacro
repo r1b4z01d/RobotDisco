@@ -8,6 +8,7 @@
        sim_mode      true = ros2_control mock hardware instead of the RoboClaw and the UR (rig, Isaac Sim)
        base_control  include the base's ros2_control tag (rd_base's controller manager)        default true
        ur_control    include the UR driver's ros2_control tag (rd_arm's controller manager)    default false
+       roboclaw_port, roboclaw_baud   the RoboClaw's serial link (robot.yaml sensors.roboclaw; header UART ttyTHS1 at 115200)
        robot_ip, ur_kinematics, tool_voltage, headless_mode, initial_positions_file: the UR driver's (ur_control only)
 
      Two controller managers share this one description: the base's (base_control:=true ur_control:=false)
@@ -19,6 +20,8 @@
     <xacro:arg name="sim_mode" default="false"/>
     <xacro:arg name="base_control" default="true"/>
     <xacro:arg name="ur_control" default="false"/>
+    <xacro:arg name="roboclaw_port" default="/dev/ttyTHS1"/>
+    <xacro:arg name="roboclaw_baud" default="115200"/>
     <xacro:arg name="robot_ip" default="0.0.0.0"/>
     <xacro:arg name="ur_kinematics" default="$(find ur_description)/config/ur5e/default_kinematics.yaml"/>
     <xacro:arg name="tool_voltage" default="24"/>

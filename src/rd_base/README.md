@@ -22,6 +22,15 @@ Nav2, teleop and the web pad are all configured stamped.
 | `config/joystick.yaml` | `joystick.yaml`; the pad name comes from `robot.yaml` at launch |
 | `launch/base.launch.py` | `launch_robot.launch.py` minus the sensors (rd_perception) and the RTDE joint poller (the UR driver is always on in 5.0) |
 
+The RoboClaw (2x15A, firmware 4.4.9) is on the Jetson's 40-pin header UART since 2026-11-08, not USB: pin 8
+(TX) -> S1, pin 10 (RX) <- S2, pin 6 GND, `/dev/ttyTHS1` at 115200, address 128, with the board's 1 s serial
+timeout as the watchdog (`robot.yaml sensors.roboclaw`; the launch passes port and baud to the xacro). The
+plugin is `vendor/roboclaw_hardware_interface` with the UART patches from `provision/patches`; the UART itself
+needs the PIO device tree from `provision.sh jetson`. See `provision/README.md`, *RoboClaw on the header UART*.
+After a link loss the controller manager is restarted by hand (`sudo supervisorctl restart rd_base`): the
+launch does not respawn it.
+
 Tests (`rig/rig.sh test rd_base`): the YAML contracts, and a launch test on mock hardware that drives the
 robot through the whole velocity path and checks the collision monitor stops it for an object 0.35 m ahead.
-Only hardware can verify: the RoboClaw serial port, wheel direction, the gamepad name and button indices.
+Only hardware can verify: the RoboClaw link (ttyTHS1 in PIO mode, the probe tools in `provision/tools`),
+wheel direction, the gamepad name and button indices.
