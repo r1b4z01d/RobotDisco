@@ -19,8 +19,21 @@ def test_map_boxes_from_zone_one():
     maps = PKG.parent / "rd_nav" / "maps"
     boxes, height = mod.map_boxes(maps, "zone_one")
     assert height == 2.5 and 50 < len(boxes) < 20000
-    xs = [b[0] for b in boxes]
-    assert min(xs) > -1.0 and max(xs) < 15.0
+    # every wall lies inside the map's own extent (origin + pixels * resolution, from the yaml and the pgm
+    # header), so the test follows the map instead of a hard-coded width that went stale once
+    import yaml
+    meta = yaml.safe_load((maps / "zone_one.yaml").read_text())
+    with open(maps / meta["image"], "rb") as f:
+        f.readline()
+        line = f.readline()
+        while line.startswith(b"#"):
+            line = f.readline()
+        width_px, height_px = (int(v) for v in line.split())
+    x0, y0 = meta["origin"][0], meta["origin"][1]
+    x1, y1 = x0 + width_px * meta["resolution"], y0 + height_px * meta["resolution"]
+    xs, ys = [b[0] for b in boxes], [b[1] for b in boxes]
+    assert x0 <= min(xs) and max(xs) <= x1, (min(xs), max(xs), x0, x1)
+    assert y0 <= min(ys) and max(ys) <= y1, (min(ys), max(ys), y0, y1)
 
 
 def test_root_link_gets_a_token_mass():
