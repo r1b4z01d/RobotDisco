@@ -2,6 +2,7 @@
 controller manager) -> /ur5e/sim_joint_command (sensor_msgs/JointState with the UR's own joint names, which
 the bridge's articulation controller drives). The sim arm then follows whatever MoveIt / the streamer command."""
 import rclpy
+from rd_bringup.process import exit_with_parent
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
@@ -28,6 +29,7 @@ class ArmMirror(Node):
 
 def main():
     rclpy.init()
+    exit_with_parent()   # end with the launch that started us (rd_bringup.process)
     n = ArmMirror()
     try:
         rclpy.spin(n)

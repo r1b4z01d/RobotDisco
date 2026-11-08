@@ -9,6 +9,7 @@ rd_nav's GoToLandmark (the places are the landmarks), landmark tasks are GoToLan
   pub  /voice/heard, /voice/command, /voice/reply, /voice/state   String
 """
 from __future__ import annotations
+from rd_bringup.process import exit_with_parent
 
 import json
 import os
@@ -369,6 +370,7 @@ class VoiceNode(Node):
 
 def main():
     rclpy.init()
+    exit_with_parent()   # end with the launch that started us (rd_bringup.process)
     node = VoiceNode()
     ex = MultiThreadedExecutor(num_threads=6)
     ex.add_node(node)

@@ -8,6 +8,7 @@ goal must be the active map or empty. `relocalize_first` calls the tag corrector
 and waits for AMCL to settle before planning. Cancel cancels the Nav2 goal.
 """
 from __future__ import annotations
+from rd_bringup.process import exit_with_parent
 
 import math
 import threading
@@ -185,6 +186,7 @@ class GoToLandmarkServer(Node):
 
 def main():
     rclpy.init()
+    exit_with_parent()   # end with the launch that started us (rd_bringup.process)
     node = GoToLandmarkServer()
     ex = MultiThreadedExecutor(num_threads=4)
     ex.add_node(node)

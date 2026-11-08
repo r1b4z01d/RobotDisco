@@ -7,6 +7,7 @@ Pairs with rd_nav's tag corrector: with the robot localized the detections agree
 (/initialpose) and the corrector pulls it back. Also what a scripted perception scene looks like without Isaac.
 """
 import math
+from rd_bringup.process import exit_with_parent
 
 import numpy as np
 import rclpy
@@ -71,6 +72,7 @@ class FakeTags(Node):
 
 def main():
     rclpy.init()
+    exit_with_parent()   # end with the launch that started us (rd_bringup.process)
     node = FakeTags()
     try:
         rclpy.spin(node)

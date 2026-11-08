@@ -7,6 +7,7 @@ lines back, and can drop a fraction of datagrams to mimic the Wi-Fi link. ROS-fr
 tests and by anything that wants a hand without a hand.
 """
 from __future__ import annotations
+from rd_bringup.process import exit_with_parent
 
 import random
 import socket
@@ -75,6 +76,7 @@ class FakeHand:
 
 
 def main(argv=None):
+    exit_with_parent()   # end with the launch that started us (rd_bringup.process)
     argv = sys.argv[1:] if argv is None else argv
     port = int(argv[0]) if argv and argv[0].isdigit() else 8766
     loss = float(argv[argv.index("--loss") + 1]) if "--loss" in argv else 0.0

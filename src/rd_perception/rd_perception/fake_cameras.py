@@ -1,6 +1,7 @@
 """The rig's webcams: synthetic rgb8 images on /cameras/<name>/image (a moving pattern with the camera
 name and the frame number drawn in, so a recording can be told apart frame by frame)."""
 import time
+from rd_bringup.process import exit_with_parent
 
 import cv2
 import numpy as np
@@ -41,6 +42,7 @@ class FakeCameras(Node):
 
 def main():
     rclpy.init()
+    exit_with_parent()   # end with the launch that started us (rd_bringup.process)
     node = FakeCameras()
     try:
         rclpy.spin(node)

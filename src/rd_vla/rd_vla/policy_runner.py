@@ -8,6 +8,7 @@ closed) / the inference server failing. Before: select the checkpoint on the ser
 /arm/go_home), streaming on. After: streaming off, home again when the goal says so, the eval.json.
 """
 from __future__ import annotations
+from rd_bringup.process import exit_with_parent
 
 import csv
 import os
@@ -259,6 +260,7 @@ class PolicyRunner(Node):
 
 def main():
     rclpy.init()
+    exit_with_parent()   # end with the launch that started us (rd_bringup.process)
     node = PolicyRunner()
     ex = MultiThreadedExecutor(num_threads=6)
     ex.add_node(node)

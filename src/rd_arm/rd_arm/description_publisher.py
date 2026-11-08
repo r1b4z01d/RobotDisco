@@ -6,6 +6,7 @@ namespace (the parameter is deprecated), and robot_state_publisher only publishe
 (ur_control:=true base_control:=false), so this node publishes it there.
 """
 import rclpy
+from rd_bringup.process import exit_with_parent
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile
@@ -27,6 +28,7 @@ class DescriptionPublisher(Node):
 
 def main():
     rclpy.init()
+    exit_with_parent()   # end with the launch that started us (rd_bringup.process)
     node = DescriptionPublisher()
     try:
         rclpy.spin(node)

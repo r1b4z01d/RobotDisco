@@ -5,6 +5,7 @@ on the robot it then asks the driver to resend the control program (headless mod
     ros2 service call /arm/power rd_interfaces/srv/ArmPower "{command: 1}"     # POWER_ON
 """
 from __future__ import annotations
+from rd_bringup.process import exit_with_parent
 
 import rclpy
 from rclpy.callback_groups import ReentrantCallbackGroup
@@ -82,6 +83,7 @@ class ArmPowerServer(Node):
 
 def main():
     rclpy.init()
+    exit_with_parent()   # end with the launch that started us (rd_bringup.process)
     node = ArmPowerServer()
     ex = MultiThreadedExecutor(num_threads=3)
     ex.add_node(node)

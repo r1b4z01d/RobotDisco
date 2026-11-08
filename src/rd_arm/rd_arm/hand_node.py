@@ -11,6 +11,7 @@ The link is UDP with a liveness probe; a dead hand is an error at connect and co
 (diagnostic in /hand/state's layout label). Address and port from robot.yaml (RD__hand__ip in the rig).
 """
 from __future__ import annotations
+from rd_bringup.process import exit_with_parent
 
 import math
 import time
@@ -151,6 +152,7 @@ class HandNode(Node):
 
 def main():
     rclpy.init()
+    exit_with_parent()   # end with the launch that started us (rd_bringup.process)
     node = HandNode()
     try:
         rclpy.spin(node)

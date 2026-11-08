@@ -12,6 +12,7 @@ IK is MoveIt's /compute_ik (KDL in the rig; cuRobo through the same service on t
 that jumps a joint by more than `max_jump` (an IK branch flip) is dropped and the previous target held.
 """
 from __future__ import annotations
+from rd_bringup.process import exit_with_parent
 
 import threading
 import time
@@ -134,6 +135,7 @@ class Stream(Node):
 
 def main():
     rclpy.init()
+    exit_with_parent()   # end with the launch that started us (rd_bringup.process)
     node = Stream()
     ex = MultiThreadedExecutor(num_threads=4)
     ex.add_node(node)

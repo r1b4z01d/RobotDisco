@@ -15,6 +15,7 @@ Wave) and the HTTP Folks page (rd_manager; the data is on topics here).
   srv  /face/wink, /face/list_people   std_srvs/Trigger
 """
 from __future__ import annotations
+from rd_bringup.process import exit_with_parent
 
 import json
 import math
@@ -571,6 +572,7 @@ class FaceNode(Node):
 
 def main():
     rclpy.init()
+    exit_with_parent()   # end with the launch that started us (rd_bringup.process)
     node = FaceNode()
     ex = MultiThreadedExecutor(num_threads=4)
     ex.add_node(node)

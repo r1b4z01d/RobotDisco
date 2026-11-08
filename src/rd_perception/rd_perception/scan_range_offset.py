@@ -7,6 +7,7 @@ after the correction are clamped to range_min (something IS that close); inf / n
 Re-measure with a box at a taped distance after any change to the unit: sensors.rplidar_s1.range_offset_m.
 """
 import numpy as np
+from rd_bringup.process import exit_with_parent
 import rclpy
 from rcl_interfaces.msg import SetParametersResult
 from rclpy.executors import ExternalShutdownException
@@ -52,6 +53,7 @@ class ScanRangeOffset(Node):
 
 def main():
     rclpy.init()
+    exit_with_parent()   # end with the launch that started us (rd_bringup.process)
     node = ScanRangeOffset()
     try:
         rclpy.spin(node)

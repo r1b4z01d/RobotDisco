@@ -14,6 +14,7 @@ T_base_tag = TF(base <- camera) . detection pose. The camera->tag pose comes fro
 never from the tag_N TF frames a detector may broadcast (they arrive after the message; v1 2026-11-01).
 """
 from __future__ import annotations
+from rd_bringup.process import exit_with_parent
 
 import math
 import os
@@ -353,6 +354,7 @@ class TagCorrector(Node):
 
 def main():
     rclpy.init()
+    exit_with_parent()   # end with the launch that started us (rd_bringup.process)
     node = TagCorrector()
     try:
         rclpy.spin(node)

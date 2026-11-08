@@ -6,6 +6,7 @@ Publishes /arm/target_pose at `rate_hz` (the pose integrates the sticks; clamped
 runner) and /hand/curls. Button / axis indices as rd_base's joystick.yaml (the 8BitDo on its receiver).
 """
 from __future__ import annotations
+from rd_bringup.process import exit_with_parent
 
 import math
 
@@ -104,6 +105,7 @@ class Teleop(Node):
 
 def main():
     rclpy.init()
+    exit_with_parent()   # end with the launch that started us (rd_bringup.process)
     node = Teleop()
     try:
         rclpy.spin(node)

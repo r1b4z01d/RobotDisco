@@ -7,6 +7,7 @@ The conversion is a plain function over duck-typed detections (id, family, pose.
 unit-tested without the Isaac package.
 """
 import rclpy
+from rd_bringup.process import exit_with_parent
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 
@@ -55,6 +56,7 @@ class TagAdapter(Node):
 
 def main():
     rclpy.init()
+    exit_with_parent()   # end with the launch that started us (rd_bringup.process)
     node = TagAdapter()
     try:
         rclpy.spin(node)

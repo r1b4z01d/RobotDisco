@@ -6,6 +6,7 @@ program). ROS-free. Start it in a protective stop to test the recovery path.
     python3 -m rd_arm.fake_dashboard [port] [--protective-stop] [--local]
 """
 from __future__ import annotations
+from rd_bringup.process import exit_with_parent
 
 import socket
 import sys
@@ -127,6 +128,7 @@ class FakeDashboard:
 
 
 def main(argv=None):
+    exit_with_parent()   # end with the launch that started us (rd_bringup.process)
     argv = sys.argv[1:] if argv is None else argv
     port = int(argv[0]) if argv and argv[0].isdigit() else 29999
     d = FakeDashboard(port, remote="--local" not in argv,

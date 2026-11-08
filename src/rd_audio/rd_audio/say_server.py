@@ -14,6 +14,7 @@ One sentence at a time; a goal with interrupt=true stops the current one. `playe
 the sink through PULSE_SINK) | none (the rig: no audio device, the timing is kept).
 """
 from __future__ import annotations
+from rd_bringup.process import exit_with_parent
 
 import os
 import subprocess
@@ -236,6 +237,7 @@ class SayServer(Node):
 
 def main():
     rclpy.init()
+    exit_with_parent()   # end with the launch that started us (rd_bringup.process)
     node = SayServer()
     ex = MultiThreadedExecutor(num_threads=4)
     ex.add_node(node)

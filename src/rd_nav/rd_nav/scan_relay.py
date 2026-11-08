@@ -1,5 +1,6 @@
 """Republish a LaserScan under another frame (the rig: one simulated scan feeds both lidar topics)."""
 import rclpy
+from rd_bringup.process import exit_with_parent
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy
@@ -25,6 +26,7 @@ class ScanRelay(Node):
 
 def main():
     rclpy.init()
+    exit_with_parent()   # end with the launch that started us (rd_bringup.process)
     n = ScanRelay()
     try:
         rclpy.spin(n)

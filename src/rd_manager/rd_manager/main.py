@@ -6,6 +6,7 @@
     manager --sim true                        # the rig: ROS bridge on, no supervisor expected
 """
 from __future__ import annotations
+from rd_bringup.process import exit_with_parent
 
 import argparse
 import os
@@ -13,6 +14,7 @@ import sys
 
 
 def main(argv=None) -> int:
+    exit_with_parent()   # end with the launch that started us (rd_bringup.process)
     from rd_bringup import config
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--host", default="0.0.0.0")

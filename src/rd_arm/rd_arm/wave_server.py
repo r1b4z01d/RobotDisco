@@ -10,6 +10,7 @@ and the controller up. Cancel stops the running trajectory. v1's ur_motion.py di
 hand-tuned staged ramps; the planner replaces the staging.
 """
 from __future__ import annotations
+from rd_bringup.process import exit_with_parent
 
 import threading
 import time
@@ -250,6 +251,7 @@ class WaveServer(Node):
 
 def main():
     rclpy.init()
+    exit_with_parent()   # end with the launch that started us (rd_bringup.process)
     node = WaveServer()
     ex = MultiThreadedExecutor(num_threads=6)
     ex.add_node(node)

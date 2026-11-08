@@ -1,5 +1,6 @@
 """Rotate an Image topic by 90/180/270 degrees (the webcams are mounted sideways; v1 rotated in every consumer)."""
 import numpy as np
+from rd_bringup.process import exit_with_parent
 import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
@@ -33,6 +34,7 @@ class ImageRotate(Node):
 
 def main():
     rclpy.init()
+    exit_with_parent()   # end with the launch that started us (rd_bringup.process)
     node = ImageRotate()
     try:
         rclpy.spin(node)

@@ -8,6 +8,7 @@ Commands over the wire: {cmd: info} -> what is served; {cmd: select, model: <spe
 checkpoint (resolved under the models dir); {cmd: reset} -> clear the action queue.
 """
 from __future__ import annotations
+from rd_bringup.process import exit_with_parent
 
 import argparse
 import sys
@@ -62,6 +63,7 @@ class Server:
 
 
 def main(argv=None) -> int:
+    exit_with_parent()   # end with the launch that started us (rd_bringup.process)
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--backend", default="fake", choices=["fake", "smolvla", "groot"])
     ap.add_argument("--ckpt", default=None, help="run[@step] under the models dir, or a path")
