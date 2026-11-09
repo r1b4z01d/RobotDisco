@@ -80,9 +80,13 @@ dock, so a robot that already drove somewhere needs a fresh sim first. Detached 
 
 ```
 (setsid nohup timeout 14400 ~/isaacsim-venv/bin/python src/rd_sim/scripts/isaac_scene.py --urdf /tmp/robot_disco.urdf --headless > ~/isaac.log 2>&1 < /dev/null & echo $! > ~/isaac.pid)
-(setsid nohup ros2 launch rd_sim sim.launch.py > ~/sim-stack.log 2>&1 < /dev/null & echo $! > ~/sim-stack.pid)
+provision/tools/launch_bg.sh ~/sim-stack.pid ~/sim-stack.log ros2 launch rd_sim sim.launch.py
 kill -INT $(cat ~/sim-stack.pid); kill -INT -- -$(cat ~/isaac.pid)     # stop: the stack by its launch pid, the sim by its group
 ```
+
+`launch_bg.sh` starts the launch with default signal dispositions. From a non-interactive shell (an agent, a script, an ssh
+command) a plain `&` inherits SIGINT ignored, and a launch started that way never reacts to `kill -INT`: that was the
+"30 s hang with 38 processes alive" of 2026-11-09; started this way the same stack is down 10 s after SIGINT.
 
 The `timeout 14400` is the sim's lifetime in seconds (4 h): the sim exits by itself when it runs out. A 3000 s limit ended a session
 after 50 minutes on 2026-11-09, and everything read afterwards (a robot that no longer answered the drive commands) was a

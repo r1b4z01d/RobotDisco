@@ -56,7 +56,8 @@ the placeholder in `src/rd_arm/config/poses.yaml` (phase `workspace` copies it t
 - Running it detached, so an ssh drop does not kill it:
   `(setsid nohup timeout 14400 ~/isaacsim-venv/bin/python src/rd_sim/scripts/isaac_scene.py --urdf /tmp/robot_disco.urdf --headless > ~/isaac.log 2>&1 < /dev/null & echo $! > ~/isaac.pid)`,
   stop with `kill -INT -- -$(cat ~/isaac.pid)`. The first start takes ~100 s (extension cache); the log is
-  line-buffered. Then `ros2 launch rd_sim sim.launch.py` for the stack, started together with a fresh sim (it seeds
+  line-buffered. Then `ros2 launch rd_sim sim.launch.py` for the stack (detached: `provision/tools/launch_bg.sh ~/sim-stack.pid
+  ~/sim-stack.log ros2 launch rd_sim sim.launch.py`), started together with a fresh sim (it seeds
   AMCL with the spawn pose). Run `colcon test` under another `ROS_DOMAIN_ID` while a sim is up (its clock, odometry
   and scans leak into the launch tests otherwise). Never `pkill -f isaac_scene` from an ssh command that itself
   contains that text: it kills the shell running the command.
