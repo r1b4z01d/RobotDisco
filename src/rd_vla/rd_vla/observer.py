@@ -1,7 +1,11 @@
 """The robot as an observation: cameras (rgb8 Image topics), the arm's joints (/joint_states), the end
-effector pose (TF ur_base_link -> ur_tool0 as xyz + rotation vector) and the commanded hand curls
+effector pose (TF ur_base -> ur_tool0 as xyz + rotation vector) and the commanded hand curls
 (/hand/state). Produces the 16-D state + images of the schema at the policy's rate. rclpy; no cv_bridge
 (the v1 two-OpenCV trap), images are decoded from the message bytes directly.
+
+The pose frame is `ur_base`, the UR controller's base frame that v1's RTDE poses (and so every v1 dataset and
+checkpoint) are in; the URDF's `ur_base_link` is that frame turned 180 deg about Z (v1's home TCP (-0.189, -0.107,
+0.991) read (0.205, 0.124, 0.98) in ur_base_link, 2026-11-09), and a policy fed the wrong one steers 0.3 m off.
 """
 from __future__ import annotations
 
@@ -33,7 +37,7 @@ def image_to_rgb(m: Image) -> np.ndarray:
 
 
 class Observer:
-    def __init__(self, node, cameras=CAMERA_KEYS, camera_topic="/cameras/{name}/image", base_frame="ur_base_link",
+    def __init__(self, node, cameras=CAMERA_KEYS, camera_topic="/cameras/{name}/image", base_frame="ur_base",
                  tool_frame="ur_tool0", callback_group=None):
         self.node = node
         self.cameras = tuple(cameras)

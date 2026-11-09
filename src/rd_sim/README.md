@@ -8,6 +8,7 @@ same topics the robot does, so the whole 5.0 stack runs against it unchanged.
 ros2 run rd_sim export_urdf /tmp/robot_disco.urdf                       # the flat URDF the importer takes
 ~/isaacsim-venv/bin/python $(ros2 pkg prefix rd_sim)/share/rd_sim/scripts/isaac_scene.py --urdf /tmp/robot_disco.urdf   # Jazzy sourced, Cyclone, EULA accepted
 ros2 launch rd_sim sim.launch.py                                        # base command path + filters + nav + arm + vla (fake) + manager
+ros2 launch rd_sim sim.launch.py vla_backend:=smolvla vla_ckpt:=tigger_1_merged_smolvla_1   # the real policy on the GPU (vla_n_action_steps 8)
 ```
 
 `scripts/sim_truth_check.py` compares AMCL and both lidars with the sim's ground truth (the sim's odometry on the spawn pose). Use it

@@ -303,6 +303,7 @@ phase_venvs() {
   # torch for CUDA 13.2 on JetPack 7.2: NVIDIA's wheel index (the plan's risk #3: pin what works on the flashed box)
   /opt/vla/bin/pip install -q --upgrade pip
   /opt/vla/bin/pip install -q ${TORCH_INDEX:+--extra-index-url "$TORCH_INDEX"} "lerobot>=0.3,<0.5" || warn "lerobot/torch install failed: see the plan's risk about cu132 wheels (set TORCH_INDEX)"
+  /opt/vla/bin/pip install -q --ignore-installed --no-deps scipy   # Ubuntu's scipy (numpy 1) would be imported otherwise and fail against the venv's numpy 2
   /opt/vla/bin/python -c "import torch, lerobot; print('torch', torch.__version__, 'cuda', torch.cuda.is_available(), 'lerobot', lerobot.__version__)" || true
 }
 

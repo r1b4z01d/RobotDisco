@@ -61,6 +61,12 @@ def load(reload: bool = False) -> dict:
     return _load(str(p), mtime)
 
 
+def data_dir() -> Path:
+    """Where datasets, checkpoints, evals, maps and galleries live: $RD_DATA_DIR, else robot.yaml's robot.data
+    (/mnt/data, the robot's NVMe). The GPU box sets RD_DATA_DIR to its mirror of the robot's data."""
+    return Path(os.environ.get("RD_DATA_DIR") or get("robot.data", "/mnt/data"))
+
+
 def get(key: str, default: Any = _MISSING, as_type: type | None = None) -> Any:
     """Dotted lookup with env override. KeyError when absent and no default given."""
     env = os.environ.get(ENV_PREFIX + key.replace(".", "__"))

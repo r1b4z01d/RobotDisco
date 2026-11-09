@@ -2,7 +2,8 @@
 
 A spec is a run name, run@step, or a path:  tigger_1_merged_smolvla_1  |  tigger_1_merged_smolvla_1@020000  |
 /abs/path/to/pretrained_model. Runs live under <models_dir>/<run>/checkpoints/<step>/pretrained_model with
-`last` a symlink to the newest step. `serve_link` (<outputs>/serve_ckpt) names what the server serves.
+`last` a symlink to the newest step (or, where a copy lost the symlink, the highest numbered step). `serve_link`
+(<outputs>/serve_ckpt) names what the server serves.
 """
 from __future__ import annotations
 
@@ -16,8 +17,7 @@ def models_dir() -> Path:
     if env:
         return Path(env)
     from rd_bringup import config
-    data = config.get("robot.data", "/mnt/data")
-    return Path(data) / "outputs" / "train"
+    return config.data_dir() / "outputs" / "train"
 
 
 def resolve(spec: str, train_dir: Path | str | None = None) -> Path:
@@ -38,7 +38,11 @@ def resolve(spec: str, train_dir: Path | str | None = None) -> Path:
     step = step or "last"
     if step.isdigit():
         step = f"{int(step):06d}"
-    for cand in (train_dir / run / "checkpoints" / step / "pretrained_model", train_dir / run / "pretrained_model", train_dir / run):
+    cands = [train_dir / run / "checkpoints" / step / "pretrained_model"]
+    if step == "last":
+        # a run copied without its symlinks (rsync, scp) has the numbered steps but no `last`: the newest step is last
+        cands += [s / "pretrained_model" for s in sorted((p for p in (train_dir / run / "checkpoints").glob("[0-9]*") if p.is_dir()), reverse=True)]
+    for cand in cands + [train_dir / run / "pretrained_model", train_dir / run]:
         tried.append(cand)
         if (cand / "config.json").is_file():
             return cand.resolve()

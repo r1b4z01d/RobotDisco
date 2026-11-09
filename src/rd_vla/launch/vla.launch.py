@@ -1,9 +1,9 @@
-"""The VLA stack: the inference server (its own process; the LeRobot venv's python on the robot), the
-RunPolicy runner, the gamepad teleop.
+"""The VLA stack: the inference server and the RunPolicy runner (both under `python`: the LeRobot venv's on the
+robot and the GPU box, so the policy loads and the recorder writes LeRobot datasets), the gamepad teleop.
 
     ros2 launch rd_vla vla.launch.py                                        # robot: smolvla from the serve link
     ros2 launch rd_vla vla.launch.py backend:=fake                          # rig
-    ros2 launch rd_vla vla.launch.py backend:=smolvla ckpt:=tigger_1_merged_smolvla_1 device:=cuda
+    ros2 launch rd_vla vla.launch.py backend:=smolvla ckpt:=tigger_1_merged_smolvla_1 device:=cuda n_action_steps:=8
 """
 import os
 
@@ -24,11 +24,15 @@ def generate_launch_description():
     server = ExecuteProcess(
         cmd=[LaunchConfiguration('python'), '-m', 'rd_vla.infer_server', '--backend', backend, '--port', port,
              '--device', LaunchConfiguration('device'), '--ckpt', LaunchConfiguration('ckpt'),
-             '--fake-close-after', LaunchConfiguration('fake_close_after')],
+             '--fake-close-after', LaunchConfiguration('fake_close_after'), '--n-action-steps', LaunchConfiguration('n_action_steps')],
         output='screen', condition=IfCondition(LaunchConfiguration('infer_server')))
-    runner = Node(package='rd_vla', executable='policy_runner', name='policy_runner', output='screen',
-                  parameters=[os.path.join(share, 'config', 'runner.yaml'),
-                              {'use_sim_time': LaunchConfiguration('use_sim_time'), 'infer_port': int(port)}])
+    # the runner under the same interpreter as the server: with the LeRobot venv its recorder writes LeRobot datasets
+    # (under the system python, where lerobot is absent, it falls back to npz episodes: the rig)
+    runner = ExecuteProcess(
+        cmd=[LaunchConfiguration('python'), '-m', 'rd_vla.policy_runner', '--ros-args', '-r', '__node:=policy_runner',
+             '--params-file', os.path.join(share, 'config', 'runner.yaml'),
+             '-p', ['use_sim_time:=', LaunchConfiguration('use_sim_time')], '-p', f'infer_port:={port}'],
+        output='screen')
     teleop = Node(package='rd_vla', executable='teleop', name='vla_teleop', output='screen',
                   parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
                   condition=IfCondition(LaunchConfiguration('teleop')))
@@ -41,5 +45,6 @@ def generate_launch_description():
         DeclareLaunchArgument('teleop', default_value='true'),
         DeclareLaunchArgument('use_sim_time', default_value='false'),
         DeclareLaunchArgument('fake_close_after', default_value='10'),
+        DeclareLaunchArgument('n_action_steps', default_value='0', description='smolvla: execute only the first N actions of each 50-step chunk before re-observing (v1 drove with 4..8); 0 = the whole chunk, open loop'),
         server, runner, teleop,
     ])

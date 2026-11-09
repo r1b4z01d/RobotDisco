@@ -82,6 +82,8 @@ terminal:
 
 ```
 ros2 launch rd_sim sim.launch.py
+ros2 launch rd_sim sim.launch.py vla_backend:=smolvla vla_ckpt:=tigger_1_merged_smolvla_1   # SmolVLA from /opt/vla on the GPU
+ros2 action send_goal -f /run_policy rd_interfaces/action/RunPolicy "{task: 'pick up tigger', max_seconds: 30.0, record: true}"
 ```
 
 That is the robot's stack against the sim: the base command path (twist_mux + collision monitor), the scan filters,

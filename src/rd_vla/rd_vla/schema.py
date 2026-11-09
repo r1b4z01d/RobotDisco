@@ -33,13 +33,16 @@ def make_state(ee_pose, joints, curls) -> list[float]:
     return v
 
 
-def features(width: int, height: int, cameras=CAMERA_KEYS, use_videos: bool = True) -> dict:
-    """LeRobot dataset features for this robot (what v1's record_sim.build_features produced)."""
+def features(width: int, height: int, cameras=CAMERA_KEYS, use_videos: bool = True, shapes: dict | None = None) -> dict:
+    """LeRobot dataset features for this robot (what v1's record_sim.build_features produced). `shapes` gives a camera
+    its own (height, width) where the cameras differ: v1's sets hold scene and side as 540x540 squares and the wrist at
+    540x960, so one size for all would stretch the squares."""
     ft = {
         "action": {"dtype": "float32", "shape": (ACTION_DIM,), "names": list(ACTION_NAMES)},
         "observation.state": {"dtype": "float32", "shape": (STATE_DIM,), "names": list(STATE_NAMES)},
     }
     for cam in cameras:
-        ft[f"observation.images.{cam}"] = {"dtype": "video" if use_videos else "image", "shape": (height, width, 3),
+        h, w = (shapes or {}).get(cam, (height, width))
+        ft[f"observation.images.{cam}"] = {"dtype": "video" if use_videos else "image", "shape": (int(h), int(w), 3),
                                            "names": ["height", "width", "channels"]}
     return ft

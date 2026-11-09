@@ -104,6 +104,9 @@ phase_vla() {
   [ -x /opt/vla/bin/python ] || { sudo python3 -m venv --system-site-packages /opt/vla && sudo chown -R "$USER:$USER" /opt/vla; }
   /opt/vla/bin/pip install -q --upgrade pip
   /opt/vla/bin/pip install -q "lerobot>=0.3,<0.5" "transformers" "num2words"
+  # the venv sees the system site-packages, and Ubuntu's scipy (built for numpy 1) satisfies pip but fails to import
+  # against the venv's numpy 2 when transformers probes it: give the venv its own scipy
+  /opt/vla/bin/pip install -q --ignore-installed --no-deps scipy
   /opt/vla/bin/python -c "import torch, lerobot; print('torch', torch.__version__, 'cuda', torch.cuda.is_available(), 'lerobot', lerobot.__version__)"
 }
 

@@ -23,7 +23,7 @@ def evals_dir() -> Path:
     if env:
         return Path(env)
     from rd_bringup import config
-    return Path(config.get("robot.data", "/mnt/data")) / "outputs" / "evals"
+    return config.data_dir() / "outputs" / "evals"
 
 
 def _guard(name: str) -> None:

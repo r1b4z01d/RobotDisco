@@ -44,6 +44,8 @@ class PolicyRunner(Node):
         dp("infer_port", int(config.get("robot.ports.infer_server", 8777)))
         dp("cameras", list(CAMERA_KEYS))
         dp("camera_topic", "/cameras/{name}/image")
+        dp("base_frame", "ur_base")      # the UR controller's base frame (v1's RTDE poses, the datasets): base_link turned 180 deg about Z
+        dp("tool_frame", "ur_tool0")
         dp("max_step_m", 0.03)                       # Cartesian step cap per tick (v1 rtde_arm max_step)
         dp("workspace_min", [-1.0, -1.0, -0.2])      # UR base frame box the target is clamped into
         dp("workspace_max", [1.0, 1.0, 1.0])
@@ -56,6 +58,7 @@ class PolicyRunner(Node):
         dp("operator", "")
         self.cb = ReentrantCallbackGroup()
         self.observer = Observer(self, tuple(self.get_parameter("cameras").value), self.get_parameter("camera_topic").value,
+                                 base_frame=self.get_parameter("base_frame").value, tool_frame=self.get_parameter("tool_frame").value,
                                  callback_group=self.cb)
         self.pose_pub = self.create_publisher(PoseStamped, "/arm/target_pose", 10)
         self.hand_pub = self.create_publisher(Float32MultiArray, "/hand/curls", 10)
@@ -126,6 +129,11 @@ class PolicyRunner(Node):
             client = wire.PolicyClient(p("infer_host"), int(p("infer_port"))).connect()
         except OSError as e:
             return False, f"inference server unreachable: {e}"
+        writer = None
+        log = None
+        step = 0
+        ended = ""
+        info: dict = {}
         try:
             if goal.checkpoint:
                 rep = client.select(goal.checkpoint)
@@ -133,7 +141,7 @@ class PolicyRunner(Node):
                     return False, f"checkpoint: {rep.get('error', 'select failed')}"
             info = client.info()
             client.reset()
-            # 2. home, observations, streaming
+            # 2. home, observations
             if goal.home_first:
                 self._feedback(handle, 0, t0, "homing", 0)
                 ok, msg = self._home()
@@ -142,110 +150,114 @@ class PolicyRunner(Node):
             ready, why = self.observer.ready(float(p("obs_max_age_s")) + 1.0)
             if not ready:
                 return False, f"no observation: {why}"
-            ok, msg = self._stream(True)
-            if not ok:
-                return False, f"streaming: {msg}"
-            # 3. recording
-            writer = None
-            run_dir = None
-            if goal.record:
-                root = Path(p("record_root") or os.environ.get("RD_RECORD_ROOT")
-                            or (Path(config.get("robot.data", "/mnt/data")) / "outputs" / "datasets"))
-                repo = f"rd/{time.strftime('%Y%m%d')}_{goal.task.strip().lower().replace(' ', '_')[:40] or 'run'}"
-                writer = EpisodeWriter(root, repo, fps=int(fps), cameras=self.observer.cameras)
-                out["dataset"] = str(writer.path)
+            # 3. the eval record, the recording, streaming on. From here every exit, an exception included, goes
+            # through step 5: the arm must not be left streaming and the run must leave its eval.json
             reg = evals.EvalRegistry(p("evals_dir") or None)
             run_name = time.strftime("%Y%m%d_%H%M%S_") + (goal.task.strip().lower().replace(" ", "_")[:30] or "run")
             run_dir = reg.path(run_name)
             run_dir.mkdir(parents=True, exist_ok=True)
             out["run_dir"] = str(run_dir)
-            log = open(run_dir / "steps.csv", "w", newline="")
-            csvw = csv.writer(log)
-            csvw.writerow(["t", "step", "obs_age_ms", "infer_ms"] + [f"a{i}" for i in range(10)] + [f"s{i}" for i in range(16)])
-            # 4. the loop
-            period = 1.0 / fps
-            next_t = time.monotonic()
-            step = 0
-            closed_since = None
-            was_closed = False
-            ended = ""
-            max_step = float(p("max_step_m"))
-            lo, hi = [float(v) for v in p("workspace_min")], [float(v) for v in p("workspace_max")]
-            clevel, olevel = float(p("done_closed_level")), float(p("done_open_level"))
-            still_s = float(goal.still_seconds) if goal.still_seconds > 0 else float(p("done_still_s"))
-            done_when = (goal.done_when or "").strip().lower()
-            self._feedback(handle, 0, t0, "running", 0)
-            while True:
-                if cancelled():
-                    ended = "cancelled"
-                    break
-                if goal.max_seconds and time.monotonic() - t0 > goal.max_seconds:
-                    ended = "timeout"
-                    break
-                if goal.max_steps and step >= goal.max_steps:
-                    ended = "max_steps"
-                    break
-                obs = self.observer.observe()
-                if obs is None:
-                    ended = "observation lost"
-                    break
-                st, images, age = obs
-                if age > float(p("obs_max_age_s")):
-                    self.get_logger().warn(f"observation {age * 1000:.0f} ms old", throttle_duration_sec=2.0)
-                ti = time.monotonic()
-                try:
-                    action = client.infer(st, images, goal.task)
-                except (RuntimeError, OSError) as e:
-                    ended = f"inference failed: {e}"
-                    break
-                infer_ms = (time.monotonic() - ti) * 1000
-                pose, curls = split_action(action)
-                xyz = clamp_box(clamp_step(pose[:3], st[:3], max_step), lo, hi)
-                msg = PoseStamped()
-                msg.header.frame_id = self.observer.base_frame
-                msg.header.stamp = self.get_clock().now().to_msg()
-                msg.pose.position.x, msg.pose.position.y, msg.pose.position.z = xyz
-                qx, qy, qz, qw = rotvec_to_quat(pose[3:])
-                msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w = qx, qy, qz, qw
-                self.pose_pub.publish(msg)
-                self.hand_pub.publish(Float32MultiArray(data=[float(v) for v in curls]))
-                if writer is not None:
-                    writer.add_frame(images, st, action, goal.task)
-                csvw.writerow([f"{time.monotonic() - t0:.3f}", step, f"{age * 1000:.0f}", f"{infer_ms:.0f}"]
-                              + [f"{v:.4f}" for v in action] + [f"{v:.4f}" for v in st])
-                step += 1
-                out["steps"] = step
-                self._feedback(handle, step, t0, "running", age * 1000)
-                # the grasp-level end condition (done_when closed | open)
-                level = sum(curls) / len(curls)
-                if level >= clevel:
-                    closed_since = closed_since or time.monotonic()
-                    if time.monotonic() - closed_since >= still_s:
-                        was_closed = True
-                        if done_when == "closed":
-                            ended = "done"
-                            break
+            try:
+                if goal.record:
+                    root = Path(p("record_root") or os.environ.get("RD_RECORD_ROOT") or (config.data_dir() / "outputs" / "datasets"))
+                    repo = f"rd/{time.strftime('%Y%m%d')}_{goal.task.strip().lower().replace(' ', '_')[:40] or 'run'}"
+                    writer = EpisodeWriter(root, repo, fps=int(fps), cameras=self.observer.cameras)
+                    out["dataset"] = str(writer.path)
+                ok, msg = self._stream(True)
+                if not ok:
+                    ended = f"streaming: {msg}"
                 else:
-                    closed_since = None
-                    if done_when == "open" and was_closed and level <= olevel:
-                        ended = "done"
-                        break
-                next_t += period
-                delay = next_t - time.monotonic()
-                if delay > 0:
-                    time.sleep(delay)
-                else:
+                    log = open(run_dir / "steps.csv", "w", newline="")
+                    csvw = csv.writer(log)
+                    csvw.writerow(["t", "step", "obs_age_ms", "infer_ms"] + [f"a{i}" for i in range(10)] + [f"s{i}" for i in range(16)])
+                    # 4. the loop
+                    period = 1.0 / fps
                     next_t = time.monotonic()
-            log.close()
+                    step = 0
+                    closed_since = None
+                    was_closed = False
+                    ended = ""
+                    max_step = float(p("max_step_m"))
+                    lo, hi = [float(v) for v in p("workspace_min")], [float(v) for v in p("workspace_max")]
+                    clevel, olevel = float(p("done_closed_level")), float(p("done_open_level"))
+                    still_s = float(goal.still_seconds) if goal.still_seconds > 0 else float(p("done_still_s"))
+                    done_when = (goal.done_when or "").strip().lower()
+                    self._feedback(handle, 0, t0, "running", 0)
+                    while True:
+                        if cancelled():
+                            ended = "cancelled"
+                            break
+                        if goal.max_seconds and time.monotonic() - t0 > goal.max_seconds:
+                            ended = "timeout"
+                            break
+                        if goal.max_steps and step >= goal.max_steps:
+                            ended = "max_steps"
+                            break
+                        obs = self.observer.observe()
+                        if obs is None:
+                            ended = "observation lost"
+                            break
+                        st, images, age = obs
+                        if age > float(p("obs_max_age_s")):
+                            self.get_logger().warn(f"observation {age * 1000:.0f} ms old", throttle_duration_sec=2.0)
+                        ti = time.monotonic()
+                        try:
+                            action = client.infer(st, images, goal.task)
+                        except (RuntimeError, OSError) as e:
+                            ended = f"inference failed: {e}"
+                            break
+                        infer_ms = (time.monotonic() - ti) * 1000
+                        pose, curls = split_action(action)
+                        xyz = clamp_box(clamp_step(pose[:3], st[:3], max_step), lo, hi)
+                        msg = PoseStamped()
+                        msg.header.frame_id = self.observer.base_frame
+                        msg.header.stamp = self.get_clock().now().to_msg()
+                        msg.pose.position.x, msg.pose.position.y, msg.pose.position.z = xyz
+                        qx, qy, qz, qw = rotvec_to_quat(pose[3:])
+                        msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w = qx, qy, qz, qw
+                        self.pose_pub.publish(msg)
+                        self.hand_pub.publish(Float32MultiArray(data=[float(v) for v in curls]))
+                        if writer is not None:
+                            writer.add_frame(images, st, action, goal.task)
+                        csvw.writerow([f"{time.monotonic() - t0:.3f}", step, f"{age * 1000:.0f}", f"{infer_ms:.0f}"]
+                                      + [f"{v:.4f}" for v in action] + [f"{v:.4f}" for v in st])
+                        step += 1
+                        out["steps"] = step
+                        self._feedback(handle, step, t0, "running", age * 1000)
+                        # the grasp-level end condition (done_when closed | open)
+                        level = sum(curls) / len(curls)
+                        if level >= clevel:
+                            closed_since = closed_since or time.monotonic()
+                            if time.monotonic() - closed_since >= still_s:
+                                was_closed = True
+                                if done_when == "closed":
+                                    ended = "done"
+                                    break
+                        else:
+                            closed_since = None
+                            if done_when == "open" and was_closed and level <= olevel:
+                                ended = "done"
+                                break
+                        next_t += period
+                        delay = next_t - time.monotonic()
+                        if delay > 0:
+                            time.sleep(delay)
+                        else:
+                            next_t = time.monotonic()
+            except Exception as e:  # noqa: BLE001 - reported on the eval record; the arm is stopped below
+                ended = f"error: {type(e).__name__}: {e}"
+                self.get_logger().error(ended)
         finally:
             client.close()
         # 5. after
+        if log is not None:
+            log.close()
         self._feedback(handle, step, t0, "returning", 0)
         self._stream(False)
         if goal.home_first and ended in ("done", "timeout", "max_steps"):
             self._home()
-        if writer is not None and step > 0:
-            if ended in ("done", "timeout", "max_steps"):
+        if writer is not None:
+            if step > 0 and ended in ("done", "timeout", "max_steps"):
                 saved = writer.save_episode()
                 self.get_logger().info(f"episode saved: {saved}")
             else:
@@ -257,6 +269,7 @@ class PolicyRunner(Node):
                               "successes": 1 if ended == "done" else 0, "remote": f"{p('infer_host')}:{p('infer_port')}"})
         ok = ended in ("done", "timeout", "max_steps")
         return ok, ended
+
 
 def main():
     rclpy.init()
@@ -271,3 +284,7 @@ def main():
     finally:
         node.destroy_node()
         rclpy.try_shutdown()
+
+
+if __name__ == "__main__":
+    main()

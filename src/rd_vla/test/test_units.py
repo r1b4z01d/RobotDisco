@@ -97,6 +97,14 @@ def test_checkpoints(tmp_path):
     assert runs[0]["run"] == "tigger_1" and runs[0]["last"] == "020000"
     with pytest.raises(FileNotFoundError):
         checkpoints.resolve("nope", tmp_path / "train")
+    # a run copied without its `last` symlink (the v1 mirror on the GPU box): the newest numbered step is last
+    nolink = tmp_path / "train" / "tigger_2" / "checkpoints"
+    for step in ("005000", "010000"):
+        d = nolink / step / "pretrained_model"
+        d.mkdir(parents=True)
+        (d / "config.json").write_text(json.dumps({"type": "smolvla"}))
+    assert "010000" in str(checkpoints.resolve("tigger_2", tmp_path / "train"))
+    assert "005000" in str(checkpoints.resolve("tigger_2@5000", tmp_path / "train"))
     link = checkpoints.set_served(tmp_path, checkpoints.resolve("tigger_1", tmp_path / "train"))
     assert checkpoints.served(tmp_path) == link.resolve()
 
@@ -131,6 +139,29 @@ def test_recorder_npz(tmp_path):
     assert meta["episodes"] == 1 and meta["fps"] == 10
     with pytest.raises(KeyError):
         w.add_frame({"scene": img}, [0.0] * 16, [0.0] * 10, "t")
+
+
+def test_recorder_keeps_each_cameras_size(tmp_path):
+    w = EpisodeWriter(tmp_path, "shapes", fps=10, cameras=("scene", "wrist"), backend="npz")      # no size given: native per camera
+    w.add_frame({"scene": np.zeros((54, 54, 3), np.uint8), "wrist": np.zeros((54, 96, 3), np.uint8)}, [0.0] * 16, [0.0] * 10, "t")
+    w.add_frame({"scene": np.zeros((108, 108, 3), np.uint8), "wrist": np.zeros((54, 96, 3), np.uint8)}, [0.0] * 16, [0.0] * 10, "t")
+    w.save_episode()
+    ep = load_episode_npz(tmp_path / "shapes" / "episodes" / "episode_000000.npz")
+    assert ep["observation.images.scene"].shape == (2, 54, 54, 3) and ep["observation.images.wrist"].shape == (2, 54, 96, 3)
+    meta = json.loads((tmp_path / "shapes" / "meta.json").read_text())
+    assert meta["features"]["observation.images.scene"]["shape"] == [54, 54, 3]
+    assert meta["features"]["observation.images.wrist"]["shape"] == [54, 96, 3]
+
+
+@pytest.mark.skipif(not lerobot_available(), reason="lerobot not importable in this interpreter")
+def test_recorder_lerobot_sidesteps_a_foreign_dir(tmp_path):
+    (tmp_path / "taken" / "episodes").mkdir(parents=True)            # an npz recording already at this name
+    w = EpisodeWriter(tmp_path, "taken", fps=10, cameras=("scene",), use_videos=False)
+    assert w.backend == "lerobot" and w.repo_id == "taken_2"
+    w.add_frame({"scene": np.zeros((32, 64, 3), np.uint8)}, [0.0] * 16, [0.0] * 10, "t")
+    w.save_episode()
+    w.close()
+    assert (tmp_path / "taken_2" / "meta").is_dir()
 
 
 @pytest.mark.skipif(not lerobot_available(), reason="lerobot not importable in this interpreter")

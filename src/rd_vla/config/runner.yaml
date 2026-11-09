@@ -3,6 +3,8 @@ policy_runner:
     fps: 12.0
     cameras: [scene, wrist, side]
     camera_topic: /cameras/{name}/image
+    base_frame: ur_base          # the UR controller's base frame = v1's RTDE poses; NOT ur_base_link (180 deg off)
+    tool_frame: ur_tool0
     max_step_m: 0.03
     workspace_min: [-1.0, -1.0, -0.2]
     workspace_max: [1.0, 1.0, 1.0]

@@ -71,11 +71,11 @@ def main(argv=None) -> int:
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8777)
     ap.add_argument("--models-dir", default=None)
-    ap.add_argument("--n-action-steps", type=int, default=None)
+    ap.add_argument("--n-action-steps", type=int, default=None, help="execute only the first N actions of each chunk before re-observing; 0/None = the whole chunk")
     ap.add_argument("--fake-close-after", type=int, default=10)
     ap.add_argument("--fake-drift", type=float, default=0.002)
     args = ap.parse_args(argv)
-    kw = {"n_action_steps": args.n_action_steps} if args.backend == "smolvla" else {}
+    kw = {"n_action_steps": args.n_action_steps or None} if args.backend == "smolvla" else {}   # 0 = the policy's own chunk
     if args.backend == "fake":
         kw = {"close_after": args.fake_close_after, "drift": args.fake_drift}
     server = Server(args.backend, args.ckpt, args.device, args.models_dir, **kw)

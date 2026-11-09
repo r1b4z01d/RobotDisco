@@ -27,44 +27,64 @@ def lerobot_available() -> bool:
 
 
 class EpisodeWriter:
-    """add_frame(obs images, state, action, task) ... save_episode(); the dataset grows under root/repo_id."""
+    """add_frame(obs images, state, action, task) ... save_episode(); the dataset grows under root/repo_id.
 
-    def __init__(self, root: Path | str, repo_id: str, fps: int = 12, width: int = 960, height: int = 540,
+    Image sizes: `width` x `height` given -> every camera is fitted to it (the rig's tests). Left None -> each camera
+    keeps the size of its first frame, as v1's sets do (scene and side 540x540 squares, the wrist 540x960), so a
+    square camera is never stretched into a landscape box. A dataset that already exists dictates its own shapes.
+    """
+
+    def __init__(self, root: Path | str, repo_id: str, fps: int = 12, width: int | None = None, height: int | None = None,
                  cameras=CAMERA_KEYS, use_videos: bool = True, backend: str = "auto"):
         self.root, self.repo_id, self.fps = Path(root), repo_id, int(fps)
-        self.width, self.height, self.cameras = int(width), int(height), tuple(cameras)
+        self.cameras = tuple(cameras)
+        self.shapes: dict[str, tuple[int, int]] = {}      # camera -> (height, width), fixed once known
+        if width and height:
+            self.shapes = {cam: (int(height), int(width)) for cam in self.cameras}
         self.use_videos = use_videos
         self.backend = backend if backend != "auto" else ("lerobot" if lerobot_available() else "npz")
         self.frames = 0
         self.episodes = 0
         self._buf: list[dict] = []
         self.dataset = None
-        if self.backend == "lerobot":
-            self._open_lerobot()
+        if self.backend == "lerobot" and self.path.exists() and not (self.path / "meta").is_dir():
+            # something else sits at this name (an npz recording from a python without lerobot): LeRobot will not
+            # create over it, so record beside it
+            n = 2
+            while (self.root / f"{self.repo_id}_{n}").exists():
+                n += 1
+            print(f"[recorder] {self.path} exists and is not a LeRobot dataset: recording to {self.repo_id}_{n}", flush=True)
+            self.repo_id = f"{self.repo_id}_{n}"
+        if self.backend == "lerobot" and ((self.path / "meta").is_dir() or len(self.shapes) == len(self.cameras)):
+            self._open_lerobot()       # else created at the first frame, once every camera's size is known
 
     @property
     def path(self) -> Path:
         return self.root / self.repo_id
 
     # ---- lerobot
+    def _features(self) -> dict:
+        return features(0, 0, self.cameras, self.use_videos, shapes=self.shapes)
+
     def _open_lerobot(self):
         from lerobot.datasets.lerobot_dataset import LeRobotDataset
         if (self.path / "meta").is_dir():
             self.dataset = LeRobotDataset(repo_id=self.repo_id, root=str(self.path))
             self.fps = self.dataset.fps
-            img = self.dataset.meta.features.get(f"observation.images.{self.cameras[0]}")
-            if img and len(img["shape"]) == 3:
-                self.height, self.width = int(img["shape"][0]), int(img["shape"][1])
+            for cam in self.cameras:
+                img = self.dataset.meta.features.get(f"observation.images.{cam}")
+                if img and len(img["shape"]) == 3:
+                    self.shapes[cam] = (int(img["shape"][0]), int(img["shape"][1]))
         else:
             self.dataset = LeRobotDataset.create(repo_id=self.repo_id, root=str(self.path), fps=self.fps,
-                                                 features=features(self.width, self.height, self.cameras, self.use_videos),
-                                                 robot_type="ur5e_amazinghand", use_videos=self.use_videos)
+                                                 features=self._features(), robot_type="ur5e_amazinghand", use_videos=self.use_videos)
         self.episodes = int(self.dataset.meta.total_episodes)
 
-    def _fit(self, img):
-        import cv2
-        if img.shape[0] != self.height or img.shape[1] != self.width:
-            img = cv2.resize(img, (self.width, self.height), interpolation=cv2.INTER_AREA)
+    def _fit(self, cam: str, img):
+        h, w = self.shapes.setdefault(cam, (int(img.shape[0]), int(img.shape[1])))     # the first frame fixes an unknown size
+        if img.shape[0] != h or img.shape[1] != w:
+            import cv2
+            img = cv2.resize(img, (w, h), interpolation=cv2.INTER_AREA)
         return np.ascontiguousarray(img, dtype=np.uint8)
 
     def add_frame(self, images: dict, state, action, task: str) -> None:
@@ -76,8 +96,10 @@ class EpisodeWriter:
         for cam in self.cameras:
             if cam not in images:
                 raise KeyError(f"missing camera {cam}")
-            frame[f"observation.images.{cam}"] = self._fit(images[cam])
+            frame[f"observation.images.{cam}"] = self._fit(cam, images[cam])
         if self.backend == "lerobot":
+            if self.dataset is None:
+                self._open_lerobot()
             self.dataset.add_frame(frame)
         else:
             self._buf.append(frame)
@@ -100,8 +122,7 @@ class EpisodeWriter:
             np.savez_compressed(d / f"episode_{ep:06d}.npz", **arrays)
             (d / f"episode_{ep:06d}.json").write_text(json.dumps({"task": self._buf[0]["task"], "frames": len(self._buf),
                                                                    "fps": self.fps, "saved": time.time()}))
-        meta = {"repo_id": self.repo_id, "fps": self.fps, "episodes": ep + 1, "backend": "npz",
-                "features": features(self.width, self.height, self.cameras, self.use_videos)}
+        meta = {"repo_id": self.repo_id, "fps": self.fps, "episodes": ep + 1, "backend": "npz", "features": self._features()}
         (self.path / "meta.json").write_text(json.dumps(meta, indent=1))
         self._buf.clear()
         self.episodes = ep + 1
@@ -118,7 +139,8 @@ class EpisodeWriter:
 
     def discard_episode(self) -> None:
         if self.backend == "lerobot":
-            self.dataset.clear_episode_buffer()
+            if self.dataset is not None:
+                self.dataset.clear_episode_buffer()
         else:
             self._buf.clear()
         self.frames = 0

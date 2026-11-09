@@ -4,11 +4,14 @@
     ros2 run rd_sim export_urdf /tmp/robot_disco.urdf
     ~/isaacsim-venv/bin/python $(ros2 pkg prefix rd_sim)/share/rd_sim/scripts/isaac_scene.py --urdf /tmp/robot_disco.urdf --headless
     ros2 launch rd_sim sim.launch.py            # base command path + scan filters + nav + arm (mock UR mirrored) + vla (fake) + voice + manager
+    ros2 launch rd_sim sim.launch.py vla_backend:=smolvla vla_ckpt:=tigger_1_merged_smolvla_1   # the real policy on the GPU
 
 Not runnable in the Docker rig (no GPU): phase 7.
 """
+import os
+
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
@@ -21,11 +24,27 @@ def inc(pkg, f, **args):
     return IncludeLaunchDescription(PythonLaunchDescriptionSource(share(pkg, 'launch', f)), launch_arguments=list(args.items()))
 
 
+def _vla(context):
+    # fake: the rig's scripted policy under the system python. smolvla: the LeRobot venv's python on the GPU, serving
+    # vla_ckpt (run[@step] under <data>/outputs/train, or a path) with vla_n_action_steps of each chunk per observation
+    backend = LaunchConfiguration('vla_backend').perform(context)
+    real = backend != 'fake'
+    python = '/opt/vla/bin/python' if os.path.exists('/opt/vla/bin/python') else 'python3'   # the venv: the policy, LeRobot recordings
+    return [IncludeLaunchDescription(PythonLaunchDescriptionSource(share('rd_vla', 'launch', 'vla.launch.py')),
+                                     launch_arguments=[('backend', backend), ('ckpt', LaunchConfiguration('vla_ckpt')),
+                                                       ('python', python), ('device', 'cuda' if real else 'cpu'),
+                                                       ('n_action_steps', LaunchConfiguration('vla_n_action_steps')), ('use_sim_time', 'true')],
+                                     condition=IfCondition(LaunchConfiguration('vla')))]
+
+
 def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('manager', default_value='true'),
         DeclareLaunchArgument('arm', default_value='true'),
         DeclareLaunchArgument('vla', default_value='true'),
+        DeclareLaunchArgument('vla_backend', default_value='fake', description='fake | smolvla (the LeRobot venv on the GPU, vla_ckpt loaded at start)'),
+        DeclareLaunchArgument('vla_ckpt', default_value='', description='smolvla: run[@step] under the data dir, e.g. tigger_1_merged_smolvla_1; empty = select per RunPolicy goal'),
+        DeclareLaunchArgument('vla_n_action_steps', default_value='8', description='smolvla: actions executed per observation (v1 drove with 4..8 of the 50-step chunk); 0 = open loop'),
         DeclareLaunchArgument('voice', default_value='true', description='the voice assistant (ears and LLM off: the rules and the landmark tasks) and a silent Say server, so the manager\'s text box and /api/say work'),
         # rsp + twist_mux + collision monitor: the robot's own command path (cmd_vel_nav / web / joy -> mux -> monitor ->
         # /diff_cont/cmd_vel), which the sim's bridge then integrates; no ros2_control, Isaac moves the wheels
@@ -40,9 +59,7 @@ def generate_launch_description():
                                  condition=IfCondition(LaunchConfiguration('arm'))),
         Node(package='rd_sim', executable='arm_mirror', name='arm_mirror', output='screen', parameters=[{'use_sim_time': True}],
              condition=IfCondition(LaunchConfiguration('arm'))),
-        IncludeLaunchDescription(PythonLaunchDescriptionSource(share('rd_vla', 'launch', 'vla.launch.py')),
-                                 launch_arguments=[('backend', 'fake'), ('python', 'python3'), ('device', 'cpu'), ('use_sim_time', 'true')],
-                                 condition=IfCondition(LaunchConfiguration('vla'))),
+        OpaqueFunction(function=_vla),
         Node(package='rd_audio', executable='say_server', name='say_server', output='screen',
              parameters=[{'engine': 'fake', 'player': 'none', 'sink_watchdog': False, 'sink': '', 'use_sim_time': True}],
              condition=IfCondition(LaunchConfiguration('voice'))),

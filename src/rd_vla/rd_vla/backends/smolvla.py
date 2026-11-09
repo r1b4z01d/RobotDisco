@@ -66,7 +66,7 @@ class SmolVLABackend:
                     if hasattr(v, "to"):
                         batch[k] = v.to(self.device)
                 chunk = self.policy.predict_action_chunk(batch)
-                chunk = self.post({"action": chunk})["action"] if self.post is not None else chunk
+                chunk = self.post(chunk) if self.post is not None else chunk   # lerobot 0.4: the unnormalizer takes the action tensor
             n = int(self.n_action_steps or chunk.shape[1])
             for a in chunk[0, :n].cpu().numpy():
                 self.queue.append(a)
