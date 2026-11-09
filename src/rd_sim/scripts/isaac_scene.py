@@ -11,7 +11,7 @@ validates it; the `# UNVERIFIED (6.2):` comments mark what the docs did not sett
   2. builds the world: a ground plane and the active map's occupied cells, one 2.5 m tall box per cell (so the
      simulated lidars see exactly the walls the map has) from rd_nav's maps folder
   3. attaches sensors: two 2D RTX lidars (frames rp_s1_lidar / rp_s2e_lidar, 360 deg, 10 Hz, 0.1..20 m), a Velodyne-like
-     3D RTX lidar (velodyne_frame), an RGB camera on camera_link_optical (1280x720) and three RGB webcams (scene / wrist /
+     3D RTX lidar (velodyne_frame), the RealSense on camera_link_optical (1280x720 colour + camera_info, depth + camera_info, the 848x480 stereo IR pair) and three RGB webcams (scene / wrist /
      side) - the PhysX lidar and isaacsim.sensors.camera are deprecated since 6.0
   4. wires the ROS 2 bridge (isaacsim.ros2.bridge): /clock, odom->base_link TF from the chassis pose, /joint_states
      (wheels + UR), /diff_cont/odom, the RAW scans on /rp_s1_lidar/scan and /rp_s2e_lidar/scan (rd_perception's body
@@ -135,7 +135,7 @@ def main():
     from isaacsim.core.experimental.objects import Cube, GroundPlane
     from isaacsim.core.simulation_manager import SimulationManager
     from isaacsim.sensors.experimental.rtx import Lidar, LidarSensor, RtxCamera
-    from pxr import Gf, Sdf, Usd, UsdGeom, UsdPhysics, UsdShade
+    from pxr import Gf, Sdf, Usd, UsdGeom, UsdPhysics, UsdShade, UsdLux
 
     for ext in ("isaacsim.ros2.bridge", "isaacsim.ros2.nodes", "isaacsim.core.nodes", "isaacsim.sensors.physics.nodes",
                 "isaacsim.robot.wheeled_robots.nodes"):
@@ -224,6 +224,14 @@ def main():
 
     # 2. the ground and the walls from the map
     GroundPlane("/World/GroundPlane")                        # collision plane + rendered mesh
+    # light: a scene without a light renders every RGB camera black (the depth and the lidars do not care); a dome for
+    # ambient light and a sun at an angle for shading, so walls, floor and the robot have edges a visual tracker can use
+    dome = UsdLux.DomeLight.Define(stage, Sdf.Path("/World/DomeLight"))
+    dome.CreateIntensityAttr(1000.0)
+    sun = UsdLux.DistantLight.Define(stage, Sdf.Path("/World/Sun"))
+    sun.CreateIntensityAttr(2500.0)
+    sun.CreateAngleAttr(1.0)
+    UsdGeom.Xformable(sun.GetPrim()).AddRotateXYZOp().Set(Gf.Vec3f(-50.0, 20.0, 0.0))
     if args.world:
         maps_dir = Path(args.maps_dir) if args.maps_dir else Path(__import__("rd_nav.maps_store", fromlist=["default_maps_dir"]).default_maps_dir())
         boxes, height = map_boxes(maps_dir, args.world)
@@ -332,23 +340,78 @@ def main():
         ]})
     # cameras: RtxCamera prims (tick_rate = publish rate) under the frames, each with a render product + ROS2CameraHelper.
     # A USD camera looks down its -Z with +Y up; the ROS optical frames look down +Z with -Y up, hence the 180 deg about X.
+    # The RealSense publishes what realsense2_camera publishes on the robot: colour + its camera_info, the depth
+    # (rendered from the colour camera, so it is the aligned depth) + camera_info, and the stereo IR pair (848x480,
+    # 50 mm baseline, the D435's imagers; the right one sits +50 mm along optical x) for visual SLAM. `fov` is the
+    # horizontal field of view in degrees (D435: 69 colour, 87 IR; webcams about 70), set through the USD aperture.
     cams = []
-    for name, frame, topic, (w, h) in (("realsense", "camera_link_optical", "/camera/camera/color/image_raw", (1280, 720)),
-                                       ("scene", "camera_link_optical", "/cameras/scene/image", (960, 540)),
-                                       ("wrist", "ur_tool0", "/cameras/wrist/image", (960, 540)),
-                                       ("side", "camera_link_optical", "/cameras/side/image", (960, 540))):
+
+    def camera(name, frame, w, h, fov, publishers, offset=(0.0, 0.0, 0.0)):
+        """An RtxCamera under `frame` with one graph: render product + a ROS2CameraHelper (kind rgb | depth) or a
+        ROS2CameraInfoHelper (kind info) per (kind, topic) in `publishers`. One edit builds the whole graph: the
+        node names in CONNECT only resolve for nodes created in the same edit."""
         path = f"{prim_named(frame).GetPath()}/cam_{name}"
         cams.append(RtxCamera(path, tick_rate=15.0))
-        cxf = UsdGeom.Xformable(stage.GetPrimAtPath(path))   # UNVERIFIED (6.2): replacing the xform ops RtxCamera authored
+        prim = stage.GetPrimAtPath(path)
+        cxf = UsdGeom.Xformable(prim)   # UNVERIFIED (6.2): replacing the xform ops RtxCamera authored
         cxf.ClearXformOpOrder()
+        cxf.AddTranslateOp().Set(Gf.Vec3d(*offset))
         cxf.AddRotateXOp().Set(180.0)
-        og.Controller.edit({"graph_path": f"/World/Cam_{name}", "evaluator_name": "execution"}, {
-            keys.CREATE_NODES: [("tick", "omni.graph.action.OnPlaybackTick"), ("context", "isaacsim.ros2.bridge.ROS2Context"),
-                                ("rp", "isaacsim.core.nodes.IsaacCreateRenderProduct"), ("helper", "isaacsim.ros2.bridge.ROS2CameraHelper")],
-            keys.SET_VALUES: [("rp.inputs:cameraPrim", [Sdf.Path(path)]), ("rp.inputs:width", w), ("rp.inputs:height", h),
-                              ("helper.inputs:type", "rgb"), ("helper.inputs:topicName", topic), ("helper.inputs:frameId", frame)],
-            keys.CONNECT: [("tick.outputs:tick", "rp.inputs:execIn"), ("rp.outputs:execOut", "helper.inputs:execIn"),
-                           ("rp.outputs:renderProductPath", "helper.inputs:renderProductPath"), ("context.outputs:context", "helper.inputs:context")]})
+        usd_cam = UsdGeom.Camera(prim)
+        usd_cam.GetFocalLengthAttr().Set(10.0)
+        usd_cam.GetHorizontalApertureAttr().Set(2 * 10.0 * math.tan(math.radians(fov) / 2))
+        usd_cam.GetVerticalApertureAttr().Set(2 * 10.0 * math.tan(math.radians(fov) / 2) * h / w)
+        nodes = [("tick", "omni.graph.action.OnPlaybackTick"), ("context", "isaacsim.ros2.bridge.ROS2Context"),
+                 ("rp", "isaacsim.core.nodes.IsaacCreateRenderProduct")]
+        values = [("rp.inputs:cameraPrim", [Sdf.Path(path)]), ("rp.inputs:width", w), ("rp.inputs:height", h)]
+        connects = [("tick.outputs:tick", "rp.inputs:execIn")]
+        for i, (kind, topic) in enumerate(publishers):
+            node = f"pub{i}"
+            nodes.append((node, "isaacsim.ros2.bridge.ROS2CameraInfoHelper" if kind == "info" else "isaacsim.ros2.bridge.ROS2CameraHelper"))
+            values += [(f"{node}.inputs:topicName", topic), (f"{node}.inputs:frameId", frame)]
+            if kind != "info":
+                values.append((f"{node}.inputs:type", kind))
+            connects += [("rp.outputs:execOut", f"{node}.inputs:execIn"), ("rp.outputs:renderProductPath", f"{node}.inputs:renderProductPath"),
+                         ("context.outputs:context", f"{node}.inputs:context")]
+        og.Controller.edit({"graph_path": f"/World/Cam_{name}", "evaluator_name": "execution"},
+                           {keys.CREATE_NODES: nodes, keys.SET_VALUES: values, keys.CONNECT: connects})
+
+    camera("realsense", "camera_link_optical", 1280, 720, 69.0,
+           [("rgb", "/camera/camera/color/image_raw"), ("info", "/camera/camera/color/camera_info"),
+            ("depth", "/camera/camera/depth/image_rect_raw"), ("info", "/camera/camera/depth/camera_info")])
+    for name, frame, topic in (("scene", "camera_link_optical", "/cameras/scene/image"), ("wrist", "ur_tool0", "/cameras/wrist/image"),
+                               ("side", "camera_link_optical", "/cameras/side/image")):
+        camera(name, frame, 960, 540, 70.0, [("rgb", topic)])
+    # the IR pair: both prims hang under camera_link_optical (the only RealSense frame in the URDF); their ROS frames
+    # camera_infra{1,2}_optical_frame are static TFs from sim.launch.py (the robot's driver publishes its own)
+    for name, offset in (("infra1", (0.0, 0.0, 0.0)), ("infra2", (0.05, 0.0, 0.0))):
+        path = f"{prim_named('camera_link_optical').GetPath()}/cam_{name}"
+        cams.append(RtxCamera(path, tick_rate=15.0))
+        prim = stage.GetPrimAtPath(path)
+        cxf = UsdGeom.Xformable(prim)
+        cxf.ClearXformOpOrder()
+        cxf.AddTranslateOp().Set(Gf.Vec3d(*offset))
+        cxf.AddRotateXOp().Set(180.0)
+        usd_cam = UsdGeom.Camera(prim)
+        usd_cam.GetFocalLengthAttr().Set(10.0)
+        usd_cam.GetHorizontalApertureAttr().Set(2 * 10.0 * math.tan(math.radians(87.0) / 2))
+        usd_cam.GetVerticalApertureAttr().Set(2 * 10.0 * math.tan(math.radians(87.0) / 2) * 480 / 848)
+    og.Controller.edit({"graph_path": "/World/Cam_infra", "evaluator_name": "execution"}, {
+        keys.CREATE_NODES: [("tick", "omni.graph.action.OnPlaybackTick"), ("context", "isaacsim.ros2.bridge.ROS2Context"),
+                            ("rp1", "isaacsim.core.nodes.IsaacCreateRenderProduct"), ("rp2", "isaacsim.core.nodes.IsaacCreateRenderProduct"),
+                            ("img1", "isaacsim.ros2.bridge.ROS2CameraHelper"), ("img2", "isaacsim.ros2.bridge.ROS2CameraHelper"),
+                            ("info", "isaacsim.ros2.bridge.ROS2CameraInfoHelper")],
+        keys.SET_VALUES: [("rp1.inputs:cameraPrim", [Sdf.Path(f"{prim_named('camera_link_optical').GetPath()}/cam_infra1")]), ("rp1.inputs:width", 848), ("rp1.inputs:height", 480),
+                          ("rp2.inputs:cameraPrim", [Sdf.Path(f"{prim_named('camera_link_optical').GetPath()}/cam_infra2")]), ("rp2.inputs:width", 848), ("rp2.inputs:height", 480),
+                          ("img1.inputs:type", "rgb"), ("img1.inputs:topicName", "/camera/camera/infra1/image_rect_raw"), ("img1.inputs:frameId", "camera_infra1_optical_frame"),
+                          ("img2.inputs:type", "rgb"), ("img2.inputs:topicName", "/camera/camera/infra2/image_rect_raw"), ("img2.inputs:frameId", "camera_infra2_optical_frame"),
+                          ("info.inputs:topicName", "/camera/camera/infra1/camera_info"), ("info.inputs:frameId", "camera_infra1_optical_frame"),
+                          ("info.inputs:topicNameRight", "/camera/camera/infra2/camera_info"), ("info.inputs:frameIdRight", "camera_infra2_optical_frame")],
+        keys.CONNECT: [("tick.outputs:tick", "rp1.inputs:execIn"), ("tick.outputs:tick", "rp2.inputs:execIn"),
+                       ("rp1.outputs:execOut", "img1.inputs:execIn"), ("rp1.outputs:renderProductPath", "img1.inputs:renderProductPath"), ("context.outputs:context", "img1.inputs:context"),
+                       ("rp2.outputs:execOut", "img2.inputs:execIn"), ("rp2.outputs:renderProductPath", "img2.inputs:renderProductPath"), ("context.outputs:context", "img2.inputs:context"),
+                       ("rp1.outputs:execOut", "info.inputs:execIn"), ("rp1.outputs:renderProductPath", "info.inputs:renderProductPath"),
+                       ("rp2.outputs:renderProductPath", "info.inputs:renderProductPathRight"), ("context.outputs:context", "info.inputs:context")]})
     # 5. run (the timeline plays, every update renders a frame - the RTX sensors need that, headless or not)
     app_utils.play()
     print(f"Robot Disco in Isaac Sim: ROS 2 bridge up (clock, odom->base_link tf, joint_states, odom, scans, cloud, cameras; "

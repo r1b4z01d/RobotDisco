@@ -30,8 +30,17 @@ the LaserScan to FlatScan converter and the localizer wired scan_filtered -> /fl
 followed). The localizer has two scan inputs: `flatscan` is buffered for the trigger service, while every message on
 `flatscan_localization` starts a localization and publishes /initialpose with zero covariance. Leave that one
 unconnected: remapped onto /flatscan it re-seeded AMCL every 2 sim seconds on a 5 cm grid and defeated the kidnap
-test. nvblox and visual SLAM are untested.
+test. nvblox and visual SLAM were validated against Isaac Sim on 2026-11-09 (below).
 
 Tests: the range correction, the Isaac→ours conversion, the rotation and the configs (ROS-free); a launch test
 of the offset node and the fake detector against a static TF. Hardware only: USB ports, the S1 constant, camera
 rotations, the RealSense profiles on the Orin.
+
+nvblox and cuVSLAM against Isaac Sim (2026-11-09, `rd_sim/scripts/isaac_percep_check.py`): nvblox on the 4.6 names
+(`camera_0/depth/...`, `esdf_mode: "2d"`, `static_mapper.esdf_slice_*`) integrates the D435 depth and publishes the ESDF
+slice at 4 Hz; its zero-crossing cells sit a median 3.9 cm from the lidar returns (79% within 15 cm), and at the lidar
+returns it reports a median distance of 0.0 m (87% within 15 cm). cuVSLAM on the stereo IR pair tracks without a lost
+frame once the cameras have light and `image_jitter_threshold_ms` allows 15 fps (75 ms; the default 34 expects 30 fps):
+7.7 cm and 0.4 deg off the sim's ground truth after a 2.1 m drive. Caveat for the robot: the D435 is mounted 46 deg up for
+faces, so its depth sees walls only above about 0.6 m and never the floor; at that pitch nvblox adds little to a
+floor-level costmap (ledger row 24).

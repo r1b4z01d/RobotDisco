@@ -15,6 +15,7 @@ ros2 launch rd_sim sim.launch.py vla_backend:=smolvla vla_ckpt:=tigger_1_merged_
 before blaming a lidar for a phantom obstacle: 2026-11-08 both lidars matched the map to a median of 5 mm (90% of beams within
 5 cm of the true range) while AMCL, with the sim's perfect odometry, had drifted 0.33 m after a 20 m corridor drive.
 `scripts/grid_kidnap_test.py` is the grid localizer's recovery test.
+`scripts/isaac_percep_check.py` drives a goal and scores cuVSLAM against the sim's odometry and nvblox's ESDF slice against the lidar.
 
 Start the two together: the stack seeds AMCL with the spawn pose (the Charger landmark), so a sim whose robot has
 already driven somewhere needs a restart first, or AMCL believes the dock and Nav2 sits boxed in by walls that are
@@ -46,3 +47,10 @@ selects (`physx`), and a massless root link made every child body its own articu
 world, so `export_urdf` gives the root link a token mass. `arm_mirror` sends the mock UR's commanded joints to the simulated arm. Tests
 cover what runs without Isaac Sim: the URDF export and the map-to-walls conversion. Replaces v1's `Scripts/sim_robot.py`
 and the MuJoCo cell.
+
+The sim's RealSense publishes what realsense2_camera publishes on the robot: `/camera/camera/color/image_raw` + `camera_info`
+(1280x720, 69 deg), `/camera/camera/depth/image_rect_raw` + `camera_info` (32FC1 metres, rendered from the colour camera, so
+it is the aligned depth) and the stereo IR pair `/camera/camera/infra{1,2}/image_rect_raw` + `camera_info` (848x480, 87 deg,
+50 mm baseline, frames `camera_infra{1,2}_optical_frame` from static TFs in sim.launch.py). The scene has a dome light and a
+sun: without a light every RGB camera rendered black (2026-11-09), while depth and lidars did not care. rd_perception's
+Isaac launch (`nvblox:=true visual_slam:=true use_sim_time:=true`) runs against it unchanged.

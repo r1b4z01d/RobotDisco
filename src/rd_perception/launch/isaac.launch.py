@@ -72,19 +72,24 @@ def generate_launch_description():
                            name='visual_slam',
                            parameters=[{'enable_rectified_pose': True, 'rectified_images': True, 'enable_imu_fusion': False,
                                         'num_cameras': 2, 'base_frame': 'base_link', 'enable_localization_n_mapping': False,
-                                        'publish_map_to_odom_tf': False, 'publish_odom_to_base_tf': False}],
+                                        'publish_map_to_odom_tf': False, 'publish_odom_to_base_tf': False,
+                                        'image_jitter_threshold_ms': 75.0,   # the IR pair runs at 15 fps (66.7 ms); the default 34 ms expects 30 fps
+                                        'use_sim_time': ParameterValue(LaunchConfiguration('use_sim_time'), value_type=bool)}],
                            remappings=[('visual_slam/image_0', '/camera/camera/infra1/image_rect_raw'),
                                        ('visual_slam/camera_info_0', '/camera/camera/infra1/camera_info'),
                                        ('visual_slam/image_1', '/camera/camera/infra2/image_rect_raw'),
                                        ('visual_slam/camera_info_1', '/camera/camera/infra2/camera_info')],
                            condition=IfCondition(vslam)),
         ])
+    # nvblox 4.6 subscribes camera_<i>/{depth,color}/{image,camera_info} for num_cameras cameras; the depth stream as the
+    # driver publishes it (848x480 in the depth optical frame), no alignment to colour needed (use_color is off)
     nvblox_node = Node(package='nvblox_ros', executable='nvblox_node', name='nvblox_node', output='screen',
-                       parameters=[os.path.join(share, 'config', 'nvblox.yaml')],
-                       remappings=[('depth/image', '/camera/camera/aligned_depth_to_color/image_raw'),
-                                   ('depth/camera_info', '/camera/camera/aligned_depth_to_color/camera_info'),
-                                   ('color/image', '/camera/camera/color/image_raw'),
-                                   ('color/camera_info', '/camera/camera/color/camera_info')],
+                       parameters=[os.path.join(share, 'config', 'nvblox.yaml'),
+                                   {'use_sim_time': ParameterValue(LaunchConfiguration('use_sim_time'), value_type=bool)}],
+                       remappings=[('camera_0/depth/image', '/camera/camera/depth/image_rect_raw'),
+                                   ('camera_0/depth/camera_info', '/camera/camera/depth/camera_info'),
+                                   ('camera_0/color/image', '/camera/camera/color/image_raw'),
+                                   ('camera_0/color/camera_info', '/camera/camera/color/camera_info')],
                        condition=IfCondition(nvblox))
     adapter = Node(package='rd_perception', executable='tag_adapter', name='tag_adapter', output='screen',
                    parameters=[{'source': 'isaac', 'in_topic': '/tag_detections', 'out_topic': '/tags/detections'}],

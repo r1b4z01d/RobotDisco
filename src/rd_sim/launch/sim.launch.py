@@ -57,6 +57,12 @@ def generate_launch_description():
         IncludeLaunchDescription(PythonLaunchDescriptionSource(share('rd_arm', 'launch', 'arm.launch.py')),
                                  launch_arguments=[('sim_mode', 'true'), ('use_sim_time', 'true'), ('cumotion', 'true')],   # the GPU box has the Isaac debs
                                  condition=IfCondition(LaunchConfiguration('arm'))),
+        # the RealSense IR frames: on the robot realsense2_camera publishes them; the URDF has only camera_link(_optical), so the
+        # sim gives the two IR imagers (the right one 50 mm along optical x) their frames for the visual SLAM camera_infos
+        Node(package='tf2_ros', executable='static_transform_publisher', name='infra1_tf', parameters=[{'use_sim_time': True}],
+             arguments=['--frame-id', 'camera_link_optical', '--child-frame-id', 'camera_infra1_optical_frame']),
+        Node(package='tf2_ros', executable='static_transform_publisher', name='infra2_tf', parameters=[{'use_sim_time': True}],
+             arguments=['--x', '0.05', '--frame-id', 'camera_link_optical', '--child-frame-id', 'camera_infra2_optical_frame']),
         Node(package='rd_sim', executable='arm_mirror', name='arm_mirror', output='screen', parameters=[{'use_sim_time': True}],
              condition=IfCondition(LaunchConfiguration('arm'))),
         OpaqueFunction(function=_vla),
