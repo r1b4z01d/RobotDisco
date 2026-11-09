@@ -168,7 +168,8 @@ phase_isaacros() {
   cat <<NOTE
 Validate rd_perception's Isaac launch against the fake cameras (no robot needed):
   ros2 run rd_perception fake_cameras &  ros2 launch rd_perception isaac.launch.py apriltag:=true
-cuMotion has no 4.6 binary: it is a source build (isaac_ros_cumotion), done when MoveIt-on-cuMotion is validated here.
+cuMotion (ros-jazzy-isaac-ros-cumotion + -moveit, in isaac-packages.txt) is validated here on the mock arm:
+  ros2 launch rd_arm arm.launch.py sim_mode:=true cumotion:=true   then   ros2 action send_goal -f /wave rd_interfaces/action/Wave "{}"
 NOTE
 }
 

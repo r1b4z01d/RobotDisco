@@ -255,7 +255,7 @@ phase_isaac() {
   sudo isaac-ros init baremetal --yes 2>&1 | tail -5
   apt_install $(pkglist "$HERE/isaac-packages.txt") python3-opencv ros-jazzy-cv-bridge || warn "some Isaac packages did not install: check isaac-packages.txt"
   dpkg -l | grep -E 'ros-jazzy-isaac-ros' | awk '{print "  " $2, $3}'
-  # cuMotion (MoveIt planner + the streamer's IK) has no 4.6 binary: source build of isaac_ros_cumotion into $ISAAC_ROS_WS, phase 8
+  # cuMotion ships as 4.6 debs (in isaac-packages.txt, verified 2026-11-09); rd_arm's arm.launch.py takes cumotion:=true once the arm is validated on the Orin (phase 8)
 }
 
 phase_groups() {

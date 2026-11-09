@@ -36,7 +36,8 @@ def generate_launch_description():
         inc('rd_nav', 'nav.launch.py', use_sim_time='true', set_initial_pose='true', initial_x='0.6957', initial_y='0.9208', initial_yaw='0.0548',
             odom_alpha='0.05'),   # the sim's odometry is exact: AMCL's default 0.2 motion noise random-walks it in the corridor
         IncludeLaunchDescription(PythonLaunchDescriptionSource(share('rd_arm', 'launch', 'arm.launch.py')),
-                                 launch_arguments=[('sim_mode', 'true'), ('use_sim_time', 'true')], condition=IfCondition(LaunchConfiguration('arm'))),
+                                 launch_arguments=[('sim_mode', 'true'), ('use_sim_time', 'true'), ('cumotion', 'true')],   # the GPU box has the Isaac debs
+                                 condition=IfCondition(LaunchConfiguration('arm'))),
         Node(package='rd_sim', executable='arm_mirror', name='arm_mirror', output='screen', parameters=[{'use_sim_time': True}],
              condition=IfCondition(LaunchConfiguration('arm'))),
         IncludeLaunchDescription(PythonLaunchDescriptionSource(share('rd_vla', 'launch', 'vla.launch.py')),

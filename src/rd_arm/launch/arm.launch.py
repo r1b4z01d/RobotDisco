@@ -91,7 +91,7 @@ def generate_launch_description():
     stream = Node(package='rd_arm', executable='stream', name='arm_stream', output='screen',
                   parameters=[{'use_sim_time': use_sim_time}], condition=IfCondition(LaunchConfiguration('stream')))
     moveit = IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(share, 'launch', 'moveit.launch.py')),
-                                      launch_arguments=[('sim_mode', sim_mode), ('use_sim_time', use_sim_time)],
+                                      launch_arguments=[('sim_mode', sim_mode), ('use_sim_time', use_sim_time), ('cumotion', LaunchConfiguration('cumotion'))],
                                       condition=IfCondition(LaunchConfiguration('moveit')))
 
     return LaunchDescription([
@@ -100,6 +100,7 @@ def generate_launch_description():
         DeclareLaunchArgument('robot_ip', default_value=str(config.get('arm.ip'))),
         DeclareLaunchArgument('hand', default_value='true'),
         DeclareLaunchArgument('moveit', default_value='true'),
+        DeclareLaunchArgument('cumotion', default_value='false', description='MoveIt plans with Isaac ROS cuMotion (GPU box, Orin)'),
         DeclareLaunchArgument('stream', default_value='true'),
         fake_dashboard, fake_hand, description,
         TimerAction(period=1.0, actions=[cm]),

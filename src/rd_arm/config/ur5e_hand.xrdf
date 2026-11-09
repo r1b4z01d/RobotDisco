@@ -1,0 +1,132 @@
+# cuMotion robot description (XRDF) for Robot Disco's arm: the UR5e as rd_description names it (every link and joint
+# carries the `ur_` prefix) with the AmazingHand on ur_tool0. Derived from Isaac ROS 4.6's shipped
+# isaac_ros_cumotion_robot_description/xrdf/ur5e.xrdf (spheres and limits unchanged, names prefixed), plus the hand.
+#
+# No set_base_frame on purpose. cuMotion takes the collision objects MoveIt hands it as already expressed in its own
+# base frame (it never transforms them: the planner node has no TF listener, and its world spheres come out in the
+# base frame with the scene's numbers). MoveIt keeps the scene in the URDF root, base_link, so cuMotion's base has
+# to be base_link too; with set_base_frame: ur_base_link the chassis keepout box (config/keepout.yaml) landed 0.52 m
+# back and 90 deg turned, over the arm column, and every plan failed INVALID_INITIAL_CSPACE_POSITION. The chassis
+# and lidar links sit between base_link and ur_base_link over fixed joints only and carry no spheres, so cuMotion
+# still plans the arm alone and sees the body only as that keepout box, exactly like OMPL does. The hand's spheres
+# are a hand-sized approximation (its visual meshes span x -0.03..0.08, y -0.06..0.05, z 0..0.16 m in ur_tool0).
+#
+# Spec: https://nvidia-isaac-ros.github.io/v/release-4.6/concepts/manipulation/xrdf.html
+format: xrdf
+format_version: 1.0
+
+# the robot's recorded VLA home (config/poses.yaml vla_home), where policies start and the wave returns to
+default_joint_positions:
+  ur_shoulder_pan_joint: 4.010228
+  ur_shoulder_lift_joint: -1.322734
+  ur_elbow_joint: -0.822906
+  ur_wrist_1_joint: -1.143980
+  ur_wrist_2_joint: 2.198752
+  ur_wrist_3_joint: -0.787094
+
+cspace:
+  joint_names:
+    - "ur_shoulder_pan_joint"
+    - "ur_shoulder_lift_joint"
+    - "ur_elbow_joint"
+    - "ur_wrist_1_joint"
+    - "ur_wrist_2_joint"
+    - "ur_wrist_3_joint"
+  acceleration_limits: [12.0, 12.0, 12.0, 12.0, 12.0, 12.0]
+  jerk_limits: [500.0, 500.0, 500.0, 500.0, 500.0, 500.0]
+
+tool_frames: ["ur_tool0"]
+
+collision:
+  geometry: "ur5e_hand_collision_spheres"
+  buffer_distance:
+    ur_shoulder_link: 0.01
+    ur_upper_arm_link: 0.01
+    ur_forearm_link: 0.01
+    ur_wrist_1_link: 0.01
+    ur_wrist_2_link: 0.01
+    ur_wrist_3_link: 0.01
+    amazing_hand: 0.02
+
+self_collision:
+  geometry: "ur5e_hand_collision_spheres"
+  buffer_distance:
+    amazing_hand: 0.02
+  ignore:
+    ur_upper_arm_link: ["ur_forearm_link", "ur_shoulder_link"]
+    ur_forearm_link: ["ur_wrist_1_link", "ur_wrist_2_link", "ur_wrist_3_link"]
+    ur_wrist_1_link: ["ur_wrist_2_link", "ur_wrist_3_link", "amazing_hand"]
+    ur_wrist_2_link: ["ur_wrist_3_link", "amazing_hand"]
+    ur_wrist_3_link: ["amazing_hand"]
+
+geometry:
+  ur5e_hand_collision_spheres:
+    spheres:
+      ur_shoulder_link:
+        - center: [0.0, 0.0, 0.0]
+          radius: 0.1
+      ur_upper_arm_link:
+        - center: [-0.416, -0.0, 0.143]
+          radius: 0.078
+        - center: [-0.015, 0.0, 0.134]
+          radius: 0.077
+        - center: [-0.14, 0.0, 0.138]
+          radius: 0.062
+        - center: [-0.285, -0.001, 0.139]
+          radius: 0.061
+        - center: [-0.376, 0.001, 0.138]
+          radius: 0.077
+        - center: [-0.222, 0.001, 0.139]
+          radius: 0.061
+        - center: [-0.055, 0.008, 0.14]
+          radius: 0.07
+        - center: [-0.001, -0.002, 0.143]
+          radius: 0.08
+      ur_forearm_link:
+        - center: [-0.01, 0.002, 0.031]
+          radius: 0.072
+        - center: [-0.387, 0.0, 0.014]
+          radius: 0.057
+        - center: [-0.121, -0.0, 0.006]
+          radius: 0.057
+        - center: [-0.206, 0.001, 0.007]
+          radius: 0.057
+        - center: [-0.312, -0.001, 0.006]
+          radius: 0.056
+        - center: [-0.057, 0.003, 0.008]
+          radius: 0.065
+        - center: [-0.266, 0.0, 0.006]
+          radius: 0.057
+        - center: [-0.397, -0.001, -0.018]
+          radius: 0.052
+        - center: [-0.164, -0.0, 0.007]
+          radius: 0.057
+      ur_wrist_1_link:
+        - center: [-0.0, 0.0, -0.009]
+          radius: 0.047
+        - center: [-0.0, 0.0, -0.052]
+          radius: 0.047
+        - center: [-0.002, 0.027, -0.001]
+          radius: 0.045
+        - center: [0.001, -0.01, 0.0]
+          radius: 0.046
+      ur_wrist_2_link:
+        - center: [0.0, -0.01, -0.001]
+          radius: 0.047
+        - center: [0.0, 0.008, -0.001]
+          radius: 0.047
+        - center: [0.001, -0.001, -0.036]
+          radius: 0.047
+        - center: [0.001, -0.03, -0.0]
+          radius: 0.047
+      ur_wrist_3_link:
+        - center: [0.001, 0.001, -0.029]
+          radius: 0.043
+      # the AmazingHand on ur_tool0 (the joint between them is identity): palm, servo block, fingers
+      amazing_hand:
+        - center: [0.02, 0.0, 0.03]
+          radius: 0.06
+        - center: [0.02, 0.0, 0.08]
+          radius: 0.06
+        - center: [0.03, 0.0, 0.13]
+          radius: 0.05

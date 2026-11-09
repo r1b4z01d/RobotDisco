@@ -95,6 +95,13 @@ class MoveItClient:
 
     # ---- execution
     def execute(self, jt: JointTrajectory, cancelled=lambda: False, progress=lambda f: None) -> tuple[bool, str]:
+        if jt.points:
+            # The controller (JTC, allow_nonzero_velocity_at_trajectory_end false) rejects a trajectory that does not
+            # end at rest. cuMotion's last interpolated sample keeps a residual 0.002..0.02 rad/s where MoveIt's time
+            # parameterization ends OMPL's at exactly zero; the end of a motion is a rest point for every planner.
+            last = jt.points[-1]
+            last.velocities = [0.0] * len(last.velocities)
+            last.accelerations = [0.0] * len(last.accelerations)
         goal = FollowJointTrajectory.Goal(trajectory=jt)
         send = _wait(self.jtc.send_goal_async(goal, feedback_callback=lambda fb: progress(fb)), lambda: not cancelled(), 10.0)
         if send is None or not send.accepted:
