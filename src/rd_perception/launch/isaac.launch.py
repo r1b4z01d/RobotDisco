@@ -66,8 +66,7 @@ def generate_launch_description():
                            name='occupancy_grid_localizer',
                            parameters=[{**map_params, 'loc_result_frame': 'map', 'map_yaml_path': map_yaml,
                                         'use_sim_time': ParameterValue(LaunchConfiguration('use_sim_time'), value_type=bool)}],
-                           remappings=[('flatscan_localization', '/flatscan'),
-                                       ('localization_result', '/initialpose')],
+                           remappings=[('localization_result', '/initialpose')],   # NOT flatscan_localization: every message on that topic triggers a localization
                            condition=IfCondition(grid)),
             ComposableNode(package='isaac_ros_visual_slam', plugin='nvidia::isaac_ros::visual_slam::VisualSlamNode',
                            name='visual_slam',
