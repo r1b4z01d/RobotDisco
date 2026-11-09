@@ -2,6 +2,7 @@
 
     ros2 launch rd_nav nav.launch.py [use_sim_time:=true] [localization:=false]
                                      [set_initial_pose:=true initial_x:=.. initial_y:=.. initial_yaw:=..]   # the sim's spawn pose for AMCL
+                                     [odom_alpha:=0.05]                                                      # the sim's exact odometry (localization.launch.py)
 """
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
@@ -22,10 +23,11 @@ def generate_launch_description():
         DeclareLaunchArgument('initial_x', default_value='0.0'),
         DeclareLaunchArgument('initial_y', default_value='0.0'),
         DeclareLaunchArgument('initial_yaw', default_value='0.0'),
+        DeclareLaunchArgument('odom_alpha', default_value=''),
         IncludeLaunchDescription(PythonLaunchDescriptionSource(share('rd_nav', 'launch', 'localization.launch.py')),
                                  launch_arguments=[('use_sim_time', use_sim_time), ('set_initial_pose', LaunchConfiguration('set_initial_pose')),
                                                    ('initial_x', LaunchConfiguration('initial_x')), ('initial_y', LaunchConfiguration('initial_y')),
-                                                   ('initial_yaw', LaunchConfiguration('initial_yaw'))],
+                                                   ('initial_yaw', LaunchConfiguration('initial_yaw')), ('odom_alpha', LaunchConfiguration('odom_alpha'))],
                                  condition=IfCondition(LaunchConfiguration('localization'))),
         IncludeLaunchDescription(PythonLaunchDescriptionSource(share('rd_nav', 'launch', 'navigation.launch.py')),
                                  launch_arguments=[('use_sim_time', use_sim_time),

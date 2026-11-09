@@ -2,23 +2,36 @@
 
     ros2 launch rd_nav localization.launch.py [map:=/path/to/map.yaml] [use_sim_time:=true]
                                                [set_initial_pose:=true initial_x:=0.7 initial_y:=0.9 initial_yaw:=0.0]
+                                               [odom_alpha:=0.05]     # the sim: its odometry is exact (see below)
 
 On the robot the Isaac occupancy-grid localizer (rd_perception, grid_localizer:=true there) gives AMCL its
 first pose; the tag corrector and the manager's pose tool are the other two sources of /initialpose. The sim
 (rd_sim) passes the spawn pose as AMCL's initial pose instead: Nav2's costmaps give map->base_footprint 60 s to
 appear at bringup, and nothing else sets it there.
+
+odom_alpha overrides AMCL's five motion-noise parameters (alpha1..5, 0.2 in nav2.yaml, the real robot's wheel slip).
+The sim's odometry is exact, and in a straight corridor, where the scans do not constrain the position along or across
+it, that noise random-walks the estimate: 18 m of back-and-forth driving left AMCL 28 cm off on average and one run
+67 cm off, against 2 cm with 0.05 (the GPU box, 2026-11-08; rd_sim/scripts/sim_truth_check.py measures it). Empty
+(the default) keeps nav2.yaml's values; only the sim launch sets it.
 """
 import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, SetEnvironmentVariable
+from launch.actions import DeclareLaunchArgument, OpaqueFunction, SetEnvironmentVariable
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from nav2_common.launch import RewrittenYaml
 
 from rd_nav.maps_store import MapsStore
+
+
+def odom_alpha_params(context):
+    """[{'alpha1': a, ... 'alpha5': a}] when the odom_alpha argument is set, else []."""
+    value = LaunchConfiguration('odom_alpha').perform(context).strip()
+    return [{f'alpha{i}': float(value) for i in range(1, 6)}] if value else []
 
 
 def generate_launch_description():
@@ -46,11 +59,13 @@ def generate_launch_description():
         DeclareLaunchArgument('initial_x', default_value='0.0'),
         DeclareLaunchArgument('initial_y', default_value='0.0'),
         DeclareLaunchArgument('initial_yaw', default_value='0.0'),
+        DeclareLaunchArgument('odom_alpha', default_value='', description="AMCL motion noise alpha1..5; empty keeps nav2.yaml's"),
         # nav2.yaml has no use_sim_time keys for the rewrite to hit: passed explicitly (see navigation.launch.py)
         Node(package='nav2_map_server', executable='map_server', name='map_server', output='screen',
              parameters=[params, {'use_sim_time': use_sim_time}], arguments=quiet),
-        Node(package='nav2_amcl', executable='amcl', name='amcl', output='screen',
-             parameters=[params, {'use_sim_time': use_sim_time}, initial], arguments=quiet),
+        OpaqueFunction(function=lambda context: [
+            Node(package='nav2_amcl', executable='amcl', name='amcl', output='screen', arguments=quiet,
+                 parameters=[params, {'use_sim_time': use_sim_time}, initial, *odom_alpha_params(context)])]),
         Node(package='nav2_lifecycle_manager', executable='lifecycle_manager', name='lifecycle_manager_localization',
              output='screen', arguments=quiet,
              parameters=[{'use_sim_time': use_sim_time, 'autostart': LaunchConfiguration('autostart'),

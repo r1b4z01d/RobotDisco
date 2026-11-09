@@ -79,10 +79,14 @@ Then `http://4090TI.local:8092/live`. Start the sim before the stack every time:
 dock, so a robot that already drove somewhere needs a fresh sim first. Detached (survives an ssh drop):
 
 ```
-(setsid nohup timeout 3000 ~/isaacsim-venv/bin/python src/rd_sim/scripts/isaac_scene.py --urdf /tmp/robot_disco.urdf --headless > ~/isaac.log 2>&1 < /dev/null & echo $! > ~/isaac.pid)
+(setsid nohup timeout 14400 ~/isaacsim-venv/bin/python src/rd_sim/scripts/isaac_scene.py --urdf /tmp/robot_disco.urdf --headless > ~/isaac.log 2>&1 < /dev/null & echo $! > ~/isaac.pid)
 (setsid nohup ros2 launch rd_sim sim.launch.py > ~/sim-stack.log 2>&1 < /dev/null & echo $! > ~/sim-stack.pid)
 kill -INT $(cat ~/sim-stack.pid); kill -INT -- -$(cat ~/isaac.pid)     # stop: the stack by its launch pid, the sim by its group
 ```
+
+The `timeout 14400` is the sim's lifetime in seconds (4 h): the sim exits by itself when it runs out. A 3000 s limit ended a session
+after 50 minutes on 2026-11-09, and everything read afterwards (a robot that no longer answered the drive commands) was a
+dying sim, not a robot problem.
 
 Stop the stack by signalling the `ros2 launch` process only, never its whole process group and never with
 `-9`: a group signal kills the Nav2 nodes before the launch knows it is shutting down, so it respawns them
