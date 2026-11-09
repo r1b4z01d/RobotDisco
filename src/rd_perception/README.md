@@ -14,7 +14,7 @@ ros2 launch rd_perception perception.launch.py sim_mode:=true       # rig: no dr
 | `/rp_s2e_lidar/scan_filtered` | S2E driver (UDP) → filter |
 | `/velodyne_points`, `/velodyne/scan` | velodyne driver + transform + laserscan |
 | `/camera/camera/color/image_raw`, `.../depth/color/points`, `.../infra*` | realsense2_camera (1280x720 @ 15 colour, 848x480 depth, IR only with `visual_slam`) |
-| `/cameras/{scene,wrist,side}/image_raw`, `/image` (rotated upright) | usb_cam by USB port path + `image_rotate`; replaces v1's multicast camera service |
+| `/cameras/{scene,wrist,side}/image_raw`, `/image` (rotated upright, scene and side cut to v1's 0.40 / 0.30 squares) | usb_cam by USB port path + `image_rotate` (robot.yaml `rotate`, `square`); replaces v1's multicast camera service, whose square crop the policies were trained on |
 | `/tags/detections` (`rd_interfaces/TagDetectionArray`) | `tag_adapter` from Isaac's `/tag_detections`, or `fake_tags` in the rig |
 
 `isaac.launch.py` holds the Isaac ROS 4.6 pieces (image rectify + AprilTag, occupancy-grid localizer, nvblox,

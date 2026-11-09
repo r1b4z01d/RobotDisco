@@ -6,7 +6,7 @@ from types import SimpleNamespace as NS
 import numpy as np
 import yaml
 
-from rd_perception.image_rotate import rotate
+from rd_perception.image_rotate import rotate, square_crop
 from rd_perception.scan_range_offset import apply_offset
 from rd_perception.tag_adapter import convert
 
@@ -44,6 +44,21 @@ def test_rotate():
     assert (np.frombuffer(data, np.uint8).reshape(h, w, 3)[0, 0] == a[1, 2]).all()
     data, h, w = rotate(a.tobytes(), 2, 3, 3, 0)
     assert data == a.tobytes()
+
+
+def test_square_crop():
+    a = np.arange(5 * 3 * 3, dtype=np.uint8).reshape(5, 3, 3)      # portrait: 5 rows, 3 cols (the scene camera after 270 deg)
+    data, h, w = square_crop(a.tobytes(), 5, 3, 3, 0.0)
+    assert (h, w) == (3, 3) and (np.frombuffer(data, np.uint8).reshape(3, 3, 3) == a[0:3]).all()      # 0 = the top
+    data, h, w = square_crop(a.tobytes(), 5, 3, 3, 1.0)
+    assert (np.frombuffer(data, np.uint8).reshape(3, 3, 3) == a[2:5]).all()                           # 1 = the bottom
+    data, h, w = square_crop(a.tobytes(), 5, 3, 3, 0.5)
+    assert (np.frombuffer(data, np.uint8).reshape(3, 3, 3) == a[1:4]).all()                           # the middle
+    b = np.ascontiguousarray(a.transpose(1, 0, 2))                                                    # landscape: the cut slides along the width
+    data, h, w = square_crop(b.tobytes(), 3, 5, 3, 1.0)
+    assert (h, w) == (3, 3) and (np.frombuffer(data, np.uint8).reshape(3, 3, 3) == b[:, 2:5]).all()
+    data, h, w = square_crop(a[:3].tobytes(), 3, 3, 3, 0.4)                                           # already square: untouched
+    assert data == a[:3].tobytes()
 
 
 def test_filter_configs_are_laser_filters_chains():

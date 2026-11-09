@@ -85,9 +85,12 @@ sensors:
     width: 1280
     height: 720
     fps: 30
-    scene: {port: "4.2", rotate: 270}     # bookshelf straight on, arm entering top-right (a USB-A jack)
-    wrist: {port: "1.1", rotate: 0}       # eye-in-hand, fingers at the top (the VIA dock on USB-C)
-    side:  {port: "2.4", rotate: 90}      # close shelf view with the window at the right (hub on the other USB-C, port 4)
+    # square: the cut of the upright (rotated) frame the policies were trained on, as a fraction along its long axis
+    # (v1's SCENE_SQUARE / SIDE_SQUARE: scene keeps the shelf and the arm's working volume, side keeps Tigger and the
+    # upper arm; the wrist is landscape and stays whole). Datasets and checkpoints must agree on these.
+    scene: {port: "4.2", rotate: 270, square: 0.40}     # bookshelf straight on, arm entering top-right (a USB-A jack)
+    wrist: {port: "1.1", rotate: 0}                     # eye-in-hand, fingers at the top (the VIA dock on USB-C)
+    side:  {port: "2.4", rotate: 90, square: 0.30}      # close shelf view with the window at the right (hub on the other USB-C, port 4)
 
 audio:
   sink: alsa_output.usb-C-Media_Electronics_Inc._USB_Audio_Device-00.analog-stereo

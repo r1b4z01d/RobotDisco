@@ -4,7 +4,8 @@ every consumer (recorder, manager pages, face) subscribes.
 
     ros2 launch rd_perception cameras.launch.py [cameras:=scene,wrist,side]
 
-Topics: /cameras/<name>/image_raw (rgb8, rotated upright per the mount), /cameras/<name>/image_raw/compressed,
+Topics: /cameras/<name>/image_raw (rgb8), /cameras/<name>/image (rotated upright per the mount and, where robot.yaml
+        gives `square`, cut to v1's square: what the recorder and the policies see), /cameras/<name>/image_raw/compressed,
         /cameras/<name>/camera_info
 """
 from launch import LaunchDescription
@@ -31,9 +32,10 @@ def _nodes(context):
                          'camera_name': name, 'frame_id': f'{name}_camera', 'io_method': 'mmap'}],
             arguments=['--ros-args', '--log-level', 'WARN']))
         rot = int(c.get('rotate', 0))
-        if rot:
+        square = c.get('square')      # fraction along the upright frame's long axis, or absent = the whole frame
+        if rot or square is not None:
             out.append(Node(package='rd_perception', executable='image_rotate', name=f'{name}_rotate',
-                            namespace=f'cameras/{name}', parameters=[{'degrees': rot}],
+                            namespace=f'cameras/{name}', parameters=[{'degrees': rot, 'square': float(square) if square is not None else -1.0}],
                             remappings=[('in', 'image_raw'), ('out', 'image')]))
     return out
 
