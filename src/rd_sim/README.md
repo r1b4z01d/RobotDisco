@@ -10,6 +10,11 @@ ros2 run rd_sim export_urdf /tmp/robot_disco.urdf                       # the fl
 ros2 launch rd_sim sim.launch.py                                        # base command path + filters + nav + arm + vla (fake) + manager
 ```
 
+`scripts/sim_truth_check.py` compares AMCL and both lidars with the sim's ground truth (the sim's odometry on the spawn pose). Use it
+before blaming a lidar for a phantom obstacle: 2026-11-08 both lidars matched the map to a median of 5 mm (90% of beams within
+5 cm of the true range) while AMCL, with the sim's perfect odometry, had drifted 0.33 m after a 20 m corridor drive.
+`scripts/grid_kidnap_test.py` is the grid localizer's recovery test.
+
 Start the two together: the stack seeds AMCL with the spawn pose (the Charger landmark), so a sim whose robot has
 already driven somewhere needs a restart first, or AMCL believes the dock and Nav2 sits boxed in by walls that are
 not where the map has them. While a sim runs, `colcon test` must use another `ROS_DOMAIN_ID`: the sim's /clock,
