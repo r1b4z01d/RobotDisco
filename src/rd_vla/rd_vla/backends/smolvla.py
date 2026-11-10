@@ -1,6 +1,11 @@
 """SmolVLA (LeRobot) backend: the checkpoint's policy + its pre/post processors, one observation in, an
 action chunk out, served one action per step with the chunk refilled on demand (v1 infer_server's scheduler,
-without the prefetch thread: Isaac's Orin runs it in ~0.3 s a chunk at 12 Hz). Imports lerobot lazily.
+WITHOUT its prefetch thread). Imports lerobot lazily.
+
+Timing: a chunk takes about 0.14 s on the 4090 and 0.73 s on the robot's AGX Orin (JetPack 7.2.1, torch 2.10 cu130,
+MAXN, measured 2026-11-10; v1 on JetPack 6 measured 0.875 s). At 12 Hz that is nine steps, and the refill is
+synchronous: on the Orin the loop pauses about 0.65 s at every chunk boundary. v1's robot unit ran
+`--n-action-steps 24 --prefetch` for exactly this; the prefetch (and RTC) are not ported yet.
 
 Reactivity: `n_action_steps` executes only the first N of each chunk before re-observing (closed loop
 without retraining); the default is the policy's own chunk (fully open loop, as v1 shipped).

@@ -5,10 +5,18 @@ filesystem on the 512 GB NVMe) into the Robot Disco robot PC: user `rd`, hostnam
 `192.168.11.80` on the isolated robot subnet, ROS 2 Jazzy + Isaac ROS 4.6 as host packages, this repo
 built at `~/RobotDisco`, everything under supervisor.
 
-**Status 2026-11-06:** skeleton. `provision.sh` runs `preflight`, `base`, `ros`, `groups`, `udev`, `sysctl`
-and `workspace`; the other phases print what they must do and skip. They get written on the freshly flashed
-robot in phase 1 of the plan, ported from v1's `rd_ws/provision/` (which also keeps the USB port photos,
-the xpad rebuild and the two-OpenCV patch that 5.0 no longer needs).
+**Status 2026-11-10:** ran on the reflashed robot, phase by phase: `jetson` (with `UART1_PIO=0`), `base`, `isaac`,
+`ros`, `isaacpkgs`, `groups`, `udev`, `sysctl`, `data`, `workspace`, `venvs`, `audio`, `llm`, `display`. Not run:
+`services` (it installs twelve supervisor units that all start by themselves; it waits for the hardware checks) and
+`network` (the address was set by hand at first boot). What the first run taught is in the phase comments of
+`provision.sh`: the Jetson apt suite of Isaac ROS, the OpenCV swap and its order, NVIDIA's own UR driver build, the
+GPU wheels for JetPack 7, and the numpy-1 packages that leak into the LeRobot venv. Known gaps: nvblox does not install
+on the Jetson, NVIDIA's ffmpeg has no `ffplay`, kernel 6.8 has no xpad entry for the 8BitDo.
+
+Two things from the flash itself: on the installer's storage screen the eMMC line comes first (the first pass landed
+there; it now serves as a recovery system), and the "Prepare for shipping to end user" icon on the fresh desktop must
+not be run: it re-arms the first-boot wizard, which crashes on this image and keeps the desktop and the GPU display
+driver from starting (undo: `systemctl set-default graphical.target`, disable and remove `oem-config.service` / `.target`).
 
 ## Order of operations
 

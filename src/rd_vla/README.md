@@ -44,5 +44,10 @@ steps at 10.8 Hz with the observation 37 ms old at inference, the end effector f
 the 3 cm step cap over 5 m of path, and the episode saved as a LeRobot v3 dataset beside its eval record. The policy
 does not find Tigger in the sim (the cameras show the sim room), so the run is a pipeline check, not a success rate.
 
-Not in the rig: SmolVLA inference itself (GPU box, above), the SpaceMouse and Stream Deck inputs (phase 8), the camera
-exposure lock (phase 8).
+On the robot's AGX Orin (2026-11-10, JetPack 7.2.1, `/opt/vla` with PyTorch's own cu130 arm64 build, MAXN): the same
+checkpoint loads in 14 s, takes 0.9 GB of GPU memory and computes a chunk in 0.73 s (v1 on JetPack 6: 0.875 s). That is
+longer than eight steps at 12 Hz and the backend has no prefetch thread, so a run pauses about 0.65 s at each chunk
+boundary: port v1's `--prefetch` (ledger row 25) or run with `n_action_steps` 24 and up meanwhile.
+
+Not in the rig: SmolVLA inference itself (GPU box and Orin, above), the SpaceMouse and Stream Deck inputs (phase 8), the
+camera exposure lock (phase 8).
