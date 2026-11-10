@@ -262,6 +262,9 @@ phase_isaac() {
   grep -q ISAAC_ROS_WS "$RD_HOME/.bashrc" || echo 'export ISAAC_ROS_WS="${ISAAC_ROS_WS:-${HOME}/workspaces/isaac_ros-dev/}"' >> "$RD_HOME/.bashrc"
   if dpkg-query -W -f='${Version}\n' 'libopencv*' 2>/dev/null | grep -q '^4\.8'; then
     warn "removing JetPack's OpenCV 4.8 (NVIDIA's Isaac ROS step); 4.6.0 is pinned and returns with the ROS and Isaac packages"
+    # the removal takes the nvidia-jetpack metapackages with it (they depend on nvidia-opencv): mark what they pulled
+    # in as wanted, or a later `apt autoremove` would take CUDA, cuDNN, TensorRT and VPI
+    sudo apt-mark manual $(apt-cache depends nvidia-jetpack-runtime nvidia-jetpack-dev 2>/dev/null | awk '/Depends:/{print $2}' | grep -v -i -e opencv -e '^<' | sort -u) >/dev/null
     sudo apt-get remove -y 'libopencv*' 'opencv*'
   fi
   sudo isaac-ros init venv --yes 2>&1 | tail -5
