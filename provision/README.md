@@ -46,8 +46,9 @@ the xpad rebuild and the two-OpenCV patch that 5.0 no longer needs).
 | `preflight` | user, sudo, Ubuntu 24.04 / aarch64 / JetPack present, root on NVMe |
 | `jetson` | `jetson/apt-packages-jetson.txt`, nvpmodel MAXN at boot, jetson_clocks service, xpad at boot (+ the rebuilt module if kernel 6.8 still lacks the 8BitDo ID), jtop, the ttyTHS1 PIO device tree for the RoboClaw link (`uart1_pio_dtb`, see *RoboClaw on the header UART*) |
 | `base` | `apt-packages.txt`, ssh + supervisor + chrony, hostname, `/etc/hosts` for ur5e / amazinghand / gpu, `AUTHORIZED_KEY` |
+| `isaac` | NVIDIA's Isaac ROS 4.6 apt repo (the Jetson suite `noble-jetpack`), the CLI in venv mode with its apt pins, JetPack's OpenCV 4.8 removed as NVIDIA prescribes. Runs before `ros` so the removal takes OpenCV alone |
 | `ros` | ROS 2 Jazzy repo + `ros-packages.txt`, rosdep, `.bashrc`: Jazzy + workspace, Cyclone DDS with `cyclonedds.xml`, `ROS_DOMAIN_ID=0`, `RD_ROBOT_CONFIG` |
-| `isaac` | NVIDIA's Isaac ROS 4.6 apt repo, `isaac-packages.txt` via the Isaac ROS CLI bare-metal mode |
+| `isaacpkgs` | `isaac-packages.txt` (after `ros`, whose packages they depend on) |
 | `groups` | dialout video input plugdev audio render docker |
 | `udev` | `udev/99-robot-disco.rules`: SpaceMouse, RealSense, webcams, Stream Deck, gamepads, 8BitDo new_id fallback |
 | `sysctl` | DDS receive buffers |

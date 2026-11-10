@@ -1,9 +1,11 @@
-# Isaac ROS 4.6 host packages (NVIDIA's apt repo: release-4.6, noble main), for provision.sh phase "isaac" (the Orin)
-# and provision/gpu/provision_gpu.sh isaacros (the 4090). Names from the 4.6 package pages (read 2026-11-07).
+# Isaac ROS 4.6 host packages from NVIDIA's apt repo (release-4.6), for provision.sh phase "isaacpkgs" (the Orin) and
+# provision/gpu/provision_gpu.sh isaacros (the 4090). The repo has TWO suites: `noble main` for x86 and
+# `noble-jetpack main` for Jetson; the x86 suite has no Isaac package for arm64. All names below were checked in both
+# package indexes on 2026-11-09 (4.6.0-0noble.20260818).
 ros-jazzy-isaac-ros-image-proc
 ros-jazzy-isaac-ros-apriltag
 ros-jazzy-isaac-ros-nvblox
-# unverified against a package page; the naming pattern of the others:
+# pulls ros-jazzy-isaac-ros-pointcloud-utils (the LaserScan to FlatScan converter the launch needs)
 ros-jazzy-isaac-ros-occupancy-grid-localizer
 # optional (phase 9): ros-jazzy-isaac-ros-visual-slam
 # cuMotion planner + MoveIt plugin (4.6.0-0noble.20260818 on the 4090, 2026-11-09; pulls -robot-description and -interfaces)

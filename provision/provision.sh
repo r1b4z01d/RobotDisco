@@ -8,7 +8,7 @@
 # or one phase at a time (idempotent, safe to re-run). "all" runs everything except "network", which
 # moves the box onto the internet-less robot subnet and so comes last, by hand.
 #
-#   provision.sh preflight jetson base ros isaac groups udev sysctl data workspace venvs audio services llm display network
+#   provision.sh preflight jetson base isaac ros isaacpkgs groups udev sysctl data workspace venvs audio services llm display network
 #
 # Knobs (all optional):
 #   RD_USER=rd                   robot user (must be the user running this script)
@@ -238,30 +238,41 @@ BASHRC
 }
 
 phase_isaac() {
-  # Isaac ROS 4.6 as host debs for JetPack 7.2 / Jazzy. The repo and CLI steps are from the 4.6 Getting Started
-  # page (read 2026-11-07): NVIDIA's apt repo pinned to release-4.6, the isaac-ros-cli, then `isaac-ros init
-  # baremetal` (the host modes replace the host OpenCV with NVIDIA's 4.6.0 build). On the Orin the Jetson apt
-  # repo is already configured by JetPack.
-  log "Isaac ROS 4.6 (host, bare metal)"
+  # Isaac ROS 4.6 as host debs, NVIDIA's "Virtual Environment" mode (debs on the host through apt, the CLI's pip shims
+  # in its own venv, never the system python): the mode the GPU box runs. From the 4.6 Getting Started page's Jetson
+  # (JetPack 7.2) steps and the first run on the robot, 2026-11-09:
+  #  - the Jetson suite of the apt repo is `noble-jetpack` (157 ros-jazzy-isaac-ros-* packages for arm64); `noble` is
+  #    the x86 suite and carries NO Isaac package for arm64, only the CLI
+  #  - the isaac-ros-cli deb drops apt pins: OpenCV 4.6.0, CUDA 13.2, TensorRT 10.16
+  #  - nvidia-jetpack brings OpenCV 4.8.0, which NVIDIA has removed here; Ubuntu's 4.6.0 then comes back with the
+  #    packages that need it. This phase runs BEFORE `ros` for that reason: nothing else depends on OpenCV yet, so
+  #    the removal takes OpenCV alone (after `ros` it would take cv_bridge, Nav2 and friends with it)
+  log "Isaac ROS 4.6: apt repo, CLI, OpenCV 4.8 -> 4.6"
   apt_install curl gnupg
-  local k=/usr/share/keyrings/nvidia-isaac-ros.gpg
+  local k=/usr/share/keyrings/nvidia-isaac-ros.gpg suite=noble
+  if [ "$(dpkg --print-architecture)" = arm64 ] && [ -f /etc/nv_tegra_release ]; then suite=noble-jetpack; fi
   [ -f $k ] || curl -fsSL https://isaac.download.nvidia.com/isaac-ros/repos.key | sudo gpg --dearmor --yes -o $k
-  local s="deb [signed-by=$k] https://isaac.download.nvidia.com/isaac-ros/release-4.6 noble main"
-  grep -qxF "$s" /etc/apt/sources.list.d/nvidia-isaac-ros.list 2>/dev/null || echo "$s" | sudo tee -a /etc/apt/sources.list.d/nvidia-isaac-ros.list >/dev/null
+  echo "deb [signed-by=$k] https://isaac.download.nvidia.com/isaac-ros/release-4.6 $suite main" | sudo tee /etc/apt/sources.list.d/nvidia-isaac-ros.list >/dev/null
   sudo apt-get update
-  sudo mkdir -p /etc/ros/rosdep/sources.list.d
+  sudo mkdir -p /etc/ros/rosdep/sources.list.d      # read by `rosdep update` in the ros phase
   sudo curl -fsSL -o /etc/ros/rosdep/sources.list.d/nvidia-isaac.yaml https://raw.githubusercontent.com/NVIDIA-ISAAC-ROS/isaac-ros-cli/release-4.6/docker/rosdep/extra_rosdeps.yaml || true
   echo "yaml file:///etc/ros/rosdep/sources.list.d/nvidia-isaac.yaml" | sudo tee /etc/ros/rosdep/sources.list.d/00-nvidia-isaac.list >/dev/null
-  rosdep update >/dev/null 2>&1 || true
   apt_install isaac-ros-cli
   mkdir -p "$RD_HOME/workspaces/isaac_ros-dev/src"
   grep -q ISAAC_ROS_WS "$RD_HOME/.bashrc" || echo 'export ISAAC_ROS_WS="${ISAAC_ROS_WS:-${HOME}/workspaces/isaac_ros-dev/}"' >> "$RD_HOME/.bashrc"
-  warn "isaac-ros init replaces the host OpenCV with NVIDIA's build; python3-opencv and cv_bridge are reinstalled after"
-  sudo apt-get remove -y 'libopencv*' 'opencv*' >/dev/null 2>&1 || true
-  sudo isaac-ros init baremetal --yes 2>&1 | tail -5
+  if dpkg-query -W -f='${Version}\n' 'libopencv*' 2>/dev/null | grep -q '^4\.8'; then
+    warn "removing JetPack's OpenCV 4.8 (NVIDIA's Isaac ROS step); 4.6.0 is pinned and returns with the ROS and Isaac packages"
+    sudo apt-get remove -y 'libopencv*' 'opencv*'
+  fi
+  sudo isaac-ros init venv --yes 2>&1 | tail -5
+}
+
+phase_isaacpkgs() {
+  # after `ros`: the Isaac packages depend on ros-jazzy-* from the ROS repo
+  log "Isaac ROS 4.6 packages"
   apt_install $(pkglist "$HERE/isaac-packages.txt") python3-opencv ros-jazzy-cv-bridge || warn "some Isaac packages did not install: check isaac-packages.txt"
   dpkg -l | grep -E 'ros-jazzy-isaac-ros' | awk '{print "  " $2, $3}'
-  # cuMotion ships as 4.6 debs (in isaac-packages.txt, verified 2026-11-09); rd_arm's arm.launch.py takes cumotion:=true once the arm is validated on the Orin (phase 8)
+  dpkg-query -W -f='  ${Package} ${Version}\n' 'libopencv-core*' 2>/dev/null
 }
 
 phase_groups() {
@@ -397,7 +408,7 @@ phase_network() {
   ip -br addr show "$iface"
 }
 
-PHASES="preflight jetson base ros isaac groups udev sysctl data workspace venvs audio services llm display network"
+PHASES="preflight jetson base isaac ros isaacpkgs groups udev sysctl data workspace venvs audio services llm display network"
 phase_all() { for p in $PHASES; do [ "$p" = network ] && continue; "phase_$p"; done; log "done; reboot, then run: provision.sh network"; }
 
 [ $# -gt 0 ] || { echo "usage: provision.sh all | <phase ...>   phases: $PHASES"; exit 2; }
