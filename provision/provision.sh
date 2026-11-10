@@ -217,7 +217,13 @@ phase_ros() {
       | sudo tee /etc/apt/sources.list.d/ros2.list >/dev/null
     sudo apt-get update
   fi
-  apt_install $(pkglist "$HERE/ros-packages.txt")
+  # NVIDIA's Jetson suite (noble-jetpack, pinned at 600 by the Isaac CLI) carries its own UR driver stack, versioned
+  # 99.2.0 so it outranks the ROS repo's 3.9.0. Its ur_ros2_control macro has an older interface (no ur_type), and
+  # rd_description is written, rig-tested and GPU-box-tested against 3.9.0: with 99.2.0 the robot's URDF does not
+  # expand and the arm stack never starts (2026-11-10). No Isaac package depends on NVIDIA's copy, so the UR stack
+  # comes from the ROS repo.
+  printf 'Package: ros-jazzy-ur ros-jazzy-ur-*\nPin: origin packages.ros.org\nPin-Priority: 1001\n' | sudo tee /etc/apt/preferences.d/50-robot-disco-ur-from-ros.pref >/dev/null
+  apt_install --allow-downgrades $(pkglist "$HERE/ros-packages.txt")
   # rd_manager reads LeRobot parquet (datasets tab): no python3-pyarrow deb on 24.04, and pyarrow >= 21 needs numpy 2
   # while the system numpy is 1.26 -> the newest that fits, into /usr/local (nothing apt-managed is touched)
   sudo pip3 install -q --break-system-packages "pyarrow<21"
