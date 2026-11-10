@@ -330,9 +330,14 @@ phase_venvs() {
   if [ ! -x /opt/vla/bin/python ]; then
     sudo python3 -m venv --system-site-packages /opt/vla && sudo chown -R "$RD_USER:$RD_USER" /opt/vla
   fi
-  # torch for CUDA 13.2 on JetPack 7.2: NVIDIA's wheel index (the plan's risk #3: pin what works on the flashed box)
+  # torch for the Orin on JetPack 7.2.1 (tested 2026-11-09): PyTorch's own CUDA 13.0 build for arm64, which bundles its
+  # CUDA libraries, sees the GPU ("Orin", cuDNN 9.15) and runs matmul, conv and torchvision ops on it. LeRobot 0.4 wants
+  # torch < 2.11, and the cu132 tree starts at 2.12, hence cu130. The Jetson AI Lab build (sbsa/cu130) does NOT import
+  # here: it links NVPL and cuDSS, which only NVIDIA's CUDA server repo carries.
+  local torch_index="${TORCH_INDEX:-https://download.pytorch.org/whl/cu130}"
   /opt/vla/bin/pip install -q --upgrade pip
-  /opt/vla/bin/pip install -q ${TORCH_INDEX:+--extra-index-url "$TORCH_INDEX"} "lerobot>=0.3,<0.5" || warn "lerobot/torch install failed: see the plan's risk about cu132 wheels (set TORCH_INDEX)"
+  /opt/vla/bin/pip install -q "torch==2.10.0" "torchvision==0.25.0" --index-url "$torch_index" --extra-index-url https://pypi.org/simple || warn "torch install failed (index $torch_index)"
+  /opt/vla/bin/pip install -q --extra-index-url "$torch_index" "lerobot>=0.3,<0.5" "transformers" "num2words" || warn "lerobot install failed"
   /opt/vla/bin/pip install -q --ignore-installed --no-deps scipy   # Ubuntu's scipy (numpy 1) would be imported otherwise and fail against the venv's numpy 2
   /opt/vla/bin/python -c "import torch, lerobot; print('torch', torch.__version__, 'cuda', torch.cuda.is_available(), 'lerobot', lerobot.__version__)" || true
 }

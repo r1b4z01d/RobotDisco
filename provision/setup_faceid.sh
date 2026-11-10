@@ -7,6 +7,10 @@
 # Usage (on the robot, online):   ./setup_faceid.sh
 # The buffalo_l model pack (~280 MB) is downloaded by insightface on first use into ~/.insightface/models.
 set -euo pipefail
+# onnxruntime with the CUDA provider for Jetson: the Jetson AI Lab index. JetPack 7 (Python 3.12, CUDA 13) is its
+# sbsa/cu130 tree; v1 on JetPack 6 used jp6/cu126, which has no Python 3.12 wheels. Tested on the Orin 2026-11-09:
+# onnxruntime-gpu 1.24.0 runs the YuNet detector on CUDAExecutionProvider (5.9 ms a frame, 8.9 ms on the CPU).
+ORT_INDEX="${ORT_INDEX:-https://pypi.jetson-ai-lab.io/sbsa/cu130}"
 
 VENV="$HOME/.robot_face/faceid-venv"
 WORKER="$HOME/RobotDisco/src/rd_face/rd_face/faceid_worker.py"
@@ -20,7 +24,7 @@ if [ "$(uname -m)" = "aarch64" ]; then
   # (The PyPI CPU builds >= 1.20 abort on the Orin with a cpuinfo assertion; 1.18.1 is the CPU fallback.)
   "$VENV/bin/pip" install "numpy<2" opencv-python-headless insightface
   "$VENV/bin/pip" uninstall -y onnxruntime >/dev/null 2>&1 || true
-  "$VENV/bin/pip" install "onnxruntime-gpu==1.24.0" --index-url https://pypi.jetson-ai-lab.io/jp6/cu126 --extra-index-url https://pypi.org/simple \
+  "$VENV/bin/pip" install "onnxruntime-gpu==1.24.0" --index-url "$ORT_INDEX" --extra-index-url https://pypi.org/simple \
     || "$VENV/bin/pip" install "onnxruntime==1.18.1"
 else
   "$VENV/bin/pip" install "numpy<2" onnxruntime opencv-python-headless insightface

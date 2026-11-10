@@ -15,6 +15,10 @@
 #                                          #     --only-binary=:all:
 #                                          # and the two model files copied into ~/.robot_face/kokoro/
 set -euo pipefail
+# onnxruntime with the CUDA provider for Jetson: the Jetson AI Lab index. JetPack 7 (Python 3.12, CUDA 13) is its
+# sbsa/cu130 tree; v1 on JetPack 6 used jp6/cu126, which has no Python 3.12 wheels. Tested on the Orin 2026-11-09:
+# onnxruntime-gpu 1.24.0 runs the YuNet detector on CUDAExecutionProvider (5.9 ms a frame, 8.9 ms on the CPU).
+ORT_INDEX="${ORT_INDEX:-https://pypi.jetson-ai-lab.io/sbsa/cu130}"
 
 VENV="$HOME/.robot_face/kokoro-venv"
 MODELS="$HOME/.robot_face/kokoro"
@@ -36,7 +40,7 @@ else
     # GPU (the face node pins ONNX_PROVIDER=CUDAExecutionProvider for the worker). Fallback: CPU 1.18.1,
     # the newest PyPI CPU build that does not abort on the Orin (cpuinfo vector assertion in >= 1.20).
     "$VENV/bin/pip" uninstall -y onnxruntime >/dev/null 2>&1 || true
-    "$VENV/bin/pip" install "onnxruntime-gpu==1.24.0" --index-url https://pypi.jetson-ai-lab.io/jp6/cu126 --extra-index-url https://pypi.org/simple \
+    "$VENV/bin/pip" install "onnxruntime-gpu==1.24.0" --index-url "$ORT_INDEX" --extra-index-url https://pypi.org/simple \
       || "$VENV/bin/pip" install "onnxruntime==1.18.1"
   fi
   for f in kokoro-v1.0.onnx voices-v1.0.bin; do
