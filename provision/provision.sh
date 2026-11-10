@@ -17,6 +17,8 @@
 #   SNAPSHOT=/path               output of v1's capture_rd_state.sh (phase 0): maps, galleries, voice.env,
 #                                motions and ~/Music are restored from it (existing files win)
 #   NVPMODEL=0                   AGX Orin power mode id (0 = MAXN)
+#   UART1_PIO=0                  leave the device tree and extlinux.conf alone (the jetson phase otherwise boots a copy
+#                                of the stock tree without ttyTHS1's DMA; on JetPack 7.2 test the link on stock first)
 #   AUTHORIZED_KEY="ssh-ed25519 ..."
 #   PROXY=socks5h://127.0.0.1:1080   apt/pip/git proxy when the box is already on the robot subnet
 #   WITH_LLM=0 OLLAMA_MODEL=qwen2.5:7b
@@ -96,8 +98,12 @@ UNIT
     warn "kernel $(uname -r) predates xpad support for the 8BitDo 2C (2dc8:310a): build provision/xpad (see its README) or rely on the udev new_id rule"
   fi
   sudo python3 -m pip install -U --break-system-packages jetson-stats 2>/dev/null || warn "jetson-stats install failed"
-  log "ttyTHS1 (header UART, the RoboClaw link) in PIO mode"
-  uart1_pio_dtb
+  if [ "${UART1_PIO:-1}" = 1 ]; then
+    log "ttyTHS1 (header UART, the RoboClaw link) in PIO mode"
+    uart1_pio_dtb
+  else
+    log "UART1_PIO=0: device tree and extlinux.conf untouched (test the RoboClaw link on the stock tree first)"
+  fi
   # a login console on the RoboClaw's UART would eat its replies; the stock units target other ports, so this acts only if one does not
   if systemctl is-enabled nvgetty.service >/dev/null 2>&1 && systemctl cat nvgetty.service 2>/dev/null | grep -q ttyTHS1; then
     sudo systemctl disable --now nvgetty.service && log "nvgetty disabled: it was a login console on ttyTHS1"
