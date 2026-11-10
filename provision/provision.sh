@@ -312,6 +312,9 @@ phase_workspace() {
   # aborting controller_manager, and a reply is read until the line goes quiet (a UART delivers it in pieces).
   "$WS/provision/apply_patches.sh" || warn "a vendor patch did not apply: the base's hardware interface may not build"
   cd "$WS"
+  # the shell running this has not sourced ROS (the ros phase only wrote .bashrc; ssh sessions never read it):
+  # without it rosdep has no distro and colcon finds no ament
+  set +u; . "/opt/ros/$ROS_DISTRO/setup.bash"; set -u
   rosdep install --from-paths src vendor --ignore-src -r -y || warn "rosdep left something unresolved"
   colcon build --symlink-install
   true
