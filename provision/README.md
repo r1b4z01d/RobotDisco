@@ -15,8 +15,28 @@ the xpad rebuild and the two-OpenCV patch that 5.0 no longer needs).
 1. **Phase 0, before the reflash** (the NVMe reflash destroys `/mnt/data`): on the workstation, with the v1
    robot still up, `rd_ws/provision/capture_rd_state.sh` for the snapshot, then copy `/mnt/data`
    (datasets, checkpoints, evals, galleries, maps) to the GPU box and verify it. Tag `rd_ws` as v1.
-2. **Flash** with SDK Manager: JetPack 7.2.1, storage = NVMe, user `rd`, hostname `robotdisco`. Give the
-   box an uplink with internet (second Ethernet or USB tether); the robot subnet has none.
+2. **Flash** with NVIDIA's Jetson ISO, their recommended path for the AGX Orin devkit since JetPack 7.2 (no host PC;
+   procedure from the devkit user guide's Quick Start, read 2026-11-09; the robot is on firmware 36.5.2, above the
+   r35.5 the installer needs):
+   1. Write `jetsoninstaller-r39.2.1-2026-08-07-18-30-47-arm64.iso` (5.0 GB, linked from the Quick Start) to a USB
+      stick of 8 GB or more with Balena Etcher ("Flash from file"); a plain file copy does not make it bootable.
+   2. Display and keyboard straight into the robot (no KVM), stick in, power on. The boot order is NVMe, then eMMC,
+      so v1 comes up unless the stick is picked in the UEFI boot manager (the boot screen names the key, Esc).
+   3. Answer `Y` to the QSPI capsule update; it runs twice. Do not cut power during it.
+   4. In the installer's menu: `Install Jetson ISO r39.2.1`, then `Install on NVMe`. This erases the NVMe
+      (`/mnt/data`). Several minutes of scrolling text, then it reboots: pull the stick.
+   5. First-boot setup: user `rd`, computer name `robotdisco` (provision.sh refuses any other user).
+   6. Check: `cat /etc/nv_tegra_release` says `R39 (release), REVISION: 2.1`, and `findmnt -no SOURCE /` names the NVMe.
+
+   The JetPack components (CUDA, cuDNN, TensorRT) are not in the image: `sudo apt update && sudo apt dist-upgrade`,
+   reboot, `sudo apt install nvidia-jetpack` (about an hour). Do not count on the eMMC's JetPack 6 as a fallback
+   afterwards: the firmware moves to r39, and NVIDIA does not say what the NVMe install leaves on the eMMC. The
+   backup is the fallback. If the installer loops (two forum reports on other units), flash from an x86 Ubuntu
+   host instead (NVIDIA names 20.04 and 22.04; SDK Manager also lists 24.04): Force Recovery (hold the middle
+   button, press and release Power; `lsusb` shows `0955:7023`), a cable from the host to the USB-C port beside the
+   40-pin header, and in the release's `Linux_for_Tegra`, after `tools/l4t_flash_prerequisites.sh` and
+   `apply_binaries.sh`: `sudo ./l4t_initrd_flash.sh --external-device nvme0n1p1 -c tools/kernel_flash/flash_l4t_t234_nvme.xml --erase-all jetson-agx-orin-devkit external`.
+   Give the box an uplink with internet (second Ethernet or USB tether); the robot subnet has none.
 3. `git clone https://github.com/r1b4z01d/RobotDisco.git ~/RobotDisco && ~/RobotDisco/provision/provision.sh all`
 4. Reboot, then `provision.sh network` and move the cable to the robot subnet.
 5. `SNAPSHOT=~/snapshot-YYYYMMDD provision.sh workspace audio` restores maps, galleries, motions and music.

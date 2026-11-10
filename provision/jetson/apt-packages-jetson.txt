@@ -11,8 +11,10 @@ pkg-config
 libopenblas-dev
 python3-dev
 
-# NOT nvidia-jetpack: the SDK Manager flash already installs cuda-toolkit-12-6, cuDNN 9 and cuBLAS, which is
-# all the torch wheels need; the metapackage would add TensorRT/VPI/OpenCV-CUDA and several GB on a 64 GB eMMC.
+# The JetPack components. The Jetson ISO flash installs the BSP only (no CUDA, cuDNN or TensorRT) and Isaac ROS 4.6
+# needs them; NVIDIA's guide: apt update, dist-upgrade, reboot, then this metapackage (about an hour). v1 left it out
+# to save space on the 64 GB eMMC; root is on the 512 GB NVMe now.
+nvidia-jetpack
 
 # fdtget/fdtput: the ttyTHS1 PIO device tree for the RoboClaw link (provision.sh uart1_pio_dtb)
 device-tree-compiler
