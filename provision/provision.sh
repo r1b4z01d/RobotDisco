@@ -340,7 +340,13 @@ phase_venvs() {
   /opt/vla/bin/pip install -q --upgrade pip
   /opt/vla/bin/pip install -q "torch==2.10.0" "torchvision==0.25.0" --index-url "$torch_index" --extra-index-url https://pypi.org/simple || warn "torch install failed (index $torch_index)"
   /opt/vla/bin/pip install -q --extra-index-url "$torch_index" "lerobot>=0.3,<0.5" "transformers" "num2words" || warn "lerobot install failed"
-  /opt/vla/bin/pip install -q --ignore-installed --no-deps scipy   # Ubuntu's scipy (numpy 1) would be imported otherwise and fail against the venv's numpy 2
+  # The venv sees the system site-packages (it needs rclpy), and Ubuntu's scipy, pandas and matplotlib are built for
+  # numpy 1: they satisfy pip, so it installs nothing, and then fail to import under the venv's numpy 2 (transformers
+  # probes scipy, datasets imports pandas). Give the venv its own copy of whichever resolves outside it.
+  for m in scipy pandas matplotlib; do
+    /opt/vla/bin/python -c "import importlib.util as u, sys; s = u.find_spec('$m'); sys.exit(0 if s and s.origin and s.origin.startswith('/opt/vla/') else 1)" 2>/dev/null \
+      || /opt/vla/bin/pip install -q --ignore-installed --no-deps "$m"
+  done
   /opt/vla/bin/python -c "import torch, lerobot; print('torch', torch.__version__, 'cuda', torch.cuda.is_available(), 'lerobot', lerobot.__version__)" || true
 }
 

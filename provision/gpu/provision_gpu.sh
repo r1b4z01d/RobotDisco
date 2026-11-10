@@ -104,9 +104,13 @@ phase_vla() {
   [ -x /opt/vla/bin/python ] || { sudo python3 -m venv --system-site-packages /opt/vla && sudo chown -R "$USER:$USER" /opt/vla; }
   /opt/vla/bin/pip install -q --upgrade pip
   /opt/vla/bin/pip install -q "lerobot>=0.3,<0.5" "transformers" "num2words"
-  # the venv sees the system site-packages, and Ubuntu's scipy (built for numpy 1) satisfies pip but fails to import
-  # against the venv's numpy 2 when transformers probes it: give the venv its own scipy
-  /opt/vla/bin/pip install -q --ignore-installed --no-deps scipy
+  # The venv sees the system site-packages (it needs rclpy), and Ubuntu's scipy, pandas and matplotlib are built for
+  # numpy 1: they satisfy pip, so it installs nothing, and then fail to import under the venv's numpy 2 (transformers
+  # probes scipy, datasets imports pandas). Give the venv its own copy of whichever resolves outside it.
+  for m in scipy pandas matplotlib; do
+    /opt/vla/bin/python -c "import importlib.util as u, sys; s = u.find_spec('$m'); sys.exit(0 if s and s.origin and s.origin.startswith('/opt/vla/') else 1)" 2>/dev/null \
+      || /opt/vla/bin/pip install -q --ignore-installed --no-deps "$m"
+  done
   /opt/vla/bin/python -c "import torch, lerobot; print('torch', torch.__version__, 'cuda', torch.cuda.is_available(), 'lerobot', lerobot.__version__)"
 }
 
