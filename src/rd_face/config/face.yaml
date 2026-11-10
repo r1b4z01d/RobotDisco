@@ -34,6 +34,8 @@ face:
     wave_enabled: true
     wave_known_only: true
     wave_cooldown: 20.0
+    wled_enabled: true                      # a beating heart on the WLED matrix panels when a known person is recognised
+    wled_heart_seconds: 3.0                 # then the panels go back to the effect they were running (the address: robot.yaml panels.ip)
     wink_eye: right
     wink_duration: 0.7
     wink_depth: 0.9

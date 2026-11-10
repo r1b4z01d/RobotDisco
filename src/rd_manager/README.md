@@ -2,8 +2,8 @@
 
 The one console: FastAPI + rclpy in one process. Every v1 page behind one port (8092 on the robot, 8081 on
 the GPU box): the Live map with the drive pad and HALT, the 3D view, the route editor and runner, Maps
-(SLAM new / continue, drawing editor, activate), Landmarks and their tasks, Folks, Services (supervisor),
-the arm / hand / policy page, datasets, models, evals, training.
+(SLAM new / continue, drawing editor, activate), Landmarks and their tasks, Folks, Panels (what the LED
+matrices show), Services (supervisor), the arm / hand / policy page, datasets, models, evals, training.
 
 ```
 manager --port 8092                  # the robot (ROS bridge on, supervisor on :9999)
@@ -18,6 +18,7 @@ ros2 launch rd_manager manager.launch.py sim_mode:=true                # the rig
 | `routes.py` | the route format and the runner over FollowWaypoints + RunPolicy / Say | `path.py` |
 | `supervisor.py` | supervisord over XML-RPC, the ordered base restart, the activity log; a fake supervisord for the rig | `webui/server.py` |
 | `grids.py`, `capture.py` | map / costmap PNGs, the stitched landmark photo | `route_editor.py` |
+| `panels.py` | the Panels tab's server side: `/api/panels` (the WLED's matrix, segments and effects from its JSON API) and `/ws/panels`, one shared connection to the WLED's live pixel stream relayed to every open tab (the WLED serves a single live client); the address is robot.yaml `panels`, `--panels-url` overrides | `webui/server.py` (2026-11-09, v1's last change) |
 | `datasets.py`, `models.py`, `ops.py`, `annotations.py` | LeRobot datasets, training runs, episode ops | `webui/` unchanged |
 | `static/` | `index.html` + `app.js` (the manager), `pages/live.html` (2D), `pages/map3d.html` (3D, vendored three.js), `pages/arm.html`, `pages/folks.html` | the v1 pages; the Robot / Routes / Folks tabs now embed this server's own pages |
 
@@ -28,6 +29,9 @@ Tests: routes / runner / supervisor / grids (units); the HTTP API without ROS th
 (pages, maps incl. SLAM request and the drawing save, landmarks and tasks, routes, evals, services against
 the fake supervisord); a launch test with the loopback simulator, Nav2, fake cameras and the Say server:
 live pose, scans, map, camera JPEGs, a landmark captured with its photo, GoToLandmark from the API,
-HALT stops the drive, the drive pad, speech, the WebSocket. The Live tab's text box sends typed text to the voice
+HALT stops the drive, the drive pad, speech, the WebSocket; the Panels tab against a fake WLED (its JSON and its
+pixel stream on one loopback port: the info, two tabs sharing one upstream connection, the stream handed back when
+the last tab leaves). Checked read-only against the real WLED on 2026-11-09: 64x48, segments Right and Left, a 32x24
+thinned preview at 19 frames a second. The Live tab's text box sends typed text to the voice
 assistant exactly as if Whisper had heard it (`POST /api/voice/text` -> `/voice/text_in`, so the wake phrase applies:
 "Robot Disco, what time is it") and shows what it heard and answered (`/api/voice`, timestamped).

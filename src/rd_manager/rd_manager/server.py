@@ -3,6 +3,7 @@ checkpoints, datasets) and supervisor. v1 webui/server.py + Scripts/route_editor
 
 Pages:  /            the manager (tabs)        /live/        the 2D map + route editor      /live/3d   the 3D view
         /arm/        arm + hand + policy       /folks/       the people the robot knows
+The Panels tab (the WLED LED matrices) is a view of the manager page: /api/panels and the /ws/panels pixel relay.
 """
 from __future__ import annotations
 
@@ -29,6 +30,7 @@ from rd_vla.evals import EvalRegistry
 from . import datasets as ds_mod, models as models_mod, ops as ops_mod
 from .capture import LANDMARK_CAMS, capture_landmark
 from .grids import MapView
+from .panels import PanelsRelay, panels_info, slash
 from .routes import RouteRunner, check_route, load_route, route_map, save_route, valid_route_name
 from .supervisor import Supervisor
 
@@ -59,7 +61,7 @@ def _run(fn, *a, **k):
 
 
 def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", robot_url: str = "", supervisor_url: str = "",
-              maps_dir=None, landmarks_dir=None, routes_dir=None, bridge=None) -> FastAPI:
+              maps_dir=None, landmarks_dir=None, routes_dir=None, bridge=None, panels_url: str = "") -> FastAPI:
     app = FastAPI(title="Robot Disco")
     outputs = Path(data_dir) / "outputs"
     datasets_dir = outputs / "datasets"
@@ -968,6 +970,27 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
         if not csvs:
             raise HTTPException(404, "no csv")
         return FileResponse(csvs[0], media_type="text/csv")
+
+    # ------------------------------------------------------------------ panels: the WLED matrices (rd_manager.panels)
+    panels_relay = PanelsRelay(panels_url)
+
+    @app.get("/api/panels")
+    def api_panels():
+        """Where the WLED is and what it is set to; the Panels tab draws the pixels from /ws/panels."""
+        info = panels_info(panels_url) if panels_url else None
+        return {"url": slash(panels_url) if panels_url else "", "reachable": info is not None, "info": info}
+
+    @app.websocket("/ws/panels")
+    async def ws_panels(socket: WebSocket):
+        await socket.accept()
+        await panels_relay.join(socket)
+        try:
+            while True:
+                await socket.receive_text()                 # nothing is expected; this notices the close
+        except (WebSocketDisconnect, RuntimeError):
+            pass
+        finally:
+            panels_relay.leave(socket)
 
     # ------------------------------------------------------------------ the WebSocket: live data, 5 Hz
     @app.websocket("/ws")

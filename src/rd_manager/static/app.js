@@ -806,8 +806,10 @@ $("#btn-lm-add").addEventListener("click", lmAdd);
 $("#btn-lm-refresh").addEventListener("click", () => { lmS.sig = ""; lmRefresh(); });
 $("#lm-name").addEventListener("keydown", (e) => { if (e.key === "Enter") lmAdd(); });
 
+// the Panels tab's state: declared here because showView() below runs at load, before the panels code further down
+const panelsS = { ws: null, timer: null, info: null, url: "", frames: 0, last: 0, retry: null, paused: true };
 // ---- view switching (Datasets / Models / Evals) ----
-const VIEWS = ["datasets", "models", "evals", "robot", "hand", "routes", "landmarks", "map", "maps", "services", "folks"];
+const VIEWS = ["datasets", "models", "evals", "robot", "hand", "routes", "landmarks", "map", "maps", "services", "folks", "panels"];
 function showView(v) {
   state.view = v;
   VIEWS.forEach((name) => { $("#view-" + name).hidden = name !== v; });
@@ -819,6 +821,7 @@ function showView(v) {
   if (v === "map") { loadMapView(); if (typeof actlog !== "undefined" && actlog) actlogRefresh(); }
   if (v === "services") loadServicesView();
   if (v === "folks") loadFolksView();
+  if (v === "panels") loadPanelsView(); else panelsStop();
   if (v === "hand") loadHandView();
   if (v === "landmarks") loadLandmarksView();
   if (v === "maps") loadMapsView();
@@ -1124,6 +1127,104 @@ async function loadRoutesView() {
   }, 5000);
 }
 $("#route-url").addEventListener("change", () => { const fr = $("#route-frame"); fr.src = $("#route-url").value; fr.dataset.src = fr.src; $("#route-open").href = fr.src; });
+
+// ---- panels view: what the LED matrix panels show. The pixels are the WLED's live stream, relayed
+// by the manager (/ws/panels: binary frames "L", 2, width, height, then RGB per pixel — the WLED
+// thins a large matrix, so a frame can be smaller than the matrix); one canvas per segment. ----
+function panelsStatus(r) {
+  const s = $("#panels-status"), i = r.info || {};
+  if (r.reachable) {
+    const fx = [...new Set((i.segments || []).map((g) => g.effect))].join(" / ");
+    s.textContent = `● ${i.name || "WLED"} ${i.ver || ""} — ${i.w}×${i.h}, ${i.on ? "on" : "off"}, brightness ${i.bri}` +
+      (i.live ? " · showing realtime data" : fx ? ` · ${fx}` : "");
+    s.className = "mono ok";
+  } else {
+    s.textContent = "○ WLED not answering"; s.className = "mono muted";
+  }
+  $("#panels-hint").hidden = r.reachable;
+  $("#panels-stage").hidden = !r.reachable;
+  $("#panels-hint-url").textContent = r.url;
+  $("#panels-open").href = r.url;
+}
+function panelsBuild(info) {
+  const stage = $("#panels-stage"), sig = JSON.stringify([info.w, info.h, info.segments.map((g) => [g.name, g.x0, g.x1, g.y0, g.y1])]);
+  if (stage.dataset.sig === sig) return;
+  stage.dataset.sig = sig; stage.innerHTML = "";
+  // the matrix has the "Right" panel first (x 0) and "Left" after it: draw them in reverse matrix order,
+  // so Left is on the left of the page as on the robot seen from the front
+  [...info.segments].sort((a, b) => b.x0 - a.x0).forEach((g) => {
+    const fig = document.createElement("figure"), cv = document.createElement("canvas"), cap = document.createElement("figcaption");
+    cv.width = g.x1 - g.x0; cv.height = g.y1 - g.y0;
+    cv.style.aspectRatio = `${cv.width} / ${cv.height}`;
+    cap.textContent = `${g.name} · ${cv.width}×${cv.height}`;
+    fig.append(cv, cap); stage.append(fig); g.canvas = cv;
+  });
+}
+function panelsDraw(buf) {
+  const b = new Uint8Array(buf), info = panelsS.info;
+  if (!info || panelsS.paused || b.length < 4 || b[0] !== 76) return;   // "L"
+  const twoD = b[1] === 2, fw = twoD ? b[2] : info.w, fh = twoD ? b[3] : info.h, off = twoD ? 4 : 2;
+  if (b.length < off + fw * fh * 3) return;
+  const kx = info.w / fw, ky = info.h / fh;                     // matrix pixels per stream pixel
+  for (const g of info.segments) {
+    const cv = g.canvas; if (!cv) continue;
+    const ctx = cv.getContext("2d"), img = ctx.createImageData(cv.width, cv.height), d = img.data;
+    for (let y = 0; y < cv.height; y++) {
+      const sy = Math.min(fh - 1, Math.floor((g.y0 + y) / ky));
+      for (let x = 0; x < cv.width; x++) {
+        const sx = Math.min(fw - 1, Math.floor((g.x0 + x) / kx)), i = off + (sy * fw + sx) * 3, o = (y * cv.width + x) * 4;
+        d[o] = b[i]; d[o + 1] = b[i + 1]; d[o + 2] = b[i + 2]; d[o + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+  }
+  panelsS.frames++; panelsS.last = Date.now();
+  $("#panels-stream").textContent = fw === info.w ? "live" : `live · preview ${fw}×${fh} of ${info.w}×${info.h}`;
+}
+function panelsConnect() {
+  if (panelsS.ws || panelsS.paused || state.view !== "panels" || !panelsS.url) return;
+  let ws;
+  try { ws = new WebSocket(location.origin.replace(/^http/, "ws") + "/ws/panels"); } catch (e) { return; }
+  ws.binaryType = "arraybuffer"; panelsS.ws = ws;
+  ws.onmessage = (ev) => { if (ev.data instanceof ArrayBuffer) panelsDraw(ev.data); };
+  ws.onclose = () => {
+    if (panelsS.ws === ws) panelsS.ws = null;
+    $("#panels-stream").textContent = panelsS.paused ? "paused" : "";
+    clearTimeout(panelsS.retry);
+    if (state.view === "panels" && !panelsS.paused) panelsS.retry = setTimeout(panelsConnect, 2000);
+  };
+  ws.onerror = () => ws.close();
+}
+function panelsStop() {
+  clearInterval(panelsS.timer); clearTimeout(panelsS.retry); panelsS.timer = null;
+  const ws = panelsS.ws; panelsS.ws = null;
+  if (ws) ws.close();
+}
+async function panelsRefresh() {
+  let r; try { r = await api("/api/panels"); } catch (e) { return; }
+  if (!r.reachable && Date.now() - panelsS.last < 8000) return;   // the WLED answers HTTP slowly; frames are still arriving
+  panelsStatus(r);
+  if (!r.reachable) return;
+  const old = panelsS.info;
+  panelsS.url = r.url; panelsBuild(r.info);
+  if (old && $("#panels-stage").dataset.sig === old.sig) r.info.segments.forEach((g) => { const m = old.segments.find((o) => o.name === g.name && o.x0 === g.x0); if (m) g.canvas = m.canvas; });
+  r.info.sig = $("#panels-stage").dataset.sig; panelsS.info = r.info;
+  panelsConnect();
+}
+// the preview is paused until asked for: while paused there is no stream at all (the canvases keep the last frame)
+function panelsSetPaused(paused) {
+  panelsS.paused = paused;
+  $("#panels-play").textContent = paused ? "▶ Play" : "⏸ Pause";
+  $("#panels-stream").textContent = paused ? "paused" : "connecting…";
+  if (paused) { clearTimeout(panelsS.retry); const ws = panelsS.ws; panelsS.ws = null; if (ws) ws.close(); }
+  else panelsConnect();
+}
+$("#panels-play").addEventListener("click", () => panelsSetPaused(!panelsS.paused));
+async function loadPanelsView() {
+  await panelsRefresh();
+  clearInterval(panelsS.timer);
+  panelsS.timer = setInterval(() => { if (state.view === "panels") panelsRefresh(); }, 5000);
+}
 
 // ---- folks view: the people the robot knows (robot_face's Folks page on the robot PC, port 8096), embedded ----
 let folksTimer = null;

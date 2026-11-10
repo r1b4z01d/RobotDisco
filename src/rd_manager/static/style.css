@@ -86,7 +86,7 @@ nav.views-right { margin-right: 8px; }      /* the arm / data tabs sit right of 
 .robot-hint { padding: 16px; font-size: 13px; }
 .routes-bar { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-bottom: 1px solid var(--line); font-size: 12px; }
 .routes-bar a { text-decoration: none; font-size: 14px; }
-#route-status.ok, #map-status.ok { color: #9fe3a6; }
+#route-status.ok, #map-status.ok, #panels-status.ok { color: #9fe3a6; }
 .robot-hint code { display: block; margin-top: 8px; font-family: var(--mono); font-size: 12px; color: var(--fg); white-space: pre-wrap; }
 #robot-status.ok { color: #9fe3a6; }
 
@@ -315,3 +315,11 @@ table.svc pre.svc-log { margin: 0; padding: 8px 12px; max-height: 320px; overflo
 .voice-form { display: flex; align-items: center; gap: 6px; margin-left: auto; min-width: 0; }
 .voice-form .ep-input { width: 280px; flex: none; }
 .voice-form #voice-echo { max-width: 460px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* panels view: one canvas per LED matrix, pixels kept square and unsmoothed */
+.panels-stage { flex: 1; min-height: 0; display: flex; gap: 28px; align-items: center; justify-content: center; padding: 20px; background: #0b0c10; overflow: auto; }
+.panels-stage[hidden] { display: none; }
+.panels-stage figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+/* the canvas's aspect-ratio is set per panel; the height drives the width */
+.panels-stage canvas { height: min(calc(100vh - 170px), 60vw); width: auto; image-rendering: pixelated; background: #000; border: 1px solid var(--line); border-radius: 4px; }
+.panels-stage figcaption { font-family: var(--mono); font-size: 12px; color: var(--muted); }

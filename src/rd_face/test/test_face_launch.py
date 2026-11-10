@@ -1,10 +1,14 @@
 """Launch test: the face headless. Frames come out on /face/image at the render rate; a mouth feed changes the
 mouth; a recognised person (the debug topic) is greeted by name through the Say action and gets a wave; the
 same person back within the cooldown gets a wink and no hello; a stranger gets the generic hello after the
-wait. Say and Wave are stub action servers inside the test that record their goals."""
+wait. Say and Wave are stub action servers inside the test that record their goals. A fake WLED on loopback (its
+JSON layout over HTTP, a UDP socket) records the heart the panels get for a recognised person."""
 import json
+import socket
+import threading
 import time
 import unittest
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import launch
 import launch_testing
@@ -21,6 +25,20 @@ from std_msgs.msg import Float32MultiArray, String
 from rd_interfaces.action import Say, Wave
 
 
+def _free_port(kind):
+    s = socket.socket(socket.AF_INET, kind)
+    s.bind(('127.0.0.1', 0))
+    port = s.getsockname()[1]
+    s.close()
+    return port
+
+
+WLED_HTTP, WLED_UDP = _free_port(socket.SOCK_STREAM), _free_port(socket.SOCK_DGRAM)     # the fake WLED's ports, picked at import
+WLED_JSON = {'info': {'leds': {'matrix': {'w': 32, 'h': 16}}},
+             'state': {'seg': [{'id': 0, 'start': 0, 'stop': 16, 'startY': 0, 'stopY': 16},
+                               {'id': 1, 'start': 16, 'stop': 32, 'startY': 0, 'stopY': 16}]}}
+
+
 @pytest.mark.launch_test
 @launch_testing.markers.keep_alive
 def generate_test_description():
@@ -29,7 +47,8 @@ def generate_test_description():
         Node(package='rd_face', executable='face', name='face', output='screen',
              parameters=[{'renderer': 'headless', 'image_topic': '/cameras/scene/image', 'face_id_enabled': False,
                           'greeting_wait': 1.0, 'greeting_cooldown': 3600.0, 'wave_cooldown': 0.0, 'wave_known_only': True,
-                          'mouth_gestures': False, 'face_stick_seconds': 0.8, 'width': 540, 'height': 950}]),
+                          'mouth_gestures': False, 'face_stick_seconds': 0.8, 'width': 540, 'height': 950,
+                          'wled_host': '127.0.0.1', 'wled_http_port': WLED_HTTP, 'wled_udp_port': WLED_UDP, 'wled_heart_seconds': 0.6}]),
         launch_testing.actions.ReadyToTest()]), {}
 
 
@@ -57,9 +76,40 @@ class TestFace(unittest.TestCase):
             return Wave.Result(success=True, message='done', seconds=0.1)
         cls.say_srv = ActionServer(cls.node, Say, 'say', say_cb)
         cls.wave_srv = ActionServer(cls.node, Wave, 'wave', wave_cb)
+        # the fake WLED: /json answers with a 32x16 matrix of two panels, the UDP socket keeps what the face sends
+        cls.heart = []
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                data = json.dumps(WLED_JSON).encode()
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Content-Length', str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+            def log_message(self, *a):
+                pass
+        cls.wled_http = HTTPServer(('127.0.0.1', WLED_HTTP), Handler)
+        cls.wled_udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        cls.wled_udp.bind(('127.0.0.1', WLED_UDP))
+        cls.wled_udp.settimeout(0.2)
+
+        def recv():
+            while True:
+                try:
+                    cls.heart.append(cls.wled_udp.recv(4096))
+                except socket.timeout:
+                    continue
+                except OSError:
+                    return
+        threading.Thread(target=cls.wled_http.serve_forever, daemon=True).start()
+        threading.Thread(target=recv, daemon=True).start()
 
     @classmethod
     def tearDownClass(cls):
+        cls.wled_http.shutdown()
+        cls.wled_udp.close()
         cls.node.destroy_node()
         rclpy.shutdown()
 
@@ -97,6 +147,7 @@ class TestFace(unittest.TestCase):
     def test_3_greets_by_name_and_waves(self):
         self.said.clear()
         self.waves.clear()
+        self.heart.clear()
         for _ in range(10):
             self.person.publish(String(data=json.dumps({'id': 'person_1', 'name': 'Bryan', 'score': 0.9})))
             self.spin(0.1)
@@ -104,28 +155,40 @@ class TestFace(unittest.TestCase):
         self.assertEqual(self.said[0], 'hello Bryan')
         self.wait_for(lambda: self.waves, 5, 'a wave')
         self.assertEqual(self.waves[0], 'wave')
+        # the heart on the panels: DNRGB realtime frames (two packets per 512-LED frame), then the zero-timeout packet
+        self.wait_for(lambda: self.heart and self.heart[-1] == bytes([4, 0, 0, 0, 0, 0, 0]), 5, 'the heart on the WLED panels')
+        frames = [p for p in self.heart[:-1] if p[2:4] == bytes([0, 0])]
+        self.assertGreaterEqual(len(frames), 5)
+        self.assertTrue(all(p[0] == 4 and p[1] == 2 for p in self.heart[:-1]))
+        self.assertEqual(len(frames[0]), 4 + 489 * 3)
+        self.assertTrue(any(frames[0][4:]), 'the frame is dark: no heart in it')
         self.spin(1.5)                      # the face loses the person (face_stick_seconds)
 
     def test_4_back_within_the_hour_gets_a_wink(self):
         self.said.clear()
         self.waves.clear()
+        self.heart.clear()
         for _ in range(15):
             self.person.publish(String(data=json.dumps({'id': 'person_1', 'name': 'Bryan', 'score': 0.9})))
             self.spin(0.1)
         self.spin(1.0)
         self.assertEqual(self.said, [])
         self.assertEqual(self.waves, [])
+        self.assertTrue(self.heart, 'someone the robot knows gets the heart with the wink too')
         self.spin(1.5)
 
     def test_5_stranger_gets_the_generic_hello(self):
         self.said.clear()
         self.waves.clear()
+        self.heart.clear()
         for _ in range(25):
             self.person.publish(String(data=json.dumps({'box': [100, 100, 120, 160]})))     # seen, not identified
             self.spin(0.1)
         self.wait_for(lambda: self.said, 10, 'the generic hello')
         self.assertEqual(self.said[0], 'hello')
         self.assertEqual(self.waves, [])          # wave_known_only
+        self.spin(0.5)
+        self.assertEqual(self.heart, [])          # the heart is for people the robot knows
 
 
 @launch_testing.post_shutdown_test()

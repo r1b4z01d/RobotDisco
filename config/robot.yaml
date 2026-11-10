@@ -48,6 +48,12 @@ hand:                             # AmazingHand, ESP32 on the tool flange (firmw
     udp: 8766                     # one "J:" line per datagram; "Q" -> "K:" liveness probe
     tcp: 8765                     # legacy line transport, debugging with nc
 
+panels:                           # WLED controller driving the two LED matrix panels (one segment per panel)
+  ip: 192.168.11.218
+  ports:
+    http: 80                      # JSON API (/json) and the live pixel WebSocket (/ws): the manager's Panels tab
+    realtime_udp: 21324           # WLED realtime protocol (DNRGB): the face node's beating heart
+
 gpu:                              # training box: RTX 4090, Ubuntu 24.04, ssh host "GPU"
   host: gpu
   ip: 192.168.11.119

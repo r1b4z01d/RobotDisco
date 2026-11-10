@@ -15,6 +15,7 @@
       <button class="nav-btn" data-view="landmarks">Landmarks</button>
       <button class="nav-btn" data-view="routes">Routes</button>
       <button class="nav-btn" data-view="folks">Folks</button>
+      <button class="nav-btn" data-view="panels">Panels</button>
       <button class="nav-btn" data-view="services">Services</button>
     </nav>
     <div class="brand">Robot Disco <span>V4</span></div>
@@ -239,6 +240,24 @@
         </div>
       </section>
     </div><!-- /view-folks -->
+
+    <!-- ===== Panels view: what the LED matrix panels are showing, drawn from the WLED's live pixel stream ===== -->
+    <div id="view-panels" class="view" hidden>
+      <section class="panel grow robot-view">
+        <div class="routes-bar">
+          <button id="panels-play" class="btn" title="start / stop the live preview of the panels (stopped when the tab opens: the stream loads the WLED)">▶ Play</button>
+          <span id="panels-status" class="mono muted">—</span>
+          <span id="panels-stream" class="mono muted">paused</span>
+          <a id="panels-open" class="muted" href="#" target="_blank" title="open the WLED page in its own tab">↗</a>
+        </div>
+        <div id="panels-stage" class="panels-stage"></div>
+        <div id="panels-hint" class="robot-hint muted" hidden>
+          The WLED controller is not answering. It drives the LED matrix panels and is expected at
+          <span id="panels-hint-url" class="mono"></span> (<code style="display:inline">panels.ip</code> in config/robot.yaml).
+          This tab connects by itself once it is up.
+        </div>
+      </section>
+    </div><!-- /view-panels -->
 
     <!-- ===== Maps view: the robot's nav maps — list, activate, make new ones with SLAM, re-map, draw on them, delete ===== -->
     <div id="view-maps" class="view" hidden>

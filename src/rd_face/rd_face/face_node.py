@@ -1,7 +1,8 @@
 """The face: eyes that track whoever is in view, a mouth that moves with the speech, idle gestures, face
 recognition with a learned gallery, and the greeting (hello by name, a wave through rd_arm, a wink for someone
-back within the hour). v1's combined_face_hand_node without the TTS (rd_audio's Say), the wave (rd_arm's
-Wave) and the HTTP Folks page (rd_manager; the data is on topics here).
+back within the hour), with a beating heart on the WLED matrix panels for anyone it knows (wled_panels.py).
+v1's combined_face_hand_node without the TTS (rd_audio's Say), the wave (rd_arm's Wave) and the HTTP Folks page
+(rd_manager; the data is on topics here).
 
   sub  <image_topic>               rgb8 Image (the D435 colour stream)
   sub  /mouth/audio, /mouth/level  from the Say server
@@ -36,10 +37,12 @@ from sensor_msgs.msg import Image
 from std_msgs.msg import Float32, Float32MultiArray, String
 from std_srvs.srv import Trigger
 
+from rd_bringup import config
 from rd_interfaces.action import Say, Wave
 
 from .face_utils import pick_face, schedule_blink
 from .mouth_gestures import gesture_duration, gesture_frame, pick_gesture
+from .wled_panels import WledPanels
 
 
 def image_to_bgr(m: Image) -> Optional[np.ndarray]:
@@ -73,6 +76,10 @@ class FaceNode(Node):
         dp("greeting_late_text", "oh, hi {name}"); dp("greeting_wait", 2.0); dp("greeting_name_window", 10.0)
         dp("greeting_happy_seconds", 30.0); dp("greeting_cooldown", 3600.0)
         dp("wave_enabled", True); dp("wave_known_only", True); dp("wave_cooldown", 20.0)
+        # the WLED matrix panels: a beating heart when a known person is recognised, then back to their own effect
+        dp("wled_enabled", True); dp("wled_heart_seconds", 3.0)
+        dp("wled_host", str(config.get("panels.ip", "")))
+        dp("wled_http_port", int(config.get("panels.ports.http", 80))); dp("wled_udp_port", int(config.get("panels.ports.realtime_udp", 21324)))
         dp("wink_eye", "right"); dp("wink_duration", 0.7); dp("wink_depth", 0.9)
         dp("face_id_enabled", True); dp("face_id_backend", "auto"); dp("face_id_python", "~/.robot_face/faceid-venv/bin/python")
         dp("face_id_models_dir", ""); dp("face_id_gallery", "~/.robot_face/people.json"); dp("face_thumb_dir", "~/.robot_face/faces")
@@ -88,6 +95,8 @@ class FaceNode(Node):
         self.image_pub = self.create_publisher(Image, "/face/image", QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT))
         self.say = ActionClient(self, Say, "say", callback_group=self.cb)
         self.wave = ActionClient(self, Wave, "wave", callback_group=self.cb)
+        self.panels = WledPanels(str(p("wled_host")).strip() if p("wled_enabled") else "", max(float(p("wled_heart_seconds")), 0.5),
+                                 logger=self.get_logger(), http_port=int(p("wled_http_port")), udp_port=int(p("wled_udp_port")))
         # inputs
         self.create_subscription(Image, p("image_topic"), self.on_image, QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT), callback_group=self.cb)
         self.create_subscription(Float32MultiArray, "/mouth/audio", self.on_mouth_audio, 20, callback_group=self.cb)
@@ -408,17 +417,20 @@ class FaceNode(Node):
             if pid is not None and self.greeted_recently(pid):
                 self.greeting_due = None
                 self.wink()
+                self.panels.show_heart()
             elif name is not None:
                 self.speak(str(p("greeting_known_text")).format(name=name))
                 self.greeting_due = None
                 self.mark_greeted(pid)
                 self.do_wave(f"recognised {name}")
+                self.panels.show_heart()
             elif now >= self.greeting_due:
                 self.speak(str(p("greeting_text")))
                 self.greeting_due = None
                 self.generic_greeted_at = now
-                if pid is not None:
+                if pid is not None:                 # recognised but unnamed: that was their hello
                     self.mark_greeted(pid)
+                    self.panels.show_heart()
                 if not p("wave_known_only"):
                     self.do_wave("someone is here")
         elif self.generic_greeted_at is not None:
@@ -426,6 +438,7 @@ class FaceNode(Node):
                 recent = self.greeted_recently(pid)
                 self.mark_greeted(pid)
                 self.generic_greeted_at = None
+                self.panels.show_heart()
                 if name is not None and not recent:
                     self.speak(str(p("greeting_late_text")).format(name=name))
                     self.do_wave(f"recognised {name}")
