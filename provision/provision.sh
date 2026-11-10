@@ -324,9 +324,11 @@ phase_venvs() {
   # The three Python environments that do not mix with the ROS python: the ArcFace face-ID worker, the
   # Whisper ears, Kokoro TTS (v1's setup scripts, paths updated), and the LeRobot venv for rd_vla.
   log "venvs: face id, voice, kokoro, lerobot"
-  [ "${WITH_FACEID:-1}" = 1 ] && "$HERE/setup_faceid.sh" || true
-  [ "${WITH_VOICE:-1}" = 1 ] && WHISPER_MODEL="${WHISPER_MODEL:-base.en}" "$HERE/setup_voice.sh" "${WHISPER_MODEL:-base.en}" || true
-  [ "${WITH_KOKORO:-1}" = 1 ] && "$HERE/setup_kokoro.sh" || true
+  # through bash, and a failure is named: setup_voice.sh sat in the repo without its execute bit and `|| true` hid the
+  # "Permission denied", so the first run on the robot left no voice venv and said nothing
+  [ "${WITH_FACEID:-1}" != 1 ] || bash "$HERE/setup_faceid.sh" || warn "setup_faceid.sh failed: no ArcFace venv (the face falls back to OpenCV YuNet + SFace)"
+  [ "${WITH_VOICE:-1}" != 1 ] || bash "$HERE/setup_voice.sh" "${WHISPER_MODEL:-base.en}" || warn "setup_voice.sh failed: no voice venv (no ears)"
+  [ "${WITH_KOKORO:-1}" != 1 ] || bash "$HERE/setup_kokoro.sh" || warn "setup_kokoro.sh failed: no Kokoro venv (speech falls back to espeak)"
   if [ ! -x /opt/vla/bin/python ]; then
     sudo python3 -m venv --system-site-packages /opt/vla && sudo chown -R "$RD_USER:$RD_USER" /opt/vla
   fi
