@@ -18,3 +18,6 @@ nvidia-jetpack
 
 # fdtget/fdtput: the ttyTHS1 PIO device tree for the RoboClaw link (provision.sh uart1_pio_dtb)
 device-tree-compiler
+
+# jetson-stats (jtop) is installed with pip in the jetson phase, which runs before base: the image has no pip
+python3-pip
