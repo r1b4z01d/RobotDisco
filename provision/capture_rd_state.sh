@@ -25,7 +25,11 @@ set -euo pipefail
 HOST="${1:-RD}"
 OUT="${2:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/snapshot-$(date +%Y%m%d)}"
 mkdir -p "$OUT/inventory"
-r() { ssh -o BatchMode=yes "$HOST" "$@"; }
+# keepalives: a robot on a flaky link (or one being carried to the access point) makes a plain ssh hang for minutes;
+# with these a dead connection fails in about 30 s, and the unguarded commands below then stop the script
+SSH_OPTS="-o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=5 -o ServerAliveCountMax=6"
+export RSYNC_RSH="ssh $SSH_OPTS"
+r() { ssh $SSH_OPTS "$HOST" "$@"; }
 
 echo "==> inventory from $HOST into $OUT"
 r 'lsb_release -ds; uname -r; hostname; id' > "$OUT/inventory/system.txt"
