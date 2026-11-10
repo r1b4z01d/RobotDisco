@@ -4,6 +4,8 @@
 # package indexes on 2026-11-09 (4.6.0-0noble.20260818).
 ros-jazzy-isaac-ros-image-proc
 ros-jazzy-isaac-ros-apriltag
+# on the Jetson nvblox does not resolve: triton-server wants datacenter-gpu-manager-4-core + libnccl2 (NVIDIA's CUDA
+# server repo only); the phase reports it and installs the rest. Fine on the 4090.
 ros-jazzy-isaac-ros-nvblox
 # pulls ros-jazzy-isaac-ros-pointcloud-utils (the LaserScan to FlatScan converter the launch needs)
 ros-jazzy-isaac-ros-occupancy-grid-localizer

@@ -271,11 +271,18 @@ phase_isaac() {
 }
 
 phase_isaacpkgs() {
-  # after `ros`: the Isaac packages depend on ros-jazzy-* from the ROS repo
+  # after `ros`: the Isaac packages depend on ros-jazzy-* from the ROS repo. One at a time, so a package that cannot
+  # resolve does not hold back the rest. On the Jetson that is nvblox (2026-11-09): it needs isaac_ros_triton ->
+  # triton-server -> datacenter-gpu-manager-4-core + libnccl2, which only NVIDIA's CUDA server repo (ubuntu2404/sbsa)
+  # carries; the Jetson and Isaac repos do not.
   log "Isaac ROS 4.6 packages"
-  apt_install $(pkglist "$HERE/isaac-packages.txt") python3-opencv ros-jazzy-cv-bridge || warn "some Isaac packages did not install: check isaac-packages.txt"
-  dpkg -l | grep -E 'ros-jazzy-isaac-ros' | awk '{print "  " $2, $3}'
-  dpkg-query -W -f='  ${Package} ${Version}\n' 'libopencv-core*' 2>/dev/null
+  local p failed=""
+  for p in $(pkglist "$HERE/isaac-packages.txt") python3-opencv ros-jazzy-cv-bridge; do
+    apt_install "$p" >/dev/null 2>&1 || failed="$failed $p"
+  done
+  [ -z "$failed" ] || warn "not installable here:$failed"
+  dpkg -l | grep -E '^ii +ros-jazzy-isaac-ros' | awk '{print "  " $2, $3}' || true
+  dpkg-query -W -f='  ${Package} ${Version}\n' 'libopencv-core*' 2>/dev/null || true
 }
 
 phase_groups() {
