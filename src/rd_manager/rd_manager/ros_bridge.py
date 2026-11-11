@@ -125,7 +125,7 @@ class RosBridge:
         from rclpy.action import ActionClient
         from rclpy.qos import QoSDurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
         from sensor_msgs.msg import Image, JointState, LaserScan, PointCloud2
-        from std_msgs.msg import Bool, Float32MultiArray, String
+        from std_msgs.msg import Bool, Float32, Float32MultiArray, String
         from std_srvs.srv import SetBool, Trigger
         from rd_interfaces.action import GoToLandmark, RunPolicy, Say, Wave
         from rd_interfaces.srv import ArmPower
@@ -161,6 +161,10 @@ class RosBridge:
         n.create_subscription(Float32MultiArray, "/hand/state", lambda m: setattr(self, "hand_state", list(m.data)), 10, callback_group=self.cb)
         n.create_subscription(String, "/arm/stream_state", lambda m: setattr(self, "stream_state", m.data), 10, callback_group=self.cb)
         n.create_subscription(Bool, "/speaking", lambda m: setattr(self, "speaking", bool(m.data)), 10, callback_group=self.cb)
+        # the speaker's level as the Say server reads it off the sink (1 Hz): without it the header's slider had no
+        # value until somebody set one, and the page disables a slider with no value (the robot, 2026-11-10)
+        self.volume = None
+        n.create_subscription(Float32, "/audio/volume", lambda m: setattr(self, "volume", float(m.data)), 10, callback_group=self.cb)
         for key in ("state", "heard", "command", "reply"):   # what it heard (speech or typed), took as the command, answered
             n.create_subscription(String, f"/voice/{key}", (lambda k: lambda m: self._voice_set(k, m.data))(key), 10, callback_group=self.cb)
         # publishers
