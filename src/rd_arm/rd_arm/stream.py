@@ -81,7 +81,7 @@ class Stream(Node):
         self.goal = None
         self.sends = self.ik_calls = self.unreachable = self.rejected = 0
         self.dt = 1.0 / float(self.get_parameter("rate_hz").value)
-        self.create_timer(self.dt, self.tick, callback_group=self.cb)
+        self.tick_timer = None     # the 125 Hz tick exists only while streaming: ticking with nothing to send cost a sixth of a core
         self.create_timer(1.0, self.publish_state, callback_group=self.cb)
 
     def on_joints(self, m: JointState):
@@ -122,9 +122,15 @@ class Stream(Node):
             self.sent = None
             self.velocity = [0.0] * 6
             self.goal = None
-        if not self.on and self.joint_sub is not None:
-            self.destroy_subscription(self.joint_sub)
-            self.joint_sub = None
+        if self.on and self.tick_timer is None:
+            self.tick_timer = self.create_timer(self.dt, self.tick, callback_group=self.cb)
+        if not self.on:
+            if self.tick_timer is not None:
+                self.destroy_timer(self.tick_timer)
+                self.tick_timer = None
+            if self.joint_sub is not None:
+                self.destroy_subscription(self.joint_sub)
+                self.joint_sub = None
         res.success = bool(r.ok)
         res.message = ("streaming on" if self.on else "streaming off") if r.ok else "controller switch failed"
         self.get_logger().info(res.message)
