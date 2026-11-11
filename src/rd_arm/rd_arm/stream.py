@@ -69,7 +69,7 @@ class Stream(Node):
         self.list_controllers = self.create_client(ListControllers, cm + "/list_controllers", callback_group=self.cb)
         self.cmd_pub = self.create_publisher(Float64MultiArray, "/ur5e/" + self.get_parameter("stream_controller").value + "/commands", 10)
         self.state_pub = self.create_publisher(String, "/arm/stream_state", 10)
-        self.create_subscription(JointState, "/joint_states", self.on_joints, 10, callback_group=self.cb)
+        self.joint_sub = None      # /joint_states only while streaming: 100 Hz through Python cost a fifth of a core idle
         self.create_subscription(PoseStamped, "/arm/target_pose", self.on_pose, 10, callback_group=self.cb)
         self.create_subscription(Float64MultiArray, "/arm/target_joints", self.on_joint_target, 10, callback_group=self.cb)
         self.create_service(SetBool, "/arm/stream", self.on_enable, callback_group=self.cb)
@@ -98,6 +98,15 @@ class Stream(Node):
         stream_ctl = self.get_parameter("stream_controller").value
         traj = [c for c in self.get_parameter("trajectory_controllers").value if c in loaded]
         if req.data:
+            if self.joint_sub is None:
+                self.actual = None
+                self.joint_sub = self.create_subscription(JointState, "/joint_states", self.on_joints, 10, callback_group=self.cb)
+            end = time.monotonic() + 2.0
+            while self.actual is None and time.monotonic() < end:
+                time.sleep(0.02)                          # the states arrive on another of the executor's threads
+            if self.actual is None:
+                res.success, res.message = False, "no joint states from the arm"
+                return res
             want, stop = [stream_ctl], [c for c in traj if loaded[c] == "active"]
         else:
             want = traj[:1]
@@ -113,6 +122,9 @@ class Stream(Node):
             self.sent = None
             self.velocity = [0.0] * 6
             self.goal = None
+        if not self.on and self.joint_sub is not None:
+            self.destroy_subscription(self.joint_sub)
+            self.joint_sub = None
         res.success = bool(r.ok)
         res.message = ("streaming on" if self.on else "streaming off") if r.ok else "controller switch failed"
         self.get_logger().info(res.message)

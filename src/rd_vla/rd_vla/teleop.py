@@ -34,6 +34,7 @@ class Teleop(Node):
         dp("button_open", 4); dp("button_close", 5); dp("button_stream", 7); dp("button_home", 6)
         dp("deadzone", 0.12)
         self.observer = Observer(self, cameras=())
+        self.observer.cameras_on()         # teleop wants the tool's pose for as long as it runs
         self.pose_pub = self.create_publisher(PoseStamped, "/arm/target_pose", 10)
         self.hand_pub = self.create_publisher(Float32MultiArray, "/hand/curls", 10)
         self.stream = self.create_client(SetBool, "/arm/stream")

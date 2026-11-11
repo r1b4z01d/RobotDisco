@@ -47,27 +47,36 @@ class Observer:
         self._joints = None
         self._curls = [0.0, 0.0, 0.0, 0.0]
         self.tf = Buffer()
-        self.tfl = TransformListener(self.tf, node)
-        # the cameras are subscribed only between cameras_on() and cameras_off(): idle, the policy runner spent half a
-        # core receiving three 30 fps streams it never looked at
+        self.tfl = None
+        # Nothing is subscribed until cameras_on() and everything is dropped at cameras_off(): idle, the policy runner
+        # spent half a core on three 30 fps camera streams it never looked at, and an eighth of one on the transforms
+        # (88 Hz through a Python listener) and the joint states of an arm nobody was running a policy on.
         self._camera_topic, self._callback_group = camera_topic, callback_group
-        self._camera_subs: list = []
-        node.create_subscription(JointState, "/joint_states", self._on_joints, 10, callback_group=callback_group)
-        node.create_subscription(Float32MultiArray, "/hand/state", self._on_hand, 10, callback_group=callback_group)
+        self._subs: list = []
 
     def cameras_on(self) -> None:
-        if self._camera_subs or not self.cameras:
+        """Start observing: the cameras, the joints, the hand and the transforms."""
+        if self._subs:
             return
         qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT)
-        self._camera_subs = [self.node.create_subscription(Image, self._camera_topic.format(name=cam), self._on_image(cam), qos,
-                                                           callback_group=self._callback_group) for cam in self.cameras]
+        cg = self._callback_group
+        self._subs = [self.node.create_subscription(Image, self._camera_topic.format(name=cam), self._on_image(cam), qos, callback_group=cg)
+                      for cam in self.cameras]
+        self._subs.append(self.node.create_subscription(JointState, "/joint_states", self._on_joints, 10, callback_group=cg))
+        self._subs.append(self.node.create_subscription(Float32MultiArray, "/hand/state", self._on_hand, 10, callback_group=cg))
+        self.tf = Buffer()
+        self.tfl = TransformListener(self.tf, self.node)
 
     def cameras_off(self) -> None:
-        for s in self._camera_subs:
+        for s in self._subs:
             self.node.destroy_subscription(s)
-        self._camera_subs = []
+        self._subs = []
+        if self.tfl is not None:
+            self.tfl.unregister()
+            self.tfl = None
         with self._lock:
             self._images.clear()               # the next run must not start on this run's last frames
+            self._joints = None
 
     def wait_ready(self, max_age: float = 1.0, timeout: float = 6.0, cancelled=lambda: False) -> tuple[bool, str]:
         """ready(), given the time the cameras need to start flowing after cameras_on()."""
