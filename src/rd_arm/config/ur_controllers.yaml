@@ -23,6 +23,13 @@
     tcp_pose_broadcaster:
       type: pose_broadcaster/PoseBroadcaster
 
+# The controller manager runs at 500 Hz for the trajectory controller; the joint states do not need to. At 500 Hz
+# every Python subscriber (the streamer, the wave server, the policy runner's observer, the manager) spent most of
+# a core just receiving them: with all units up the Orin sat at a load average of 42 (2026-11-10).
+/**/joint_state_broadcaster:
+  ros__parameters:
+    update_rate: 100
+
 /**/speed_scaling_state_broadcaster:
   ros__parameters:
     state_publish_rate: 100.0
