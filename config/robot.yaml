@@ -69,6 +69,17 @@ gpu:                              # training box: RTX 4090, Ubuntu 24.04, ssh ho
     manager: 8081                 # rd_manager instance for datasets / training / evals
     ollama: 11434                 # the voice assistant's first-choice local model
 
+battery:                          # the monitor board on the pack: ESP32 + INA228 (firmware/RD_Battery_Monitor), which sends
+                                  # {"Voltage","Current","Temperature"} to this PC four times a second
+  ports:
+    udp: 8889
+  current_sign: 1                 # -1 if the shunt is wired so that discharge reads positive (/battery: negative = discharging)
+  # The pack's own voltages. Until they are set rd_base's battery_monitor reports volts and amps and warns about nothing.
+  full_v: null                    # resting voltage fully charged     } the percentage, linear between the two
+  empty_v: null                   # where the pack counts as empty    }
+  low_v: null                     # "my battery is low", said once
+  critical_v: null                # "please charge me now", repeated every five minutes
+
 sensors:
   velodyne:
     ip: 192.168.11.46

@@ -196,6 +196,15 @@ class RosBridge:
         # and its mute: the header button showed only mutes made from this page, not the voice assistant's or the desktop's
         self.muted = False
         n.create_subscription(Bool, "/audio/muted", lambda m: setattr(self, "muted", bool(m.data)), 10, callback_group=self.cb)
+        # the pack, from rd_base's battery_monitor (1 Hz): the header shows it on every tab
+        from sensor_msgs.msg import BatteryState
+        self.battery = None
+
+        def on_battery(m):
+            f = lambda x: None if x != x else round(float(x), 3)          # noqa: E731  nan -> None
+            self.battery = {"present": bool(m.present), "voltage": f(m.voltage), "current": f(m.current),
+                            "percentage": f(m.percentage), "temperature": f(m.temperature), "t": time.time()}
+        n.create_subscription(BatteryState, "/battery", on_battery, 10, callback_group=self.cb)
         for key in ("state", "heard", "command", "reply"):   # what it heard (speech or typed), took as the command, answered
             n.create_subscription(String, f"/voice/{key}", (lambda k: lambda m: self._voice_set(k, m.data))(key), 10, callback_group=self.cb)
         # publishers

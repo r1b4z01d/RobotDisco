@@ -21,5 +21,6 @@ setup(
     maintainer_email='bryanribas@gmail.com',
     description='Robot Disco mobile base',
     license='CC-BY-NC-SA-4.0',
-    entry_points={'console_scripts': ['hardware_watchdog = rd_base.hardware_watchdog:main', 'joy_guard = rd_base.joy_guard:main']},
+    entry_points={'console_scripts': ['hardware_watchdog = rd_base.hardware_watchdog:main', 'joy_guard = rd_base.joy_guard:main',
+                                        'battery_monitor = rd_base.battery_monitor:main']},
 )

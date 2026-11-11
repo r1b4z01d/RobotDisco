@@ -148,6 +148,9 @@ class VoiceNode(Node):
         self.create_subscription(String, "/voice/text_in", self.on_text_in, 10, callback_group=self.cb)
         self.create_subscription(String, "/voice/run_task", self.on_run_task, 10, callback_group=self.cb)
         self.create_subscription(Bool, "/speaking", self.on_speaking, 10, callback_group=self.cb)
+        from sensor_msgs.msg import BatteryState
+        self._battery = None                                   # (message, monotonic) from rd_base's battery_monitor
+        self.create_subscription(BatteryState, "/battery", lambda m: setattr(self, "_battery", (m, time.monotonic())), 10, callback_group=self.cb)
         self.create_subscription(String, "/face/person", self.on_person, 10, callback_group=self.cb)
         self.say_client = ActionClient(self, Say, "say", callback_group=self.cb)
         self.policy_client = ActionClient(self, RunPolicy, "run_policy", callback_group=self.cb)
@@ -170,6 +173,7 @@ class VoiceNode(Node):
                            persona=str(p("persona")), location_name=str(p("location_name")), model=str(p("llm_model")),
                            llm_enabled=bool(p("llm_enabled")), llm_backend=str(p("llm_backend")), ollama_url=str(p("ollama_url")),
                            ollama_model=str(p("ollama_model")), log=lambda m: self.get_logger().info(m))
+        self.brain.battery = self.battery_sentence
         self.wake = WakeMatcher(list(p("wake_phrases")), float(p("wake_threshold")))
         self.follow_up_seconds = float(p("follow_up_seconds"))
         self._follow_up_until = 0.0
@@ -347,6 +351,15 @@ class VoiceNode(Node):
         else:
             self.get_logger().warn("no Say server")
             self.ears_cmd({"cmd": "unmute"})
+
+    def battery_sentence(self) -> str:
+        b = self._battery
+        if b is None or not b[0].present or time.monotonic() - b[1] > 10.0:
+            return "I can't hear my battery monitor right now."
+        m = b[0]
+        level = f"{round(m.percentage * 100)} percent, " if m.percentage == m.percentage else ""
+        doing = " and charging" if m.current > 0.2 else f", drawing {abs(m.current):.1f} amps" if m.current < -0.05 else ""
+        return f"My battery is at {level}{m.voltage:.1f} volts{doing}."
 
     def on_speaking(self, m: Bool):
         self._speaking = bool(m.data)

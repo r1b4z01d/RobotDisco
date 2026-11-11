@@ -1676,6 +1676,26 @@ async function copyRecordCmd(d) {
 }
 
 loadDatasets();
+// ---- battery (header, every tab): rd_base's battery_monitor -> /battery -> /api/battery
+async function battRefresh() {
+  if (document.visibilityState !== "visible") return;
+  const s = $("#hdr-batt");
+  let b; try { b = await api("/api/battery"); } catch (e) { return; }
+  if (!b || b.voltage == null || !b.present || b.age > 10) {
+    s.hidden = !(b && b.voltage != null);            // never heard: no chip at all; heard and gone: say so
+    s.textContent = "🔋 ?"; s.className = "mono muted hdr-batt"; s.title = "battery: the monitor board went quiet";
+    return;
+  }
+  const pct = b.percentage == null ? null : Math.round(b.percentage * 100);
+  const amps = b.current == null ? "" : ` ${b.current >= 0 ? "+" : "−"}${Math.abs(b.current).toFixed(1)} A`;
+  s.hidden = false;
+  s.textContent = `🔋 ${pct == null ? "" : pct + "% "}${b.voltage.toFixed(1)} V${amps}`;
+  s.className = "mono hdr-batt " + (pct == null ? "muted" : pct <= 10 ? "bad" : pct <= 25 ? "warn" : "muted");
+  s.title = `battery: ${b.voltage.toFixed(2)} V${b.current == null ? "" : `, ${b.current.toFixed(2)} A (negative = discharging)`}` +
+            `${b.temperature == null ? "" : `, board ${b.temperature.toFixed(0)} °C`}${pct == null ? " — set the pack's voltages in robot.yaml battery for a percentage and warnings" : ""}`;
+}
+battRefresh(); setInterval(battRefresh, 5000);
+
 // ---- robot speaker volume (header, every tab): the face node on the robot serves /api/volume
 // next to its Folks page; the manager relays. Polled slowly, never while the slider is being dragged.
 const vol = { timer: null, dragging: false, last: null, muted: false, pending: null };

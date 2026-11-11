@@ -847,6 +847,14 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
             raise HTTPException(404, "name|forget|reset_greeting|wink")
         return {"ok": True}
 
+    @app.get("/api/battery")
+    def api_battery():
+        """The pack as rd_base's battery_monitor last reported it; `age` in seconds, null fields where it has no value."""
+        b = getattr(B, "battery", None) if B else None
+        if not b:
+            return {"present": False, "error": "no ROS" if not B else "nothing on /battery yet"}
+        return {**{k: v for k, v in b.items() if k != "t"}, "age": round(time.time() - b["t"], 1)}
+
     @app.get("/api/volume")
     def api_volume():
         if not B:

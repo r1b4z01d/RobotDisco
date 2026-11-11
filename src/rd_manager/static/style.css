@@ -256,6 +256,9 @@ table.svc pre.svc-log { margin: 0; padding: 8px 12px; max-height: 320px; overflo
 .hdr-right .views-right, .hdr-right .btn, .hdr-right .monitor { flex-shrink: 0; }
 #datasets-dir { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* robot speaker volume: in the header on every tab (the speaker is the robot's, not the tab's) */
+.hdr-batt { font-size: 12px; flex-shrink: 0; white-space: nowrap; }
+.hdr-batt.warn { color: #ffb347; }
+.hdr-batt.bad { color: #ff6b6b; font-weight: 600; }
 .hdr-vol { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .hdr-vol input[type=range] { width: 90px; accent-color: var(--accent); margin: 0; }
 .hdr-vol input[type=range]:disabled { opacity: .35; }

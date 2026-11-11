@@ -9,6 +9,8 @@
 
   <exec_depend>rd_description</exec_depend>
   <exec_depend>rd_bringup</exec_depend>
+  <exec_depend>rd_interfaces</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>controller_manager</exec_depend>
   <exec_depend>controller_manager_msgs</exec_depend>
   <exec_depend>roboclaw_hardware_interface</exec_depend>

@@ -102,6 +102,10 @@ def generate_launch_description():
     joy_guard = Node(package='rd_base', executable='joy_guard', name='joy_guard', output='screen',
                      parameters=[{'use_sim_time': use_sim_time}], condition=IfCondition(joystick))
 
+    # the pack's voltage and current from the monitor board over UDP -> /battery, and the low-battery warnings
+    battery = Node(package='rd_base', executable='battery_monitor', name='battery_monitor', output='screen',
+                   parameters=[{'use_sim_time': use_sim_time}], condition=IfCondition(LaunchConfiguration('battery')))
+
     return LaunchDescription([
         DeclareLaunchArgument('sim_mode', default_value='false', description='mock ros2_control hardware'),
         DeclareLaunchArgument('use_sim_time', default_value='false'),
@@ -110,10 +114,11 @@ def generate_launch_description():
                               description='gate cmd_vel through the Nav2 collision monitor (needs the lidar scans)'),
         DeclareLaunchArgument('controllers', default_value='true',
                               description='ros2_control (controller manager + diff_cont): false when a simulator moves the wheels'),
+        DeclareLaunchArgument('battery', default_value='true', description='listen for the battery monitor board (UDP) and publish /battery'),
         rsp,
         TimerAction(period=2.0, actions=[controller_manager]),
         RegisterEventHandler(OnProcessStart(target_action=controller_manager, on_start=spawners)),
         twist_mux, watchdog,
         monitor, monitor_lifecycle,
-        joy, joy_guard, teleop,
+        joy, joy_guard, teleop, battery,
     ])

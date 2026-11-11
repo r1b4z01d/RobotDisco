@@ -85,3 +85,33 @@ def test_joy_guard_lets_no_stale_pad_state_through():
     assert g.update(True, [0.0, 0.3, 0, 0, 1.0, 1.0], stale_buttons)[0][1] == 0.3
     listing = 'I: Bus=0005\nN: Name="8BitDo Ultimate 2C Wireless"\nH: Handlers=js1 event13\n'
     assert device_present("8BitDo Ultimate 2C Wireless", listing) and not device_present("8BitDo Ultimate 2C Wireless Controller", listing)
+
+
+def test_battery_monitor_parses_the_boards_line():
+    from rd_base.battery_monitor import parse, percentage
+    s = parse(b'{"Voltage":25.31,"Current":-3120.5,"Temperature":31.2}')
+    assert abs(s["voltage"] - 25.31) < 1e-6 and abs(s["current_a"] + 3.1205) < 1e-6 and abs(s["temperature"] - 31.2) < 1e-6
+    assert parse(b'{"Voltage":25.3}') == {"voltage": 25.3, "current_a": 0.0, "temperature": None}
+    for junk in (b"", b"hello", b'{"Current":1}', b'{"Voltage":"x"}', b'{"Voltage":-5}', b'{"Voltage":NaN}', b"\xff\xfe"):
+        assert parse(junk) is None
+    assert percentage(25.0, 20.0, 30.0) == 0.5 and percentage(35.0, 20.0, 30.0) == 1.0 and percentage(10.0, 20.0, 30.0) == 0.0
+    assert percentage(25.0, None, None) is None and percentage(25.0, 0.0, 0.0) is None
+
+
+def test_battery_alerts_hold_then_speak_once_and_repeat_only_when_critical():
+    from rd_base.battery_monitor import Alerts, sentence
+    a = Alerts(low_v=23.0, critical_v=21.0, hold_s=10.0, hysteresis_v=0.3, repeat_s=300.0)
+    assert a.update(25.0, 0) is None
+    assert a.update(22.5, 1) is None and a.update(25.0, 5) is None          # a sag of four seconds: nothing
+    assert a.update(22.5, 20) is None and a.update(22.6, 29) is None
+    assert a.update(22.5, 30) == "low"                                       # held ten seconds: said once
+    assert all(a.update(22.5, t) is None for t in range(31, 400, 10))        # and not again
+    assert a.update(23.2, 400) is None and a.update(23.2, 420) is None and a.level == "low"     # inside the hysteresis
+    assert a.update(20.5, 430) is None and a.update(20.5, 440) == "critical"
+    assert a.update(20.5, 500) is None and a.update(20.5, 740) == "critical"  # every five minutes while it lasts
+    assert a.update(25.0, 750) is None and a.update(25.0, 760) is None and a.level == "ok"      # charged: quiet
+    assert a.update(22.0, 800) is None and a.update(22.0, 810) == "low"      # and it warns again next time
+    quiet = Alerts(None, None)
+    assert all(quiet.update(1.0, t) is None for t in range(0, 100, 5))       # no levels configured: never
+    assert sentence("low", 22.5, None) == "My battery is low, 22.5 volts."
+    assert "20 percent" in sentence("critical", 21.0, 0.2) and "charge me" in sentence("critical", 21.0, 0.2)

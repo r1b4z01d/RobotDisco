@@ -37,6 +37,12 @@ A lost reply no longer ends driving: the interface asks twice and rides out half
 the hardware for good, 2026-11-10). If the link stays down, `hardware_watchdog` ends the launch after 5 s and the
 unit's autorestart starts a fresh one; nothing has to be restarted by hand.
 
+`battery_monitor` listens for the battery board (`firmware/RD_Battery_Monitor`, an ESP32 with an INA228 on the pack)
+on UDP 8889 and publishes `sensor_msgs/BatteryState` on `/battery` once a second. With the pack's voltages in
+`robot.yaml battery` it also gives a percentage and says "my battery is low" once, then "please charge me now" every
+five minutes while critical (held 10 s first, so a sag while the motors start does not count). The console's header
+and the voice assistant ("how is your battery") read `/battery`.
+
 Tests (`rig/rig.sh test rd_base`): the YAML contracts, and a launch test on mock hardware that drives the
 robot through the whole velocity path and checks the collision monitor stops it for an object 0.35 m ahead.
 Only hardware can verify: the RoboClaw link (ttyTHS1 in PIO mode, the probe tools in `provision/tools`),

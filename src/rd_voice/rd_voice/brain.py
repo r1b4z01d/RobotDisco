@@ -257,6 +257,8 @@ def parse_volume(t: str) -> Optional[tuple]:
 
 
 _R_TIME = re.compile(r"^(?:what(?:'s| is)\s+the\s+time|what time is it)(?:\s+now)?[?.!]*$")
+_R_BATTERY = re.compile(r"^(?:how(?:'s| is)\s+(?:your|the)\s+battery(?:\s+(?:doing|level|looking))?|(?:what(?:'s| is)\s+)?(?:your|the)\s+battery\s+(?:level|status|charge|voltage)"
+                        r"|how\s+much\s+(?:battery|charge|power)\s+(?:do\s+you\s+have|is)\s*(?:left)?|battery\s+(?:level|status|check)|do\s+you\s+need\s+(?:a\s+|to\s+)?charg\w*)[?.!]*$")
 _R_DATE = re.compile(r"^(?:what(?:'s| is)\s+(?:the\s+date|today(?:'s date)?)|what day is it)[?.!]*$")
 _R_WEATHER = re.compile(
     r"^(?:.*\b(?:weather|forecast|temperature|how (?:hot|cold|warm) is it|rain(?:ing|y)?|snow(?:ing)?|sunny|umbrella|jacket)\b.*)$"
@@ -293,6 +295,7 @@ class Brain:
     ):
         self.weather, self.news, self.home, self.music, self.clock = weather, news, home, music, clock
         self.volume = volume or VolumeSkill()
+        self.battery: Optional[Callable[[], str]] = None      # the node sets it: the pack's state as a sentence
         self.nav: Navigator = navigator or NoNavigator()
         self.tasks: TaskRunner = tasks or NoTaskRunner()
         self.persona = persona
@@ -629,6 +632,8 @@ class Brain:
         m = _R_DATE.match(t)
         if m:
             return self.clock.date()
+        if _R_BATTERY.match(t) and self.battery is not None:
+            return self.battery()
         hit = self.tasks.match(t)             # "pick up tigger" = a landmark task: drive there, run its policy
         if hit is not None:
             return self.tasks.start(*hit)
