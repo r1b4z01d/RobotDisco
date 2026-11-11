@@ -12,6 +12,6 @@ def generate_launch_description():
         DeclareLaunchArgument('engine', default_value='auto'),
         Node(package='rd_audio', executable='say_server', name='say_server', output='screen',
              parameters=[{'engine': PythonExpression(["'fake' if '", sim, "' == 'true' else '", LaunchConfiguration('engine'), "'"]),
-                          'player': PythonExpression(["'none' if '", sim, "' == 'true' else 'aplay'"]),
+                          'player': PythonExpression(["'none' if '", sim, "' == 'true' else 'paplay'"]),
                           'sink_watchdog': PythonExpression(["'", sim, "' != 'true'"])}]),
     ])

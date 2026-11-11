@@ -10,7 +10,7 @@ tracks what comes out of the speaker.
   pub    /audio/volume   std_msgs/Float32           the sink's volume 0..1 (1 Hz); param `volume` sets it
   srv    /audio/mute     std_srvs/SetBool
 
-One sentence at a time; a goal with interrupt=true stops the current one. `player` = aplay (robot, pinned to
+One sentence at a time; a goal with interrupt=true stops the current one. `player` = paplay (robot, pinned to
 the sink through PULSE_SINK) | none (the rig: no audio device, the timing is kept).
 """
 from __future__ import annotations
@@ -49,7 +49,7 @@ class SayServer(Node):
         dp("speed", 1.0)
         dp("kokoro_python", "~/.robot_face/kokoro-venv/bin/python")
         dp("kokoro_model_dir", "~/.robot_face/kokoro")
-        dp("player", "aplay")                 # aplay | none
+        dp("player", "paplay")                # paplay | aplay | none
         dp("sink", str(config.get("audio.sink", "")))
         dp("sink_watchdog", True)
         dp("lead_silence", 1.5)               # seconds of faint tone before each utterance (the USB adapter wakes up)
@@ -205,8 +205,11 @@ class SayServer(Node):
     def _play(self, path, audio, rate, cancelled, interrupted, progress) -> tuple[bool, str]:
         player = self.get_parameter("player").value
         proc = None
-        if player == "aplay":
-            proc = subprocess.Popen(["aplay", "-q", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        if player in ("paplay", "aplay"):
+            # paplay speaks to the sound server and honours PULSE_SINK. aplay goes through ALSA's default device,
+            # which on Ubuntu 24.04 is PipeWire's ALSA plugin: it ignores PULSE_SINK, and on the robot the speech
+            # never reached the C-Media speaker (2026-11-10, measured with the robot's own mic).
+            proc = subprocess.Popen([player, path] if player == "paplay" else ["aplay", "-q", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                     env=audio_sink.player_env(self.get_parameter("sink").value))
             self._proc = proc
         peak = float(np.abs(audio).max()) if audio.size else 0.0

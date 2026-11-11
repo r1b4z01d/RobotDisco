@@ -17,4 +17,4 @@ node's duplicate copies are gone.
 
 Tests: the fake voice and the chunking (units); a launch test that speaks through the fake voice with no
 audio device and checks `/speaking`, the 25 Hz mouth feed, the duration and interruption. Hardware only:
-Kokoro in its venv, aplay on the C-Media sink, the lead-in silence the adapter needs.
+Kokoro in its venv, paplay on the C-Media sink (aplay's ALSA default ignores PULSE_SINK under PipeWire), the lead-in silence the adapter needs.

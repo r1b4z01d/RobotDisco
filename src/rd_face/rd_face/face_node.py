@@ -148,7 +148,7 @@ class FaceNode(Node):
         self.renderer = None
         self._init_renderer()
         self.render_dt = 1.0 / float(p("render_fps"))
-        self.create_timer(self.render_dt, self.render_tick, callback_group=self.cb)
+        # no timer for render_tick: the GL context belongs to the thread that made the window, so main() draws
         self.create_timer(1.0, self.publish_people, callback_group=self.cb)
         self.get_logger().info(f"renderer {p('renderer')}, face id {'on' if self.face_id else 'off'}, image {p('image_topic')}")
 
@@ -589,8 +589,29 @@ def main():
     node = FaceNode()
     ex = MultiThreadedExecutor(num_threads=4)
     ex.add_node(node)
+
+    def spin():
+        try:
+            ex.spin()
+        except (KeyboardInterrupt, ExternalShutdownException):
+            pass
+
+    # The callbacks run on the executor's threads; the frames are drawn here, on the main thread. An OpenGL context
+    # is current on one thread only (the one that made the window in FaceNode.__init__), and GLFW wants its events
+    # polled from the main thread. As a timer on the 4-thread executor render_tick drew into no context at all:
+    # the window came up and stayed black (the robot, 2026-11-10; the rig never saw it, it renders headless).
+    spinner = threading.Thread(target=spin, daemon=True, name="face_spin")
+    spinner.start()
     try:
-        ex.spin()
+        next_frame = time.monotonic()
+        while rclpy.ok() and spinner.is_alive():
+            node.render_tick()
+            next_frame += node.render_dt
+            pause = next_frame - time.monotonic()
+            if pause > 0:
+                time.sleep(pause)
+            else:
+                next_frame = time.monotonic()      # behind: do not try to catch up
     except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
