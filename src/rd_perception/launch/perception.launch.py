@@ -28,6 +28,7 @@ def generate_launch_description():
         DeclareLaunchArgument('lidars', default_value='true'),
         DeclareLaunchArgument('realsense', default_value='true'),
         DeclareLaunchArgument('cameras', default_value='true'),
+        DeclareLaunchArgument('camera_names', default_value='scene,wrist,side', description='which USB webcams the cameras switch starts'),
         DeclareLaunchArgument('isaac', default_value='false', description='the Isaac ROS container (robot only)'),
         DeclareLaunchArgument('apriltag', default_value='false'),
         DeclareLaunchArgument('grid_localizer', default_value='false'),
@@ -37,7 +38,9 @@ def generate_launch_description():
                               description='sim_mode: tags in the map as id, x, y, z, yaw'),
         inc('rd_perception', 'lidars.launch.py', _real('lidars')),
         inc('rd_perception', 'realsense.launch.py', _real('realsense'), infra=LaunchConfiguration('visual_slam')),
-        inc('rd_perception', 'cameras.launch.py', _real('cameras')),
+        # cameras.launch.py has its own `cameras` argument (the NAMES to start); an include inherits this file's
+        # `cameras` (a true/false switch) unless it is passed one, and then looked up a camera called 'true'
+        inc('rd_perception', 'cameras.launch.py', _real('cameras'), cameras=LaunchConfiguration('camera_names')),
         inc('rd_perception', 'isaac.launch.py', _real('isaac'),
             apriltag=LaunchConfiguration('apriltag'), grid_localizer=LaunchConfiguration('grid_localizer'),
             nvblox=LaunchConfiguration('nvblox'), visual_slam=LaunchConfiguration('visual_slam')),

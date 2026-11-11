@@ -6,7 +6,7 @@ from types import SimpleNamespace as NS
 import numpy as np
 import yaml
 
-from rd_perception.image_rotate import rotate, square_crop
+from rd_perception.image_rotate import rotate, scale_to_height, square_crop
 from rd_perception.scan_range_offset import apply_offset
 from rd_perception.tag_adapter import convert
 
@@ -59,6 +59,18 @@ def test_square_crop():
     assert (h, w) == (3, 3) and (np.frombuffer(data, np.uint8).reshape(3, 3, 3) == b[:, 2:5]).all()
     data, h, w = square_crop(a[:3].tobytes(), 3, 3, 3, 0.4)                                           # already square: untouched
     assert data == a[:3].tobytes()
+
+
+def test_scale_to_height():
+    a = np.zeros((720, 1280, 3), np.uint8)
+    a[:, 640:] = 200                                                   # right half bright
+    data, h, w = scale_to_height(a.tobytes(), 720, 1280, 3, 540)      # the wrist: 1280x720 -> 960x540
+    r = np.frombuffer(data, np.uint8).reshape(h, w, 3)
+    assert (h, w) == (540, 960) and r[270, 100, 0] == 0 and r[270, 900, 0] == 200
+    data, h, w = scale_to_height(np.zeros((720, 720, 3), np.uint8).tobytes(), 720, 720, 3, 540)   # a square stays square
+    assert (h, w) == (540, 540)
+    same = a.tobytes()
+    assert scale_to_height(same, 720, 1280, 3, 0)[0] is same and scale_to_height(same, 720, 1280, 3, 720)[0] is same
 
 
 def test_filter_configs_are_laser_filters_chains():

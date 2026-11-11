@@ -8,6 +8,8 @@ Topics: /cameras/<name>/image_raw (rgb8), /cameras/<name>/image (rotated upright
         gives `square`, cut to v1's square: what the recorder and the policies see), /cameras/<name>/image_raw/compressed,
         /cameras/<name>/camera_info
 """
+import os
+
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import LaunchConfiguration
@@ -26,17 +28,22 @@ def _nodes(context):
         out.append(Node(
             package='usb_cam', executable='usb_cam_node_exe', name=f'{name}_camera', namespace=f'cameras/{name}',
             output='screen', respawn=True, respawn_delay=3.0,
-            parameters=[{'video_device': by_path.format(port=c['port']),
+            # usb_cam mishandles a symlink outside /dev: it prepends /dev/ to the link's relative target and tried
+            # to open `/dev/../../video8` (first run on the robot, 2026-11-10). Resolve the by-path name here; it is
+            # still the USB PORT that picks the camera, the /dev/videoN number is only what it is at launch.
+            parameters=[{'video_device': os.path.realpath(by_path.format(port=c['port'])),
                          'image_width': int(cams.get('width', 1280)), 'image_height': int(cams.get('height', 720)),
                          'framerate': float(cams.get('fps', 30)), 'pixel_format': 'mjpeg2rgb',
                          'camera_name': name, 'frame_id': f'{name}_camera', 'io_method': 'mmap'}],
             arguments=['--ros-args', '--log-level', 'WARN']))
         rot = int(c.get('rotate', 0))
         square = c.get('square')      # fraction along the upright frame's long axis, or absent = the whole frame
-        if rot or square is not None:
-            out.append(Node(package='rd_perception', executable='image_rotate', name=f'{name}_rotate',
-                            namespace=f'cameras/{name}', parameters=[{'degrees': rot, 'square': float(square) if square is not None else -1.0}],
-                            remappings=[('in', 'image_raw'), ('out', 'image')]))
+        # every camera, also one with nothing to rotate or cut (the wrist): /cameras/<name>/image is what everything reads
+        out.append(Node(package='rd_perception', executable='image_rotate', name=f'{name}_rotate',
+                        namespace=f'cameras/{name}',
+                        parameters=[{'degrees': rot, 'square': float(square) if square is not None else -1.0,
+                                     'height': int(cams.get('image_height', 0))}],
+                        remappings=[('in', 'image_raw'), ('out', 'image')]))
     return out
 
 

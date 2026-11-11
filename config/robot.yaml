@@ -91,6 +91,7 @@ sensors:
     width: 1280
     height: 720
     fps: 30
+    image_height: 540             # rows of /cameras/<name>/image after rotation and crop: v1's dataset size (540x540 squares, 960x540 wrist)
     # square: the cut of the upright (rotated) frame the policies were trained on, as a fraction along its long axis
     # (v1's SCENE_SQUARE / SIDE_SQUARE: scene keeps the shelf and the arm's working volume, side keeps Tigger and the
     # upper arm; the wrist is landscape and stays whole). Datasets and checkpoints must agree on these.
