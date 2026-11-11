@@ -24,7 +24,7 @@
     <xacro:arg name="roboclaw_baud" default="115200"/>
     <xacro:arg name="robot_ip" default="0.0.0.0"/>
     <xacro:arg name="ur_kinematics" default="$(find ur_description)/config/ur5e/default_kinematics.yaml"/>
-    <xacro:arg name="tool_voltage" default="24"/>
+    <xacro:arg name="tool_voltage" default="12"/>   <!-- the hand runs on 12 V; the driver applies this only with use_tool_communication -->
     <xacro:arg name="headless_mode" default="true"/>
     <xacro:arg name="initial_positions_file" default="$(find ur_description)/config/initial_positions.yaml"/>
     <xacro:property name="initial_positions_file" default="$(arg initial_positions_file)"/>

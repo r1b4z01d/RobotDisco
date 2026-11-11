@@ -32,6 +32,16 @@ def test_known_values(key, expect):
     assert config.get(key) == expect
 
 
+def test_tool_voltage_is_the_hands_12_volts():
+    """The AmazingHand is fed from the UR's tool connector at 12 V; 24 V there would be into its ESP32 and servos."""
+    assert config.get("arm.tool_voltage") == 12
+    root = Path(__file__).resolve().parents[3]
+    xacro = (root / "src/rd_description/urdf/robot.urdf.xacro").read_text()
+    assert '<xacro:arg name="tool_voltage" default="12"/>' in xacro
+    for rel in ("src/rd_arm/launch/arm.launch.py", "src/rd_arm/rd_arm/arm_power.py"):
+        assert "tool_voltage', 24" not in (root / rel).read_text() and 'tool_voltage", 24' not in (root / rel).read_text(), rel
+
+
 def test_every_section_present():
     cfg = config.load()
     for section in ("network", "robot", "arm", "hand", "gpu", "sensors", "audio", "gamepad"):

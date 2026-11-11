@@ -1,6 +1,8 @@
 """ArmPower service: the one implementation of UR power-up / power-off / protective-stop recovery
 (v1 had it in ur_power.py, eval_hw.py and the face node). Talks to the dashboard directly (rd_arm.dashboard);
-on the robot it then asks the driver to resend the control program (headless mode) and sets the tool voltage.
+on the robot it then asks the driver to resend the control program (headless mode). It does NOT set the tool
+voltage: PolyScope's installation keeps the 12 V the hand runs on, and the `tool_voltage` parameter is only the value
+a future power-cycle of the hand would use (v1's eval_hw toggled it to reboot the ESP32).
 
     ros2 service call /arm/power rd_interfaces/srv/ArmPower "{command: 1}"     # POWER_ON
 """
@@ -24,7 +26,7 @@ class ArmPowerServer(Node):
         super().__init__("arm_power")
         self.declare_parameter("ip", str(config.get("arm.ip")))
         self.declare_parameter("dashboard_port", int(config.get("arm.ports.dashboard", 29999)))
-        self.declare_parameter("tool_voltage", int(config.get("arm.tool_voltage", 24)))
+        self.declare_parameter("tool_voltage", int(config.get("arm.tool_voltage", 12)))
         self.declare_parameter("resend_program", True)     # the driver's io_and_status_controller/resend_robot_program
         self.declare_parameter("sim_mode", False)
         self.dash = UrDashboard(self.get_parameter("ip").value, int(self.get_parameter("dashboard_port").value),

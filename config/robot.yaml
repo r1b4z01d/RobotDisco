@@ -39,7 +39,9 @@ arm:                              # Universal Robots UR5e, PolyScope 5.21
     script_sender: 50002
     trajectory: 50003
     script_command: 50004
-  tool_voltage: 24                # the hand is powered from the tool connector
+  tool_voltage: 12                # the hand's ESP32 and servos are fed from the tool connector at 12 V (v1 eval_hw.py TOOL_VOLTAGE,
+                                  # confirmed by Bryan 2026-11-10). NEVER 24: nothing sets it today (PolyScope keeps its own 12 V),
+                                  # but this is the value anything that does set it will use
   home: vla_home                  # named pose in rd_arm's pose library that policies start from
 
 hand:                             # AmazingHand, ESP32 on the tool flange (firmware/AmazingHand)
