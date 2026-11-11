@@ -22,7 +22,8 @@ from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 from rclpy.node import Node
-from std_msgs.msg import Float32MultiArray
+from rclpy.qos import QoSDurabilityPolicy, QoSProfile, ReliabilityPolicy
+from std_msgs.msg import Bool, Float32MultiArray
 from std_srvs.srv import SetBool, Trigger
 
 from rd_bringup import config, units
@@ -71,6 +72,11 @@ class PolicyRunner(Node):
         self.go_home = self.create_client(Trigger, "/arm/go_home", callback_group=self.cb)
         self._lock = threading.Lock()
         self._active = None
+        self._program_running = None       # the UR driver's robot_program_running; None where nothing publishes it (the rig's mock arm)
+        self.create_subscription(Bool, "/ur5e/io_and_status_controller/robot_program_running",
+                                 lambda m: setattr(self, "_program_running", bool(m.data)),
+                                 QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL, reliability=ReliabilityPolicy.RELIABLE),
+                                 callback_group=self.cb)
         self.server = ActionServer(self, RunPolicy, "run_policy", execute_callback=self.execute, goal_callback=self.on_goal,
                                    cancel_callback=lambda h: CancelResponse.ACCEPT, callback_group=self.cb)
         unit = str(self.get_parameter("server_unit").value)
@@ -239,9 +245,17 @@ class PolicyRunner(Node):
                     still_s = float(goal.still_seconds) if goal.still_seconds > 0 else float(p("done_still_s"))
                     done_when = (goal.done_when or "").strip().lower()
                     self._feedback(handle, 0, t0, "running", 0)
+                    was_running = False
                     while True:
                         if cancelled():
                             ended = "cancelled"
+                            break
+                        # The UR's control program stops on a protective stop. The first run on the robot went on
+                        # sending targets to a stopped arm until the policy closed the hand and it was scored a success.
+                        if self._program_running:
+                            was_running = True
+                        elif was_running:
+                            ended = "arm stopped (protective stop?)"
                             break
                         if goal.max_seconds and time.monotonic() - t0 > goal.max_seconds:
                             ended = "timeout"

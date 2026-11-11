@@ -123,3 +123,27 @@ def test_motion_library(monkeypatch):
     assert motions.joint_distance(poses["vla_home"], m["q"][0]) > 1.0      # the wave starts elsewhere: a Wave from home begins with a MoveIt approach
     with pytest.raises(FileNotFoundError):
         motions.load_motion("nope")
+
+
+def test_stream_follower_starts_from_rest_and_respects_its_limits():
+    """What tripped the UR's collision check on the first real run: the sent joints went from rest to 1.5 rad/s in one
+    tick. The follower's first step is bounded by the acceleration, its speed by the limit, and it settles on the goal."""
+    from rd_arm.stream import smooth_step
+    dt, omega, vmax, amax = 1 / 125, 12.0, 1.0, 5.0
+    x, v, goal = [0.0] * 6, [0.0] * 6, [0.5, -0.5, 0.02, 0.0, 0.3, -0.01]
+    x1, v1 = smooth_step(x, v, goal, dt, omega, vmax, amax)
+    assert max(abs(a) for a in x1) <= amax * dt * dt + 1e-12            # 0.32 mrad, not the old 30 mrad
+    peak_v = peak_a = 0.0
+    for _ in range(int(3.0 / dt)):
+        xn, vn = smooth_step(x, v, goal, dt, omega, vmax, amax)
+        peak_a = max(peak_a, max(abs(b - a) / dt for a, b in zip(v, vn)))
+        peak_v = max(peak_v, max(abs(b) for b in vn))
+        x, v = xn, vn
+    assert peak_v <= vmax + 1e-9 and peak_a <= amax + 1e-6
+    assert all(abs(a - g) < 2e-3 for a, g in zip(x, goal)) and max(abs(b) for b in v) < 1e-2    # there, and at rest
+    # a small step, the policy's usual one, does not overshoot
+    x, v, top = [0.0], [0.0], 0.0
+    for _ in range(int(2.0 / dt)):
+        x, v = smooth_step(x, v, [0.03], dt, omega, vmax, amax)
+        top = max(top, x[0])
+    assert top <= 0.03 + 1e-4
