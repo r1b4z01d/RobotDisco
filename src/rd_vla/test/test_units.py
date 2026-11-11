@@ -200,3 +200,91 @@ def test_selecting_the_loaded_checkpoint_does_not_reload_it():
         assert s.checkpoint == "two"
     finally:
         infer_server.make_backend = real
+
+
+class _Raw:
+    """A stand-in for the policy's (1, n, dof) chunk tensor: sliceable as raw[:, a:b], with a shape."""
+
+    def __init__(self, values):
+        self.values = list(values)
+        self.shape = (1, len(self.values))
+
+    def __getitem__(self, key):
+        return _Raw(self.values[key[1]])
+
+
+def _chunk_policy(length=50, delay=0.0, fail_on=()):
+    """compute(obs, prev_left): chunk k planned at observation `obs` holds the actions (obs, 0), (obs, 1), ..."""
+    calls = []
+
+    def compute(obs, prev_left):
+        calls.append((obs, None if prev_left is None else list(prev_left.values)))
+        if len(calls) in fail_on:
+            raise RuntimeError("boom")
+        time.sleep(delay)
+        return _Raw([(obs, i) for i in range(length)]), [(obs, i) for i in range(length)]
+    return compute, calls
+
+
+def _settle(s):
+    t = s._thread
+    if t is not None:
+        t.join(timeout=5.0)
+
+
+def test_chunk_scheduler_prefetches_and_skips_the_elapsed_actions():
+    from rd_vla.chunks import ChunkScheduler
+    compute, calls = _chunk_policy()
+    s = ChunkScheduler(compute, horizon=8, prefetch_at=2, log=lambda m: None)
+    out = []
+    for step in range(24):
+        out.append(s.next_action(step))
+        _settle(s)                                   # the forward pass is faster than a step here
+    # the first chunk inline from observation 0; the next planned at step 5 (actions 5, 6, 7 still to play), served from its action 3
+    assert out[:8] == [(0, i) for i in range(8)]
+    assert out[8:16] == [(5, i) for i in range(3, 11)]
+    assert out[16:24] == [(13, i) for i in range(3, 11)]
+    assert s.stats["inline"] == 1 and s.stats["prefetched"] == 2 and s.stats["waited"] == 0
+    assert [c[0] for c in calls] == [0, 5, 13, 21]
+
+
+def test_chunk_scheduler_waits_for_a_slow_prefetch_instead_of_computing_twice():
+    from rd_vla.chunks import ChunkScheduler
+    compute, calls = _chunk_policy(delay=0.05)
+    s = ChunkScheduler(compute, horizon=4, prefetch_at=1, log=lambda m: None)
+    out = [s.next_action(step) for step in range(12)]              # no pause between steps: the queue runs dry
+    assert out[:4] == [(0, i) for i in range(4)] and out[4:8] == [(2, i) for i in range(2, 6)]
+    assert s.stats["waited"] >= 1 and s.stats["inline"] == 1 and len(calls) <= 4
+
+
+def test_chunk_scheduler_reset_drops_a_prefetch_in_flight():
+    from rd_vla.chunks import ChunkScheduler
+    compute, calls = _chunk_policy(delay=0.1)
+    s = ChunkScheduler(compute, horizon=4, prefetch_at=2, log=lambda m: None)
+    for step in range(2):
+        s.next_action(("old", step))                              # the second step spawns a prefetch
+    stale = s._thread
+    assert stale is not None
+    s.reset()
+    stale.join(timeout=5.0)
+    assert s._pending is None and len(s) == 0                      # the old episode's chunk went nowhere
+    out = [s.next_action(("new", step)) for step in range(2)]
+    assert out == [(("new", 0), 0), (("new", 0), 1)]
+    _settle(s)
+
+
+def test_chunk_scheduler_retries_a_failed_prefetch_and_passes_the_tail():
+    from rd_vla.chunks import ChunkScheduler
+    compute, calls = _chunk_policy(fail_on=(2,))
+    logs = []
+    s = ChunkScheduler(compute, horizon=4, prefetch_at=2, pass_tail=True, log=logs.append)
+    out = []
+    for step in range(8):
+        out.append(s.next_action(step))
+        _settle(s)
+    # the prefetch of step 1 fails; step 2 tries again with two actions left to play, so its chunk starts at action 2
+    assert out[:4] == [(0, i) for i in range(4)] and out[4:8] == [(2, i) for i in range(2, 6)]
+    assert s.stats["inline"] == 1 and s.stats["failed"] == 1 and any("boom" in m for m in logs)
+    assert calls[1] == (1, [(0, 1), (0, 2), (0, 3)])               # the prefetch got the outgoing chunk from its own step on
+    one = ChunkScheduler(_chunk_policy()[0], horizon=1, prefetch_at=2, log=lambda m: None)   # nothing to refill ahead of
+    assert [one.next_action(i) for i in range(3)] == [(0, 0), (1, 0), (2, 0)] and one.stats["inline"] == 3

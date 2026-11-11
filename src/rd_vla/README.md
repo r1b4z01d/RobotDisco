@@ -46,8 +46,11 @@ does not find Tigger in the sim (the cameras show the sim room), so the run is a
 
 On the robot's AGX Orin (2026-11-10, JetPack 7.2.1, `/opt/vla` with PyTorch's own cu130 arm64 build, MAXN): the same
 checkpoint loads in 14 s, takes 0.9 GB of GPU memory and computes a chunk in 0.73 s (v1 on JetPack 6: 0.875 s). That is
-longer than eight steps at 12 Hz and the backend has no prefetch thread, so a run pauses about 0.65 s at each chunk
-boundary: port v1's `--prefetch` (ledger row 25) or run with `n_action_steps` 24 and up meanwhile.
+longer than eight steps at 12 Hz, so the robot's unit serves with `--n-action-steps 24 --prefetch --prefetch-at 10`
+(v1's setting): the next chunk is computed in a thread once eleven actions are left (`rd_vla/chunks.py`), and no step
+waits for a forward pass. On the 4090 against a recorded episode (2026-11-11): a step costs under 1 ms instead of
+107 ms at each boundary, the seams are those of the synchronous path, and `--rtc` blends them further. On the Orin the
+prefetch and RTC's extra cost are not measured yet.
 
 Not in the rig: SmolVLA inference itself (GPU box and Orin, above), the SpaceMouse and Stream Deck inputs (phase 8), the
 camera exposure lock (phase 8).

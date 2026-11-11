@@ -74,10 +74,24 @@ def main(argv=None) -> int:
     ap.add_argument("--port", type=int, default=8777)
     ap.add_argument("--models-dir", default=None)
     ap.add_argument("--n-action-steps", type=int, default=None, help="execute only the first N actions of each chunk before re-observing; 0/None = the whole chunk")
+    ap.add_argument("--prefetch", action="store_true", help="smolvla: compute the next chunk in a thread before the queue drains, so no step waits for a forward pass")
+    ap.add_argument("--prefetch-at", type=int, default=2, help="refill once this many actions remain: the forward pass in steps (2 on the 4090, 10 on the Orin at 12 Hz)")
+    ap.add_argument("--rtc", action="store_true", help="Real-Time Chunking: blend each prefetched chunk into the tail of the one playing (needs --prefetch)")
+    ap.add_argument("--rtc-inference-delay", type=int, default=None, help="leading actions pinned to the old chunk: the steps that play during a forward pass (default: --prefetch-at + 1)")
+    ap.add_argument("--rtc-execution-horizon", type=int, default=None, help="leading actions RTC pulls towards the old chunk (default: all served; just above the delay leaves the rest free to react)")
+    ap.add_argument("--rtc-max-guidance", type=float, default=10.0, help="how hard RTC pulls the seam towards the old chunk")
+    ap.add_argument("--num-steps", type=int, default=None, help="smolvla: denoising steps per chunk (the policy's 10); fewer is faster and coarser")
     ap.add_argument("--fake-close-after", type=int, default=10)
     ap.add_argument("--fake-drift", type=float, default=0.002)
     args = ap.parse_args(argv)
-    kw = {"n_action_steps": args.n_action_steps or None} if args.backend == "smolvla" else {}   # 0 = the policy's own chunk
+    if args.rtc and not args.prefetch:
+        ap.error("--rtc needs --prefetch")
+    kw = {}
+    if args.backend == "smolvla":
+        kw = {"n_action_steps": args.n_action_steps or None,      # 0 = the policy's own chunk
+              "prefetch": args.prefetch, "prefetch_at": args.prefetch_at, "rtc": args.rtc, "num_steps": args.num_steps,
+              "rtc_inference_delay": args.rtc_inference_delay, "rtc_execution_horizon": args.rtc_execution_horizon,
+              "rtc_max_guidance": args.rtc_max_guidance}
     if args.backend == "fake":
         kw = {"close_after": args.fake_close_after, "drift": args.fake_drift}
     server = Server(args.backend, args.ckpt, args.device, args.models_dir, **kw)
