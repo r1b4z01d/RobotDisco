@@ -137,3 +137,27 @@ def test_robot_yaml_has_every_sensor():
     cams = s['usb_cameras']
     assert '{port}' in cams['by_path'] and {'scene', 'wrist', 'side'} <= set(cams)
     assert {cams[c]['rotate'] for c in ('scene', 'wrist', 'side')} <= {0, 90, 180, 270}
+
+
+def test_tag_axes_turn_from_the_library_frame_to_z_up():
+    """A tag square on to the camera: the library's axes are the camera's (x right, y down, z away). Ours: x back at
+    the camera, y to the tag's right, z up in the image."""
+    from rd_perception.tag_adapter import LIBRARY_TO_Z_UP, quat_multiply
+
+    def rot(q):
+        x, y, z, w = q
+        return np.array([[1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+                         [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+                         [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]])
+    pose = NS(position=NS(x=0.0, y=0.0, z=1.0), orientation=NS(x=0.0, y=0.0, z=0.0, w=1.0))
+    det = NS(id=0, family='tag36h11', pose=NS(header=NS(frame_id='camera_color_optical_frame', stamp=NS(sec=1, nanosec=0)),
+                                                 pose=NS(pose=pose, covariance=[0.0] * 36)))
+    msg = NS(header=NS(frame_id='camera_color_optical_frame', stamp=NS(sec=1, nanosec=0)), detections=[det])
+    o = convert(msg).detections[0].pose.pose.orientation
+    r = rot((o.x, o.y, o.z, o.w))
+    assert np.allclose(r[:, 0], [0, 0, -1]) and np.allclose(r[:, 1], [1, 0, 0]) and np.allclose(r[:, 2], [0, -1, 0])
+    raw = convert(msg, z_up=False).detections[0].pose.pose.orientation
+    assert (raw.x, raw.y, raw.z, raw.w) == (0.0, 0.0, 0.0, 1.0)
+    # composing with a turned tag keeps the turn: 90 deg about the camera's y, then our axes
+    turned = (0.0, math.sin(math.pi / 4), 0.0, math.cos(math.pi / 4))
+    assert np.allclose(rot(quat_multiply(turned, LIBRARY_TO_Z_UP)), rot(turned) @ rot(LIBRARY_TO_Z_UP))
