@@ -47,7 +47,8 @@ def generate_launch_description():
         DeclareLaunchArgument('keepout_mask', default_value=str(maps_dir / 'keepout_mask.yaml'),
                               description='keepout filter mask (rd_keepout builds it from keepout_zones.yaml)'),
         DeclareLaunchArgument('tag_corrector', default_value='true'),
-        DeclareLaunchArgument('tag_poses_file', default_value=os.path.join(share, 'config', 'tag_poses.yaml')),
+        # the robot keeps its taught tags outside the source tree (RD_TAG_POSES_FILE, set in the units' common.env)
+        DeclareLaunchArgument('tag_poses_file', default_value=os.environ.get('RD_TAG_POSES_FILE') or os.path.join(share, 'config', 'tag_poses.yaml')),
         # keepout servers first: the costmaps' keepout_filter waits for /costmap_filter_info + /filter_mask
         nav2('nav2_map_server', 'map_server', 'filter_mask_server',
              extra_params=[{'yaml_filename': LaunchConfiguration('keepout_mask')}]),

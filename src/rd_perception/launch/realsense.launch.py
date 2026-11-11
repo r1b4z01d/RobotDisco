@@ -32,7 +32,11 @@ def generate_launch_description():
             ('enable_infra1', LaunchConfiguration('infra')), ('enable_infra2', LaunchConfiguration('infra')),
             ('pointcloud.enable', LaunchConfiguration('pointcloud')),
             ('align_depth.enable', 'true'),
-            ('publish_tf', 'false'),     # the URDF carries the camera frames (realsense_d435.xacro)
+            # The driver hangs its own frames (camera_color_optical_frame, the depth and IR ones, at the unit's factory
+            # offsets) off the URDF's camera_link, as v1 did. With this off the images named a frame nobody published:
+            # every tag detection came in camera_color_optical_frame and the tag corrector could place none of them
+            # (the robot, 2026-11-10; the sim never saw it, its camera is Isaac's).
+            ('publish_tf', 'true'),
             ('log_level', 'warn'),
         ]),
     ])
