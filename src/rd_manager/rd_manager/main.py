@@ -40,8 +40,16 @@ def main(argv=None) -> int:
                     landmarks_dir=args.landmarks_dir or None, routes_dir=args.routes_dir or None, panels_url=args.panels_url)
     import uvicorn
     print(f"rd_manager: http://{args.host}:{args.port}  (ros {'on' if not args.no_ros else 'off'}, {'sim' if sim else 'robot'}, data {args.data})", flush=True)
-    uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
-    return 0
+    # Stopping. Two things kept the unit from stopping cleanly on the robot (2026-11-10/11):
+    #  - with a page open, uvicorn waited for its live socket and camera streams to end by themselves, which they never
+    #    do: supervisor killed the manager after 15 s, every restart. Two seconds of grace, then they are cut.
+    #  - with no page open it died of SIGABRT in the interpreter's teardown ("terminate called without an active
+    #    exception": the ROS executor's threads are still running when their C++ side is torn down), leaving a crash
+    #    report each time. Nothing here needs that teardown: the files are closed, so leave at once.
+    uvicorn.run(app, host=args.host, port=args.port, log_level="warning", timeout_graceful_shutdown=2)
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(0)
 
 
 if __name__ == "__main__":
