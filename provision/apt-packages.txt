@@ -31,6 +31,8 @@ espeak
 
 # --- the face is an OpenGL window on the robot's screen
 libglfw3
+python3-pyglfw
+python3-moderngl
 libgl1-mesa-dri
 libegl1
 mesa-utils
