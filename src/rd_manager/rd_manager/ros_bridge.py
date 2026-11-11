@@ -193,6 +193,9 @@ class RosBridge:
         # value until somebody set one, and the page disables a slider with no value (the robot, 2026-11-10)
         self.volume = None
         n.create_subscription(Float32, "/audio/volume", lambda m: setattr(self, "volume", float(m.data)), 10, callback_group=self.cb)
+        # and its mute: the header button showed only mutes made from this page, not the voice assistant's or the desktop's
+        self.muted = False
+        n.create_subscription(Bool, "/audio/muted", lambda m: setattr(self, "muted", bool(m.data)), 10, callback_group=self.cb)
         for key in ("state", "heard", "command", "reply"):   # what it heard (speech or typed), took as the command, answered
             n.create_subscription(String, f"/voice/{key}", (lambda k: lambda m: self._voice_set(k, m.data))(key), 10, callback_group=self.cb)
         # publishers

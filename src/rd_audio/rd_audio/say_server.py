@@ -8,6 +8,7 @@ tracks what comes out of the speaker.
   pub    /speaking       std_msgs/Bool              true while audio plays (the voice node mutes its ears)
   pub    /mouth/audio    std_msgs/Float32MultiArray 40 ms chunks in [-1, 1]
   pub    /audio/volume   std_msgs/Float32           the sink's volume 0..1 (1 Hz); param `volume` sets it
+  pub    /audio/muted    std_msgs/Bool              the sink's mute (1 Hz), whoever set it
   srv    /audio/mute     std_srvs/SetBool
 
 One sentence at a time; a goal with interrupt=true stops the current one. `player` = paplay (robot, pinned to
@@ -60,6 +61,7 @@ class SayServer(Node):
         self.speaking_pub = self.create_publisher(Bool, "/speaking", 10)
         self.mouth_pub = self.create_publisher(Float32MultiArray, "/mouth/audio", 10)
         self.volume_pub = self.create_publisher(Float32, "/audio/volume", 10)
+        self.muted_pub = self.create_publisher(Bool, "/audio/muted", 10)     # the sink's own mute, whoever set it
         self.create_subscription(String, "/say_text", self.on_text, 10, callback_group=self.cb)
         self.create_service(SetBool, "/audio/mute", self.on_mute, callback_group=self.cb)
         self._lock = threading.Lock()
@@ -112,6 +114,7 @@ class SayServer(Node):
         v = audio_sink.get_volume(sink)
         if v and v.get("volume") is not None:
             self.volume_pub.publish(Float32(data=float(v["volume"]) / 100.0))
+            self.muted_pub.publish(Bool(data=bool(v.get("muted"))))
 
     def on_mute(self, req, res):
         sink = self.get_parameter("sink").value

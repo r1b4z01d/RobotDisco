@@ -95,15 +95,37 @@ class Supervisor:
         except Exception as e:  # noqa: BLE001
             return {"error": f"supervisor: {e}"}
 
+    def start_wait(self, sv, name: str, timeout: float = 90.0) -> str:
+        """Start a unit and wait until supervisor calls it RUNNING. Asked to wait itself (startProcess(name, True)),
+        supervisor answers only after the unit's startsecs, 15 s for the launches, and this client gives a call 4 s:
+        every map switch on the robot ended 'failed: timed out' with the unit up and fine (2026-11-11)."""
+        try:
+            sv.startProcess(name, False)
+        except xmlrpc.client.Fault as e:
+            if "ALREADY_STARTED" not in str(e.faultString):
+                raise
+        t0 = time.time()
+        while time.time() - t0 < timeout:
+            try:
+                st = sv.getProcessInfo(name)["statename"]
+            except Exception:  # noqa: BLE001
+                st = "?"
+            if st in ("RUNNING", "FATAL", "EXITED", "BACKOFF"):
+                if st != "RUNNING":
+                    raise RuntimeError(f"{name} did not start: {st}")
+                return st
+            time.sleep(0.5 * self.settle_scale if self.settle_scale else 0.01)
+        raise RuntimeError(f"{name} still starting after {timeout:.0f} s")
+
     def action(self, name: str, action: str) -> dict:
         sv = self.proxy()
         if action == "start":
-            sv.startProcess(name, True)
+            self.start_wait(sv, name)
         elif action == "stop":
-            sv.stopProcess(name, True)
+            self.stop_wait(sv, name)
         elif action == "restart":
             self.stop_wait(sv, name)
-            sv.startProcess(name, True)
+            self.start_wait(sv, name)
         else:
             raise ValueError("action must be start|stop|restart")
         return {"ok": True, "name": name, "action": action}
@@ -136,7 +158,7 @@ class Supervisor:
                 for name, settle in BASE_STACK:
                     self.job["log"].append(f"restarting {name}")
                     self.stop_wait(sv, name)
-                    sv.startProcess(name, True)
+                    self.start_wait(sv, name)
                     if settle * self.settle_scale > 0:
                         self.job["log"].append(f"settling {settle:.0f} s")
                         time.sleep(settle * self.settle_scale)

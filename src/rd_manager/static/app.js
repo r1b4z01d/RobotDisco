@@ -1463,7 +1463,7 @@ function mapsRender(d) {
   } else { slam.hidden = true; slam.replaceChildren(); }
   const list = $("#maps-list");
   list.replaceChildren(...(d.maps || []).map((m) => mapCard(m, d)));
-  if (d.job && (d.job.running || (d.job.log || []).length)) list.prepend(el("div", { class: "maps-job" + (d.job.running ? " on" : "") }, (d.job.running ? "switching map: " : "last switch: ") + (d.job.log || []).join(" · ")));
+  if (d.job && (d.job.running || (d.job.log || []).length)) list.append(el("div", { class: "maps-job" + (d.job.running ? " on" : "") }, (d.job.running ? "switching map: " : "last switch: ") + (d.job.log || []).join(" · ")));
 }
 async function mapsRefresh() {
   let d; try { d = await api("/api/maps"); } catch (e) { $("#maps-status").textContent = "○ " + e.message; $("#maps-status").className = "mono muted"; $("#maps-list").replaceChildren(); $("#btn-maps-new").disabled = true; return; }
