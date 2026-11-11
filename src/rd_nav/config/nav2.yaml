@@ -328,7 +328,11 @@ local_costmap:
           data_type: "PointCloud2"
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 0.1
+        # The falloff was v1's 0.1, which is no falloff at all: with this radius every cell within 0.65 m of a wall cost
+        # 244 to 251 of 254 (v1 had the same number but only 0.45 m of it), so a 1.1 m doorway was one solid band.
+        # At 3.0, the global costmap's value, the cost is 126 at the middle of that doorway. Set live on the robot
+        # 2026-11-10 when Bryan found the inflation too heavy; row 6's untested candidate.
+        cost_scaling_factor: 3.0
         inflation_radius: 0.65     # >= the footprint's circumscribed radius (0.62): MPPI's CostCritic needs it (v1 DWB ran 0.45)
       always_send_full_costmap: true
 
