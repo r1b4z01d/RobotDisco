@@ -41,6 +41,15 @@ def _yaw(q) -> float:
     return math.atan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y * q.y + q.z * q.z))
 
 
+WAKE_PHRASE = "robot disco"       # rd_voice's wake_phrases default
+
+
+def with_wake_phrase(text: str) -> str:
+    """The typed text as the voice assistant wants to hear it: the wake phrase first, once."""
+    text = text.strip()
+    return text if text.lower().startswith(WAKE_PHRASE) else f"{WAKE_PHRASE}, {text}"
+
+
 def encode_jpeg(rgb: np.ndarray, quality: int = 80) -> bytes:
     import cv2
     ok, buf = cv2.imencode(".jpg", np.ascontiguousarray(rgb[..., ::-1]), [cv2.IMWRITE_JPEG_QUALITY, quality])
@@ -486,9 +495,11 @@ class RosBridge:
         self.voice[key + "_t"] = time.time()          # so a page can tell a new reply from the previous one
 
     def voice_text(self, text: str) -> dict:
-        """The Live tab's text box: the text reaches rd_voice on /voice/text_in exactly as a Whisper transcript
-        would (the wake phrase applies); listeners = 0 means the voice assistant is not running."""
+        """The Live tab's text box: the text reaches rd_voice on /voice/text_in as a Whisper transcript would, with
+        the wake phrase put in front (typing to the robot is already addressing it); listeners = 0 means the voice
+        assistant is not running."""
         from std_msgs.msg import String
+        text = with_wake_phrase(text)
         self.voice_text_pub.publish(String(data=text))
         return {"ok": True, "text": text, "listeners": self.voice_text_pub.get_subscription_count()}
 

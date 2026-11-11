@@ -114,3 +114,9 @@ def test_mapview_file_and_grid(tmp_path):
     assert png[:4] == b"\x89PNG" and "error" in cmeta
     png2, cmeta2 = mv.costmap_png("local", {"msg": cm, "t": time.time()}, {"odom": (1.0, 0.0, 0.0)}, "/local_costmap/costmap")
     assert png2 == png and cmeta2["origin"] == [2.0, 2.0]
+
+
+def test_typed_text_gets_the_wake_phrase_once():
+    from rd_manager.ros_bridge import with_wake_phrase
+    assert with_wake_phrase("what time is it") == "robot disco, what time is it"
+    assert with_wake_phrase("  Robot Disco what time is it ") == "Robot Disco what time is it"

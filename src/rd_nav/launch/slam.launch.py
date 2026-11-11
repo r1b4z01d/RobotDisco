@@ -22,4 +22,9 @@ def generate_launch_description():
         DeclareLaunchArgument('use_sim_time', default_value='false'),
         Node(package='slam_toolbox', executable='async_slam_toolbox_node', name='slam_toolbox', output='screen',
              parameters=[os.path.join(share, 'config', 'slam.yaml'), {'use_sim_time': use_sim_time}, overrides]),
+        # slam_toolbox 2.8 is a lifecycle node: started alone it sits unconfigured, takes no scan and publishes no map
+        # (the robot's first "new map", 2026-11-10: the unit ran for minutes and logged one line). This configures and
+        # activates it; no bond, the node only makes one when told to.
+        Node(package='nav2_lifecycle_manager', executable='lifecycle_manager', name='lifecycle_manager_slam', output='screen',
+             parameters=[{'use_sim_time': use_sim_time, 'autostart': True, 'node_names': ['slam_toolbox'], 'bond_timeout': 0.0}]),
     ])
