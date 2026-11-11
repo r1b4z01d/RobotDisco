@@ -112,6 +112,13 @@ audio:
   mic: TONOR
   tts_voice: af_heart            # Kokoro-82M
 
+site:                            # where the robot lives: the voice assistant's forecast and its spoken context
+  name: "Austin, Texas"
+  weather:
+    place: Austin                # the name the forecast is spoken with
+    latitude: 30.2672              # downtown Austin
+    longitude: -97.7431
+
 gamepad:                         # the 8BitDo Ultimate 2C; the name and the button numbers go together, per link:
                                  #   Bluetooth:        "8BitDo Ultimate 2C Wireless",            RB 7, LB 6  (measured 2026-11-10)
                                  #   2.4 GHz receiver: "8BitDo Ultimate 2C Wireless Controller", RB 5, LB 4  (kernel xpad, v1 2026-10-31)

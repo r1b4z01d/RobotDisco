@@ -434,6 +434,13 @@ phase_llm() {
 phase_display() {
   # The face is a GL window on the robot's own GNOME session: autologin, never blank or lock.
   log "GNOME autologin for $RD_USER, no blanking"
+  # No crash-report dialogs on the face's screen: apport shows "System program problem detected" at every login while
+  # a report sits in /var/crash (the installer's and Firefox's from the flash day did, 2026-11-10).
+  if [ -f /etc/default/apport ]; then
+    sudo sed -i 's/^enabled=.*/enabled=0/' /etc/default/apport
+    sudo systemctl disable --now apport.service >/dev/null 2>&1 || true
+    sudo mkdir -p /var/crash/old && sudo find /var/crash -maxdepth 1 -name '*.crash' -exec mv {} /var/crash/old/ \;
+  fi
   if [ -f /etc/gdm3/custom.conf ]; then
     sudo sed -i -E -e "s/^#?\s*AutomaticLoginEnable\s*=.*/AutomaticLoginEnable = true/" -e "s/^#?\s*AutomaticLogin\s*=.*/AutomaticLogin = $RD_USER/" /etc/gdm3/custom.conf
     grep -q "^AutomaticLoginEnable" /etc/gdm3/custom.conf || sudo sed -i "/^\[daemon\]/a AutomaticLoginEnable = true\nAutomaticLogin = $RD_USER" /etc/gdm3/custom.conf
