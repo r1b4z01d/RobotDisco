@@ -9,6 +9,8 @@ plus config/ur5e_hand.xrdf (the arm's c-space, limits and collision spheres; the
 server puts in the planning scene). No ESDF: nvblox is not wired in yet (read_esdf_world false).
 """
 import os
+
+from rd_bringup import config
 import tempfile
 
 import yaml
@@ -33,7 +35,7 @@ def _setup(context):
     use_sim_time = LaunchConfiguration('use_sim_time')
     cumotion = LaunchConfiguration('cumotion').perform(context).lower() in ('1', 'true', 'yes')
     cfg = os.path.join(share, 'config')
-    xacro_args = ['xacro ', os.path.join(desc, 'urdf', 'robot.urdf.xacro'), ' base_control:=false ur_control:=false sim_mode:=', sim_mode]
+    xacro_args = ['xacro ', os.path.join(desc, 'urdf', 'robot.urdf.xacro'), ' base_control:=false ur_control:=false sim_mode:=', sim_mode, config.ur_kinematics_arg()]
     robot_description = ParameterValue(Command(xacro_args), value_type=str)
     with open(os.path.join(cfg, 'robot.srdf')) as f:
         srdf = f.read()

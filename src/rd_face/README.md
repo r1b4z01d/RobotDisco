@@ -19,6 +19,11 @@ ros2 topic echo /face/people                          # the Folks data (rd_manag
 | `headless_renderer.py` | new: the GL renderer's call shape on a numpy canvas, for the rig and the manager's preview |
 | `wled_panels.py` | v1's module of 2026-11-09, its last change: one heart per matrix segment as WLED realtime UDP (DNRGB) for `wled_heart_seconds`, after which the WLED resumes its own effect by itself; the layout comes from the WLED's JSON API, the address from robot.yaml `panels`. `python3 wled_panels.py 192.168.11.218` shows it without ROS |
 
+Strangers are enrolled only when the RealSense's depth shows a head standing in front of its background: a face that
+is part of one flat surface (a television, a picture, also seen at an angle) or whose real width is not a face's is
+not learned (`liveness.py`; v1's gallery filled up with whoever was on the screen). Known people are still recognised
+anywhere. Checked on synthetic depth only; the thresholds (6 cm of flatness, 9 to 30 cm of width) want a look on the robot.
+
 Tests: a launch test with the headless face: frames on `/face/image` at the render rate, the mouth reacts to
 audio, a recognised person (the `/face/debug_person` stand-in) is greeted by name with a wave, the same person
 again gets a wink, a stranger the generic hello; a fake WLED on loopback receives the heart for the first two

@@ -87,6 +87,14 @@ def get(key: str, default: Any = _MISSING, as_type: type | None = None) -> Any:
     return value
 
 
+def ur_kinematics_arg() -> str:
+    """' ur_kinematics:=<file>' for the xacro when this arm's own calibration has been extracted (robot.yaml
+    arm.kinematics_file exists), else '': the model then uses ur_description's nominal UR5e. Every launch that
+    expands the robot xacro appends it, so the driver, robot_state_publisher and MoveIt agree."""
+    p = str(get("arm.kinematics_file", "") or "")
+    return f" ur_kinematics:={p}" if p and os.path.isfile(p) else ""
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if not argv or argv[0] in ("-h", "--help"):

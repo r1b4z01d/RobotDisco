@@ -42,7 +42,7 @@
       tf_prefix="ur_"
       parent="rp_s2e_lidar"
       joint_limits_parameters_file="$(find ur_description)/config/ur5e/joint_limits.yaml"
-      kinematics_parameters_file="$(find ur_description)/config/ur5e/default_kinematics.yaml"
+      kinematics_parameters_file="$(arg ur_kinematics)"
       physical_parameters_file="$(find ur_description)/config/ur5e/physical_parameters.yaml"
       visual_parameters_file="$(find ur_description)/config/ur5e/visual_parameters.yaml">
     <!-- 30 mm above the lidar, x/y centered. Yaw +90 deg: with -90 the model showed the arm 180 deg

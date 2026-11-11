@@ -91,6 +91,9 @@ class FaceNode(Node):
         dp("face_id_models_dir", ""); dp("face_id_gallery", "~/.robot_face/people.json"); dp("face_thumb_dir", "~/.robot_face/faces")
         dp("face_id_min_period", 0.5); dp("face_id_match_threshold", 0.0); dp("face_id_auto_enroll", True)
         dp("face_id_min_face_px", 40); dp("face_id_enroll_min_face_px", 64); dp("face_id_enroll_frames", 6)
+        # strangers are enrolled only when the depth image says the face is a head in the room, not a flat picture
+        # of one (a television): rd_face/liveness.py. "" = no check. The depth is subscribed only while a stranger is in view
+        dp("face_id_depth_topic", "/camera/camera/aligned_depth_to_color/image_raw"); dp("face_id_color_hfov_deg", 69.0)
         dp("face_id_gpu", True); dp("face_id_det_size", 640); dp("face_id_threads", 2)
         p = lambda k: self.get_parameter(k).value  # noqa: E731
         self.p = p
@@ -144,6 +147,7 @@ class FaceNode(Node):
         self.said = []                   # what was said (the last few), for the log and the tests
         # face id
         self.face_id = None
+        self._depth, self._depth_sub, self._depth_wanted, self._depth_since, self._refusal_logged = None, None, -1e9, 0.0, -1e9
         self._vision_job = None
         self._vision_result = None
         self._last_embed = 0.0
@@ -185,6 +189,9 @@ class FaceNode(Node):
                 auto_enroll=bool(p("face_id_auto_enroll")), min_face_px=int(p("face_id_min_face_px")),
                 enroll_min_face_px=int(p("face_id_enroll_min_face_px")), enroll_frames=int(p("face_id_enroll_frames")))
             self.get_logger().info(f"face id: {backend}, {len(self.face_id.people())} people known")
+            if str(p("face_id_depth_topic")):
+                self.face_id.enroll_gate = self._enroll_gate
+                self.create_timer(1.0, self._depth_tick, callback_group=self.cb)
         except Exception as e:  # noqa: BLE001
             self.get_logger().error(f"face id unavailable: {e}")
             self.face_id = None
@@ -218,6 +225,51 @@ class FaceNode(Node):
             from .headless_renderer import HeadlessRenderer
             self.renderer = HeadlessRenderer(width=int(p("width")) // 2, height=int(p("height")) // 2, mouth_enabled=bool(p("mouth_enabled")),
                                              **self._layout(int(p("width")) // 2))
+
+    # ---- strangers on a screen
+    def _depth_tick(self):
+        """Hold the depth subscription while the enrollment gate asks for it, drop it 10 s after the last ask."""
+        wanted = time.monotonic() - self._depth_wanted < 10.0
+        if wanted and self._depth_sub is None:
+            self._depth_since = time.monotonic()
+            self._depth_sub = self.create_subscription(Image, self.p("face_id_depth_topic"), self._on_depth,
+                                                       QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT), callback_group=self.cb)
+        elif not wanted and self._depth_sub is not None:
+            self.destroy_subscription(self._depth_sub)
+            self._depth_sub, self._depth = None, None
+
+    def _on_depth(self, m: Image):
+        try:
+            if m.encoding in ("16UC1", "mono16"):
+                d = np.frombuffer(m.data, np.uint16).reshape(m.height, m.step // 2)[:, :m.width].astype(np.float32) * 0.001
+            elif m.encoding == "32FC1":
+                d = np.frombuffer(m.data, np.float32).reshape(m.height, m.step // 4)[:, :m.width]
+            else:
+                return
+        except ValueError:
+            return
+        self._depth = (d, time.monotonic())
+
+    def _enroll_gate(self, box):
+        """Called by the face id (vision thread) before a stranger counts towards enrollment."""
+        from .liveness import refusal
+        now = time.monotonic()
+        self._depth_wanted = now
+        depth = self._depth
+        if depth is None or now - depth[1] > 1.0:
+            if self._depth_sub is not None and now - self._depth_since > 5.0:
+                return None                      # no depth on this robot (or the camera's depth is down): as before
+            return "waiting for the depth image"
+        d, _ = depth
+        if d.shape[1] != self.camera_w and self.camera_w:        # depth not at the colour size: scale the box
+            k = d.shape[1] / float(self.camera_w)
+            box = tuple(v * k for v in box)
+        fx = d.shape[1] / (2.0 * math.tan(math.radians(float(self.p("face_id_color_hfov_deg"))) / 2.0))
+        why, _ = refusal(d, box, fx)
+        if why and now - self._refusal_logged > 10.0:
+            self._refusal_logged = now
+            self.get_logger().info(f"not enrolling: {why}")
+        return why
 
     # ---- camera + vision
     def on_image(self, m: Image):

@@ -47,7 +47,7 @@ def generate_launch_description():
     # the RoboClaw's serial link (header UART ttyTHS1 at 115200 since 2026-11-08) from robot.yaml; ignored in sim_mode
     roboclaw = [' roboclaw_port:=', str(config.get('sensors.roboclaw.port', '/dev/ttyTHS1')),
                 ' roboclaw_baud:=', str(config.get('sensors.roboclaw.baud', 115200))]
-    robot_description = ParameterValue(Command(['xacro ', xacro_file, ' sim_mode:=', sim_mode] + roboclaw), value_type=str)
+    robot_description = ParameterValue(Command(['xacro ', xacro_file, ' sim_mode:=', sim_mode] + roboclaw + [config.ur_kinematics_arg()]), value_type=str)
 
     # No respawn: v1 saw the OnProcessStart spawners re-run on a respawn and take the whole launch down.
     controller_manager = Node(

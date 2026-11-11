@@ -59,3 +59,32 @@ def test_greeting_bookkeeping(gallery):
     assert gallery.reset_greeting(p.person_id) and gallery.find("Zoe").last_greeted == 0.0
     assert not gallery.reset_greeting("nope")
     assert any("Zoe" in line for line in gallery.summary())
+
+
+def _scene(face_z, behind_z, tilt=0.0, w=640, h=480, box=(280, 180, 80, 100)):
+    """A depth image: a face-sized patch at face_z; around it a surface at behind_z, tilted by `tilt` m per pixel."""
+    import numpy as np
+    xs = np.arange(w, dtype=np.float32)[None, :].repeat(h, 0)
+    d = behind_z + tilt * (xs - (box[0] + box[2] / 2.0))
+    x, y, bw, bh = box
+    d[y - 10:y + bh + 10, x - 6:x + bw + 6] = face_z + tilt * (xs[y - 10:y + bh + 10, x - 6:x + bw + 6] - (x + bw / 2.0))
+    return d.astype(np.float32), box
+
+
+def test_liveness_tells_a_head_from_a_screen():
+    import numpy as np
+    from rd_face.liveness import measure, refusal
+    fx = 640 / (2 * np.tan(np.radians(69.0) / 2))          # the D435's colour camera
+    d, box = _scene(1.0, 2.5)                              # a head 1 m away, the wall 1.5 m behind it: 17 cm wide
+    why, m = refusal(d, box, fx)
+    assert why is None and 0.15 < m["width_m"] < 0.19 and m["left"] > 1.0 and m["right"] > 1.0
+    d, box = _scene(1.0, 1.0)                              # the same box on a flat surface: a television
+    assert "flat" in refusal(d, box, fx)[0]
+    d, box = _scene(1.0, 1.0, tilt=0.002)                  # the television seen at an angle: one side nearer, one farther
+    m = measure(d, box, fx)
+    assert m["left"] < -0.05 and m["right"] > 0.05 and "flat" in refusal(d, box, fx)[0]
+    d, box = _scene(3.0, 3.0)                              # a close-up on a big screen across the room: half a metre of face
+    assert "cm wide" in refusal(d, box, fx)[0]
+    d, box = _scene(1.0, 0.0)                              # nothing behind the head within range: a head
+    assert refusal(d, box, fx)[0] is None
+    assert refusal(np.zeros((480, 640), np.float32), box, fx) == (None, None)       # no depth at all: no verdict

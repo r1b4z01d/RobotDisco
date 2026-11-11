@@ -415,6 +415,11 @@ WantedBy=multi-user.target
 UNIT
   sudo mkdir -p /etc/systemd/system/supervisor.service.d
   printf '[Unit]\nAfter=rd-wait-clock.service\nWants=rd-wait-clock.service\n' | sudo tee /etc/systemd/system/supervisor.service.d/10-wait-clock.conf >/dev/null
+  # Real-time priority for the control loops: the units run as rd, whose processes may not ask for SCHED_FIFO, so the
+  # UR's 500 Hz controller manager ran as an ordinary thread and reported overruns of 2 to 3 ms (2026-11-10). Limits
+  # set on supervisord are inherited by every unit (PAM's limits.d never sees them: no login session). Takes effect
+  # when supervisor itself restarts, i.e. at the next boot.
+  printf '[Service]\nLimitRTPRIO=99\nLimitMEMLOCK=infinity\n' | sudo tee /etc/systemd/system/supervisor.service.d/20-realtime.conf >/dev/null
   sudo systemctl daemon-reload
   sudo systemctl enable rd-wait-clock.service >/dev/null 2>&1 || warn "could not enable rd-wait-clock.service"
   sudo cp "$WS"/src/rd_bringup/services/*.conf /etc/supervisor/conf.d/

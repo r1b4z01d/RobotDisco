@@ -31,7 +31,10 @@ def yaw_of(q):
 
 def load_map(name):
     from ament_index_python.packages import get_package_share_directory
-    d = Path(get_package_share_directory("rd_nav")) / "maps"
+    from rd_nav.maps_store import default_maps_dir
+    d = Path(default_maps_dir())                     # $RD_MAPS_DIR, else the package's maps
+    if name == "active":
+        name = (d / "active_map").read_text().strip()
     meta = yaml.safe_load((d / f"{name}.yaml").read_text())
     b = (d / meta["image"]).read_bytes()
     m = re.match(rb"P5\s+(?:#.*\s+)*(\d+)\s+(\d+)\s+(\d+)\s", b)
@@ -42,7 +45,7 @@ def load_map(name):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--spawn", nargs=3, type=float, default=[0.6957, 0.9208, 0.0548])
-    ap.add_argument("--map", default="demo")
+    ap.add_argument("--map", default="active")
     a = ap.parse_args()
     occ, res, ox, oy = load_map(a.map)
     H, W = occ.shape

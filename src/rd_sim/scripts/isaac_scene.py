@@ -45,7 +45,7 @@ ROBOT = "/World/RobotDisco"
 def parse():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--urdf", default="/tmp/robot_disco.urdf")
-    ap.add_argument("--world", default="demo", help="a map from rd_nav/maps to build walls from ('' = empty)")
+    ap.add_argument("--world", default="active", help="a map from the maps folder ($RD_MAPS_DIR, else rd_nav/maps) to build walls from; 'active' = its active map, '' = empty")
     ap.add_argument("--maps-dir", default="")
     ap.add_argument("--headless", action="store_true")
     ap.add_argument("--x", type=float, default=0.6957)      # the Charger landmark (rd_nav landmarks.yaml), where the robot docks;
@@ -234,6 +234,8 @@ def main():
     UsdGeom.Xformable(sun.GetPrim()).AddRotateXYZOp().Set(Gf.Vec3f(-50.0, 20.0, 0.0))
     if args.world:
         maps_dir = Path(args.maps_dir) if args.maps_dir else Path(__import__("rd_nav.maps_store", fromlist=["default_maps_dir"]).default_maps_dir())
+        if args.world == "active":
+            args.world = (maps_dir / "active_map").read_text().strip()
         boxes, height = map_boxes(maps_dir, args.world)
         if boxes:
             stage_utils.define_prim("/World/Walls", "Xform")

@@ -6,6 +6,8 @@ sim_mode:=true swaps the RoboClaw ros2_control hardware for mock hardware (dev s
 """
 import os
 
+from rd_bringup import config
+
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
@@ -19,7 +21,7 @@ def generate_launch_description():
     sim_mode = LaunchConfiguration('sim_mode')
     xacro_file = os.path.join(get_package_share_directory('rd_description'), 'urdf', 'robot.urdf.xacro')
     # value_type=str: never YAML-parse the URDF
-    robot_description = ParameterValue(Command(['xacro ', xacro_file, ' sim_mode:=', sim_mode]), value_type=str)
+    robot_description = ParameterValue(Command(['xacro ', xacro_file, ' sim_mode:=', sim_mode, config.ur_kinematics_arg()]), value_type=str)
 
     return LaunchDescription([
         DeclareLaunchArgument('use_sim_time', default_value='false', description='Use /clock'),

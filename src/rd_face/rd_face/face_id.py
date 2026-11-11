@@ -567,6 +567,8 @@ class FaceIdentifier:
         self.gallery = FaceGallery(gallery_path, max_embeddings_per_person,
                                    expected_dim=backend.dim, backend=backend.name, thumb_dir=thumb_dir)
         self.auto_enroll = bool(auto_enroll)
+        self.enroll_gate = None          # callable(box) -> a reason not to enroll this stranger, or None
+        self.enroll_refusal = None
         self.min_face_px = int(min_face_px)
         self.min_detect_score = float(min_detect_score)
         self.enroll_frames = max(1, int(enroll_frames))
@@ -692,6 +694,13 @@ class FaceIdentifier:
         if not self.auto_enroll or face_w < self.enroll_min_face_px:
             # Too far away to learn reliably; wait until they come closer
             return Match(None, None, score, False, box, face_score)
+
+        # A face on a screen or in a picture is not a person to learn (the node's depth check, rd_face/liveness.py)
+        if self.enroll_gate is not None:
+            self.enroll_refusal = self.enroll_gate(box)
+            if self.enroll_refusal:
+                self._pending.clear()
+                return Match(None, None, score, False, box, face_score)
 
         # Require a run of consistent sightings before enrolling, to avoid
         # learning blurry glimpses or mis-detections as new people.

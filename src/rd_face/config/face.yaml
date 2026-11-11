@@ -57,6 +57,11 @@ face:
     face_id_min_face_px: 40
     face_id_enroll_min_face_px: 64
     face_id_enroll_frames: 6
+    # a stranger is enrolled only if the depth image shows a head in the room: a face that is part of a flat surface
+    # (a television, a picture) or not face-sized is left alone (rd_face/liveness.py). "" switches the check off.
+    # Subscribed only while a stranger is in view
+    face_id_depth_topic: /camera/camera/aligned_depth_to_color/image_raw
+    face_id_color_hfov_deg: 69.0            # the D435's colour camera: turns a box width and a depth into centimetres
     face_id_gpu: true
     face_id_det_size: 640
     face_id_threads: 2

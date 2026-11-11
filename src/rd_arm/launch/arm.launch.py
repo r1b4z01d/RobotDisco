@@ -36,7 +36,7 @@ def generate_launch_description():
         'xacro ', os.path.join(desc, 'urdf', 'robot.urdf.xacro'),
         ' base_control:=false ur_control:=true sim_mode:=', sim_mode, ' robot_ip:=', robot_ip,
         ' tool_voltage:=', str(config.get('arm.tool_voltage', 12)),
-        ' initial_positions_file:=', os.path.join(share, 'config', 'initial_positions.yaml')]), value_type=str)
+        ' initial_positions_file:=', os.path.join(share, 'config', 'initial_positions.yaml'), config.ur_kinematics_arg()]), value_type=str)
 
     # Jazzy's controller_manager reads the URDF from ~/robot_description (topic), so the arm-control variant
     # of the description is latched on /ur5e/robot_description for it (rsp publishes the whole-robot one on /).

@@ -7,12 +7,12 @@ Jazzy + Isaac ROS 4.6**, and the whole robot is driven from one web console, `rd
 (RTX 4090) trains the policies, runs Isaac Sim and mirrors the manager.
 
 5.0 is a rebuild of [rd_ws](https://github.com/r1b4z01d/rd_ws) (v1: Humble on JetPack 6, a patched
-`apriltag_ros`, Foxglove, scripts spawning scripts). It keeps every v1 feature and drops Foxglove. The plan,
-the feature-by-feature mapping, the phases and the risks are in the
-[Robot Disco 5.0 Rebuild Plan](https://claude.ai/artifact/T2mFGJhZuEiFKGtLmpHvPM).
+`apriltag_ros`, Foxglove, scripts spawning scripts). It keeps every v1 feature and drops Foxglove. The
+[wiki](https://github.com/r1b4z01d/RobotDisco/wiki) explains the architecture, the hardware, setup and each subsystem.
 
-**Status 2026-11-07: every package written and passing its tests in the rig.** The robot still runs v1;
-nothing here has run on hardware. Next: the GPU box (Isaac Sim, Isaac ROS), then the robot.
+**Status 2026-11-11: running on the robot.** The Jetson is flashed and provisioned, eleven supervisor units start at
+boot, and every subsystem has run on the hardware (driving, mapping, Nav2 goals, AprilTag localisation, the arm and
+hand, face recognition and greeting, voice, the console). Open: a policy run to the end on the real arm.
 
 ## Layout
 
@@ -55,13 +55,10 @@ says what stands in for each piece of hardware. `rd_sim` runs the robot in Isaac
 | 4 | rd_arm | done, launch test passes |
 | 5 | rd_vla | done, launch test passes |
 | 6 | rd_audio, rd_face, rd_voice | done, launch tests pass |
-| 7 | rd_sim (Isaac Sim) + Isaac ROS validated on the GPU box | Isaac Sim drives the whole stack (2026-11-07); Isaac ROS host install pending |
-| 8 | the robot: snapshot + `/mnt/data` copy (the gate), JetPack 7.2.1 flash, `provision.sh all`, hardware checks | after 7 |
+| 7 | rd_sim (Isaac Sim) + Isaac ROS validated on the GPU box | done (2026-11-09) |
+| 8 | the robot: snapshot + `/mnt/data` copy (the gate), JetPack 7.2.1 flash, `provision.sh all`, hardware checks | flashed and provisioned 2026-11-10; hardware checks under way |
 | 9 | optional: visual odometry, GR00T, docking | |
 | 10 | retire v1 | |
-
-The detailed plan, risks and decisions live in the
-[Robot Disco 5.0 Rebuild Plan](https://claude.ai/artifact/T2mFGJhZuEiFKGtLmpHvPM).
 
 ## Run the sim (GPU box)
 
