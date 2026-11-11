@@ -8,7 +8,8 @@ v1's combined_face_hand_node without the TTS (rd_audio's Say), the wave (rd_arm'
   sub  /mouth/audio, /mouth/level  from the Say server
   pub  /face/person   String json  {id, name, score, new, box} whenever someone is identified
   pub  /face/people   String json  the gallery (1 Hz and on change): [{id, name, seen_count, last_seen, last_greeted, thumb}]
-  pub  /face/image    rgb8 Image   the rendered face (headless renderer; off with the GL window)
+  pub  /face/image    bgr8 Image   the rendered face: every frame from the headless renderer; from the GL window
+                                   a quarter-size readback at 5 Hz while somebody subscribes
   sub  /face/set_person_name  String   "Name" (the person in view) or "person_3=Name"
   sub  /face/forget_person    String   id, name, or "all"
   sub  /face/reset_greeting   String   id
@@ -151,6 +152,8 @@ class FaceNode(Node):
             threading.Thread(target=self._vision_loop, daemon=True, name="face_vision").start()
         # renderer
         self.renderer = None
+        self.gl = False               # the renderer is the GL window (set by _init_renderer)
+        self.last_capture = 0.0
         self.layout_scale = 1.0
         self._init_renderer()
         self.render_dt = 1.0 / float(p("render_fps"))
@@ -206,6 +209,7 @@ class FaceNode(Node):
                 self.renderer = GlEyeRenderer(width=int(p("width")), height=int(p("height")), fullscreen=bool(p("fullscreen")),
                                               mouth_enabled=bool(p("mouth_enabled")), log=self.get_logger(),
                                               grab_focus_seconds=float(p("window_focus_seconds")), **self._layout(int(p("width"))))
+                self.gl = True
                 return
             except Exception as e:  # noqa: BLE001
                 self.get_logger().error(f"GL renderer failed ({e}); headless")
@@ -589,10 +593,16 @@ class FaceNode(Node):
         level, samples, smile, skew, path, blend = self.update_mouth(now, seeing_person=self.tracked_face is not None)
         if self.renderer is None:
             return
+        # With the GL window the face is on the robot's screen; the manager's face panel still wants to see it, so
+        # while somebody listens to /face/image the window's frame is read back five times a second.
+        extra = {}
+        if self.gl and p("publish_image") and now - self.last_capture >= 0.2 and self.image_pub.get_subscription_count() > 0:
+            extra["capture"] = True
+            self.last_capture = now
         frame = self.renderer.render(blink=blink, wink=wink * float(p("wink_depth")), wink_eye=self.wink_eye_index, gaze_offset=gaze,
                                      mood=3 if now < self.happy_until else 0, dt=self.render_dt, mouth_level=level, mouth_samples=samples,
-                                     mouth_smile=smile, mouth_skew=skew, mouth_shape=blend, mouth_path=path)
-        if frame is not None and p("publish_image") and p("renderer") == "headless":
+                                     mouth_smile=smile, mouth_skew=skew, mouth_shape=blend, mouth_path=path, **extra)
+        if frame is not None and p("publish_image"):
             m = Image(height=frame.shape[0], width=frame.shape[1], encoding="bgr8", is_bigendian=0, step=frame.shape[1] * 3, data=frame.tobytes())
             m.header.stamp = self.get_clock().now().to_msg()
             m.header.frame_id = "face"

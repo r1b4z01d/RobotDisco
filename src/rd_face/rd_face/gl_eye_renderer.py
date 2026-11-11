@@ -626,7 +626,8 @@ class GlEyeRenderer:
         mouth_path: np.ndarray | None = None,
         wink: float = 0.0,
         wink_eye: int = 1,
-    ) -> None:
+        capture: bool = False,
+    ):
         """Render one frame.  Call from your ROS image callback.
 
         ``wink`` (0..1) closes one eye on top of ``blink``; ``wink_eye`` picks it
@@ -686,7 +687,15 @@ class GlEyeRenderer:
         self._prog["u_time"].value  = float(self._t)
 
         self._vao.render(moderngl.TRIANGLE_STRIP)
+        frame = None
+        if capture:
+            # the frame as it is about to be shown, read back before the swap (afterwards the back buffer is undefined):
+            # BGR, top row first, a quarter of the pixels (the manager's face panel, not the screen)
+            x, y, w, h = self._ctx.viewport
+            rgb = np.frombuffer(self._ctx.screen.read(viewport=(x, y, w, h), components=3), dtype=np.uint8).reshape(h, w, 3)
+            frame = np.ascontiguousarray(rgb[::-2, ::2, ::-1])
         glfw.swap_buffers(self._window)
+        return frame
 
     # ------------------------------------------------------------------
     def should_close(self) -> bool:
