@@ -37,6 +37,7 @@ RobotDisco/
 │   └── rd_bringup/        top-level launch, supervisor units, udev, netplan
 ├── vendor/                source-built ROS packages only where apt has no Jazzy binary (submodules)
 ├── firmware/AmazingHand/  the hand's CAD + ESP32 firmware (submodule, r1b4z01d/AmazingHand)
+├── firmware/RD_Battery_Monitor/  the battery monitor: ESP32 + INA228, JSON over UDP
 └── provision/             JetPack 7.2 provisioning phases, package lists, udev, netplan, DDS profile
 ```
 
