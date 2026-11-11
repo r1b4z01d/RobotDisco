@@ -140,8 +140,9 @@ class TestFace(unittest.TestCase):
             self.mouth.publish(Float32MultiArray(data=[0.9 * ((-1) ** i) for i in range(640)]))
             self.spin(0.04)
         loud = np.frombuffer(bytes(self.frames[-1][1].data), np.uint8).reshape(475, 270, 3)
-        band_q = quiet[300:475].astype(int)
-        band_l = loud[300:475].astype(int)
+        # the mouth line on this 270x475 canvas: eye centres at (280 + 77) / 4 = 89, the mouth (77 + 550) / 4 below, 246
+        band_q = quiet[200:300].astype(int)
+        band_l = loud[200:300].astype(int)
         self.assertGreater(np.abs(band_q - band_l).mean(), 1.0, 'the mouth region did not change with audio')
 
     def test_3_greets_by_name_and_waves(self):

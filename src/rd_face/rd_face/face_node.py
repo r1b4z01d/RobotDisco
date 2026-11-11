@@ -65,6 +65,11 @@ class FaceNode(Node):
         dp("render_fps", 30.0)
         dp("publish_image", True)            # headless: publish /face/image
         dp("width", 1080); dp("height", 1900); dp("fullscreen", True)
+        # the layout on the 1080x1900 canvas, v1's (combined_face_hand_node.py): eye half-width 187 and height 154,
+        # eye centres 280 px down, the mouth 550 px below the eyes
+        dp("eye_hw", 187.0); dp("eye_hh", 154.0); dp("eye_side_margin", 80.0); dp("eye_top_margin", 280.0)
+        dp("mouth_gap", 550.0); dp("mouth_amplitude", 70.0); dp("mouth_width", 0.0)   # width 0 = between the eye centres
+        dp("window_focus_seconds", 10.0)     # keep asking GNOME for focus this long after start
         dp("camera_timeout", 3.0); dp("face_stick_seconds", 1.5)
         dp("blink_min", 2.5); dp("blink_max", 15.5); dp("blink_duration", 0.14); dp("blink_closed_hold", 0.05)
         dp("gaze_speed", 0.3); dp("gaze_idle_speed", 0.01)
@@ -146,6 +151,7 @@ class FaceNode(Node):
             threading.Thread(target=self._vision_loop, daemon=True, name="face_vision").start()
         # renderer
         self.renderer = None
+        self.layout_scale = 1.0
         self._init_renderer()
         self.render_dt = 1.0 / float(p("render_fps"))
         # no timer for render_tick: the GL context belongs to the thread that made the window, so main() draws
@@ -180,6 +186,17 @@ class FaceNode(Node):
             self.get_logger().error(f"face id unavailable: {e}")
             self.face_id = None
 
+    def _layout(self, canvas_width: int) -> dict:
+        """Where the eyes and the mouth sit, as the renderers' arguments. The parameters are pixels on the 1080-wide
+        design canvas; a narrower canvas (the headless renderer draws at half the configured size) scales them."""
+        p = self.p
+        scale = self.layout_scale = canvas_width / 1080.0
+        width = float(p("mouth_width"))
+        return dict(eye_hw=float(p("eye_hw")) * scale, eye_hh=float(p("eye_hh")) * scale,
+                    eye_side_margin=float(p("eye_side_margin")) * scale, eye_top_margin=float(p("eye_top_margin")) * scale,
+                    mouth_gap=float(p("mouth_gap")) * scale, mouth_amp=float(p("mouth_amplitude")) * scale,
+                    mouth_hw=width / 2.0 * scale if width > 0 else None)
+
     def _init_renderer(self):
         p = self.p
         mode = p("renderer")
@@ -187,14 +204,16 @@ class FaceNode(Node):
             try:
                 from .gl_eye_renderer import GlEyeRenderer
                 self.renderer = GlEyeRenderer(width=int(p("width")), height=int(p("height")), fullscreen=bool(p("fullscreen")),
-                                              mouth_enabled=bool(p("mouth_enabled")), log=self.get_logger())
+                                              mouth_enabled=bool(p("mouth_enabled")), log=self.get_logger(),
+                                              grab_focus_seconds=float(p("window_focus_seconds")), **self._layout(int(p("width"))))
                 return
             except Exception as e:  # noqa: BLE001
                 self.get_logger().error(f"GL renderer failed ({e}); headless")
                 mode = "headless"
         if mode == "headless":
             from .headless_renderer import HeadlessRenderer
-            self.renderer = HeadlessRenderer(width=int(p("width")) // 2, height=int(p("height")) // 2, mouth_enabled=bool(p("mouth_enabled")))
+            self.renderer = HeadlessRenderer(width=int(p("width")) // 2, height=int(p("height")) // 2, mouth_enabled=bool(p("mouth_enabled")),
+                                             **self._layout(int(p("width")) // 2))
 
     # ---- camera + vision
     def on_image(self, m: Image):
@@ -565,7 +584,7 @@ class FaceNode(Node):
                 wink = max(0.0, 1.0 - (w - close_t - hold_t) / open_t)
         nx = max(-1.0, min(1.0, (self.smoothed_center[0] - self.camera_w / 2.0) / (self.camera_w / 2.0)))
         ny = max(-1.0, min(1.0, (self.smoothed_center[1] - self.camera_h / 2.0) / (self.camera_h / 2.0)))
-        travel = 40.0
+        travel = max(float(p("eye_hw")) - float(p("eye_hh")) / 2.0, 0.0) * self.layout_scale   # v1: the pupil's room in the eye (187 - 77)
         gaze = (-nx * travel * 0.7, ny * travel * 0.6)
         level, samples, smile, skew, path, blend = self.update_mouth(now, seeing_person=self.tracked_face is not None)
         if self.renderer is None:
