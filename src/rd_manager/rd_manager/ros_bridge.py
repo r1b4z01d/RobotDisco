@@ -31,6 +31,7 @@ CAMERA_LABELS = {"scene": "Scene", "wrist": "Wrist", "side": "Side", "realsense"
 POLY_MAX_POINTS = {"stop": 3, "slowdown": 3}
 FRAME_FRESH_S, FRAME_HOLD_S = 2.0, 6.0
 CAM_LINGER_S = 10.0          # a camera stays subscribed this long after the last page asked for it
+DEMAND_LINGER_S = 10.0       # the same for scans, clouds, costmaps, particles and joint states
 SCAN_MAX_POINTS, CLOUD_MAX_POINTS, CLOUD_BIN_MAX = 720, 4000, 60000
 CLOUD_Z = (0.05, 2.0)
 DRIVE_HZ, DRIVE_STALE_S, DRIVE_MAX_VX, DRIVE_MAX_WZ, DRIVE_TURBO = 10.0, 0.4, 0.25, 0.5, 4.0   # scales + LB turbo of rd_base joystick.yaml (1.0 m/s, 2.0 rad/s)
@@ -134,15 +135,22 @@ class RosBridge:
         latched = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL, reliability=ReliabilityPolicy.RELIABLE)
         best = QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT)
         keep = lambda name: (lambda m: self.latest.__setitem__(name, m))  # noqa: E731
+        # The heavy and the fast topics are subscribed only while a page asks for what they feed (touch()), and for
+        # DEMAND_LINGER_S after. Taken all the time, the Velodyne cloud alone was 7 MB/s into this process and the
+        # manager held most of a core with nobody looking (2026-11-10).
+        self._demand: dict = {}
+        self._demand_lock = threading.Lock()
         for name, topic in SCAN_TOPICS.items():
-            n.create_subscription(LaserScan, topic, keep(name), qos_profile_sensor_data, callback_group=self.cb)
+            self._on_demand(name, LaserScan, topic, qos_profile_sensor_data, keep(name), forget=lambda nm=name: self.latest.pop(nm, None))
         for name, topic in CLOUD_TOPICS.items():
-            n.create_subscription(PointCloud2, topic, keep(name), qos_profile_sensor_data, callback_group=self.cb)
+            self._on_demand(name, PointCloud2, topic, qos_profile_sensor_data, keep(name), forget=lambda nm=name: self.latest.pop(nm, None))
         for name, topic in COSTMAP_TOPICS.items():
-            n.create_subscription(OccupancyGrid, topic, (lambda nm: (lambda m: self.costmaps.__setitem__(nm, {"msg": m, "t": time.time()})))(name), latched, callback_group=self.cb)
+            self._on_demand("costmap:" + name, OccupancyGrid, topic, latched,
+                            (lambda nm: (lambda m: self.costmaps.__setitem__(nm, {"msg": m, "t": time.time()})))(name))
         n.create_subscription(OccupancyGrid, "/map", lambda m: self.live_map.update(msg=m, t=time.time()), latched, callback_group=self.cb)
         n.create_subscription(String, "/robot_description", lambda m: setattr(self, "urdf", m.data), latched, callback_group=self.cb)
-        n.create_subscription(JointState, "/joint_states", lambda m: self.joints.update({k: round(float(v), 5) for k, v in zip(m.name, m.position)}), 10, callback_group=self.cb)
+        self._on_demand("joints", JointState, "/joint_states", 10,
+                        lambda m: self.joints.update({k: round(float(v), 5) for k, v in zip(m.name, m.position)}))
         for name, topic in NAV_TOPICS.items():
             n.create_subscription(Path, topic, (lambda nm: (lambda m: self.nav.__setitem__(nm, {"frame": m.header.frame_id, "t": time.time(),
                                   "pts": [[round(p.pose.position.x, 3), round(p.pose.position.y, 3), round(p.pose.position.z, 3)] for p in m.poses[::max(1, len(m.poses) // 400)]]})))(name), 10, callback_group=self.cb)
@@ -152,7 +160,8 @@ class RosBridge:
             n.create_subscription(PolygonStamped, topic, (lambda nm: (lambda m: self.polys.__setitem__(nm, m)))(name), 10, callback_group=self.cb)
         try:
             from nav2_msgs.msg import ParticleCloud
-            n.create_subscription(ParticleCloud, "/particle_cloud", keep("particles"), qos_profile_sensor_data, callback_group=self.cb)
+            self._on_demand("particles", ParticleCloud, "/particle_cloud", qos_profile_sensor_data, keep("particles"),
+                            forget=lambda: self.latest.pop("particles", None))
         except Exception:  # noqa: BLE001
             pass
         # A camera is subscribed only while a page (or a landmark capture) wants it, and for CAM_LINGER_S after: the
@@ -162,6 +171,7 @@ class RosBridge:
         self._cam_lock = threading.Lock()
         self._cam_qos, self._cam_type = best, Image
         n.create_timer(1.0, self._cam_follow_demand, callback_group=self.cb)
+        n.create_timer(1.0, self._demand_tick, callback_group=self.cb)
         n.create_subscription(String, "/face/people", lambda m: self._set_json("people", m.data), 10, callback_group=self.cb)
         n.create_subscription(Float32MultiArray, "/hand/state", lambda m: setattr(self, "hand_state", list(m.data)), 10, callback_group=self.cb)
         n.create_subscription(String, "/arm/stream_state", lambda m: setattr(self, "stream_state", m.data), 10, callback_group=self.cb)
@@ -210,6 +220,35 @@ class RosBridge:
             setattr(self, key, json.loads(text))
         except ValueError:
             pass
+
+    def _on_demand(self, key: str, msg_type, topic: str, qos, callback, forget=None) -> None:
+        self._demand[key] = {"type": msg_type, "topic": topic, "qos": qos, "cb": callback, "forget": forget, "sub": None, "t": 0.0}
+
+    def touch(self, *keys: str) -> None:
+        """A page wants what these topics feed: subscribe now where it is not, and keep it for DEMAND_LINGER_S."""
+        now = time.time()
+        with self._demand_lock:
+            for key in keys:
+                d = self._demand.get(key)
+                if d is None:
+                    continue
+                d["t"] = now
+                if d["sub"] is None:
+                    d["sub"] = self.node.create_subscription(d["type"], d["topic"], d["cb"], d["qos"], callback_group=self.cb)
+
+    def _demand_tick(self):
+        now = time.time()
+        if now - self.want["t"] < 3.0:                      # /api/scans names what it shows
+            self.touch(*self.want["names"])
+        if now - self.want3d.get("particles", 0.0) < 3.0:
+            self.touch("particles")
+        with self._demand_lock:
+            for d in self._demand.values():
+                if d["sub"] is not None and now - d["t"] > DEMAND_LINGER_S:
+                    self.node.destroy_subscription(d["sub"])
+                    d["sub"] = None
+                    if d["forget"]:
+                        d["forget"]()                       # a scan nobody refreshes must not be shown as the scan
 
     def want_cam(self, name: str) -> None:
         """A page is looking at this camera: subscribe now if it is not, and keep it for CAM_LINGER_S."""

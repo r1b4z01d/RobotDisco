@@ -179,11 +179,14 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
         now = time.time()
         names = [n for n in layers.split(",") if n]
         B.want = {"names": names or list(SCAN_TOPICS) + list(CLOUD_TOPICS), "t": now}
+        B.touch(*B.want["names"])
         return {"scans": {k: v for k, v in B.scans.items() if now - v["t"] < 3.0 and (not names or k in names)},
                 "topics": {**SCAN_TOPICS, **CLOUD_TOPICS}, "ros": ros_status(), "obstacles": []}
 
     @app.get("/api/costmap")
     def api_costmap(name: str = "global", color: Optional[str] = None):
+        if B:
+            B.touch("costmap:" + name)         # subscribed on the first ask; the latched grid arrives for the next
         if not B or name not in B.costmaps:
             return {"error": "no costmap received yet (is navigation running?)"}
         from .ros_bridge import COSTMAP_TOPICS
@@ -191,6 +194,8 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
 
     @app.get("/costmap/{name}.png")
     def costmap_png(name: str, color: Optional[str] = None):
+        if B:
+            B.touch("costmap:" + name)
         if not B or name not in B.costmaps:
             raise HTTPException(404, "no costmap")
         from .ros_bridge import COSTMAP_TOPICS
@@ -206,6 +211,7 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
     def api_tf():
         if not B:
             return {"frames": {}, "joints": {}, "t": time.time(), "ros": ros_status(), "ros_up": False}
+        B.touch("joints")
         return {"frames": B.frames, "joints": B.joints, "t": time.time(), "ros": ros_status(), "published": B.published, "sim": sim,
                 "halted": False, "tf_debug": B.tf_debug, "map_rev": mapview.rev, "mapping": state["mapping"]}
 
@@ -221,11 +227,14 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
         nav["policy"] = B.policy_feedback
         if particles:
             B.want3d["particles"] = time.time()
+            B.touch("particles")
             nav["particles"] = B.particles
         return nav
 
     @app.get("/api/cloud.bin")
     def api_cloud(name: str = "velodyne", max: int = 60000):
+        if B:
+            B.touch(name)
         b = B.cloud_bin(name, int(max)) if B else None
         if not b:
             raise HTTPException(404, f"no {name} data yet")
@@ -347,6 +356,11 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
         out = {"ros": ros_up(), "stream": B.stream_state if B else "", "hand": B.hand_state if B else [], "joints": {}, "policy": B.policy_feedback if B else {},
                "status": B.arm_status if B else {}, "speaking": B.speaking if B else False}
         if B:
+            B.touch("joints")
+            for _ in range(8):                 # the first ask subscribes: give the 100 Hz states a moment
+                if any(k.startswith("ur_") for k in B.joints):
+                    break
+                time.sleep(0.05)
             out["joints"] = {k: v for k, v in B.joints.items() if k.startswith("ur_")}
         return out
 
@@ -1046,6 +1060,9 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
         try:
             while True:
                 live_map_tick()
+                if B:
+                    from .ros_bridge import SCAN_TOPICS
+                    B.touch(*SCAN_TOPICS)      # an open Live page shows the laser scans
                 msg = {"t": time.time(), "pose": pose(), "ros": ros_status(), "ros_up": ros_up(), "map_rev": mapview.rev, "mapping": state["mapping"],
                        "nav": {k: v for k, v in (B.nav.items() if B else []) if k in ("goal", "polygons")}, "goal_state": B.nav_goal if B else {},
                        "route": runner.state, "policy": B.policy_feedback if B else {}, "speaking": B.speaking if B else False,
