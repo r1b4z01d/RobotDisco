@@ -384,6 +384,29 @@ phase_services() {
     sudo systemctl restart supervisor
   fi
   mkdir -p "$WS/log"
+  # The units must not start before the clock is set. After a total power loss the Jetson's clock comes up at 1970
+  # (no RTC battery on the devkit) and jumps 56 years when chrony first syncs; started before that, Nav2's bringup
+  # saw its timeouts expire at once and aborted (the robot, 2026-11-10, when the battery died). Supervisor waits for
+  # chrony for at most a minute; without a network it then starts with the clock it has.
+  sudo tee /etc/systemd/system/rd-wait-clock.service >/dev/null <<'UNIT'
+[Unit]
+Description=Robot Disco: wait (at most a minute) for the clock to be set before the units start
+After=chrony.service network-online.target
+Wants=chrony.service network-online.target
+Before=supervisor.service
+
+[Service]
+Type=oneshot
+ExecStart=-/usr/bin/chronyc waitsync 12 0 0 5
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+  sudo mkdir -p /etc/systemd/system/supervisor.service.d
+  printf '[Unit]\nAfter=rd-wait-clock.service\nWants=rd-wait-clock.service\n' | sudo tee /etc/systemd/system/supervisor.service.d/10-wait-clock.conf >/dev/null
+  sudo systemctl daemon-reload
+  sudo systemctl enable rd-wait-clock.service >/dev/null 2>&1 || warn "could not enable rd-wait-clock.service"
   sudo cp "$WS"/src/rd_bringup/services/*.conf /etc/supervisor/conf.d/
   sudo supervisorctl reread >/dev/null && sudo supervisorctl update >/dev/null
   sudo supervisorctl status || true
