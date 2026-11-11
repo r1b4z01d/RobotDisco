@@ -32,7 +32,7 @@ from rd_interfaces.action import GoToLandmark, RunPolicy, Say
 from rd_nav.landmarks import LandmarkStore
 
 from .brain import Brain
-from .skills import ClockSkill, HomeAssistantSkill, MusicSkill, NewsSkill, VolumeSkill, WeatherSkill
+from .skills import ClockSkill, HomeAssistantSkill, MusicSkill, NewsSkill, VolumeSkill, WeatherSkill, default_player
 from .tasks import TaskRunner
 from .wake import WakeMatcher
 
@@ -135,7 +135,7 @@ class VoiceNode(Node):
         dp("weather_place", str(config.get("site.weather.place", ""))); dp("units", "fahrenheit")
         dp("news_feeds", ["NPR=https://feeds.npr.org/1001/rss.xml", "BBC=https://feeds.bbci.co.uk/news/world/rss.xml"])
         dp("hass_url", ""); dp("hass_token", ""); dp("hass_aliases", [""])
-        dp("music_dir", "~/Music"); dp("player_cmd", ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet"])
+        dp("music_dir", "~/Music"); dp("player_cmd", default_player())      # ffplay, or gst-play-1.0 where there is none
         dp("music_continuous", True); dp("music_duck", 0.6)
         dp("volume_sink", str(config.get("audio.sink", ""))); dp("volume_step", 10); dp("volume_max", 100)
         dp("landmarks_dir", ""); dp("task_nav_timeout", 300.0); dp("task_run_timeout", 600.0)
