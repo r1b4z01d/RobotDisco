@@ -201,6 +201,12 @@ phase_base() {
   sudo apt-get update
   apt_install $(pkglist "$HERE/apt-packages.txt")
   sudo systemctl enable --now ssh supervisor chrony
+  # The Jetson image ships dnsmasq and isc-dhcp-server enabled and unconfigured: dnsmasq cannot have port 53
+  # (systemd-resolved holds it) and dhcpd has no subnet, so both fail at every boot. The robot serves neither DNS nor
+  # DHCP (its address is static, see the network phase): off, so that a failed unit means something.
+  for unit in dnsmasq isc-dhcp-server isc-dhcp-server6; do
+    systemctl list-unit-files "$unit.service" >/dev/null 2>&1 && sudo systemctl disable --now "$unit.service" >/dev/null 2>&1 || true
+  done
   if [ -n "$HOSTNAME_NEW" ] && [ "$(hostname)" != "$HOSTNAME_NEW" ]; then sudo hostnamectl set-hostname "$HOSTNAME_NEW"; fi
   for entry in "192.168.11.21 ur5e" "192.168.11.117 amazinghand" "192.168.11.119 gpu"; do
     grep -qE "^${entry%% *}[[:space:]]" /etc/hosts || echo "$entry" | sudo tee -a /etc/hosts >/dev/null
