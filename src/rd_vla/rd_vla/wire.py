@@ -96,8 +96,15 @@ class PolicyClient:
         rep = self._rpc({"cmd": "info"})
         return rep if rep.get("ok") else {}
 
-    def select(self, model: str) -> dict:
-        return self._rpc({"cmd": "select", "model": model})
+    def select(self, model: str, timeout: float = 240.0) -> dict:
+        """Have the server serve this checkpoint. Loading another one takes far longer than an inference (14 s on an
+        idle Orin, a minute on a busy one), so this call alone waits `timeout`; the 15 s default ended the robot's
+        first run before its model was in (2026-11-10)."""
+        self.sock.settimeout(timeout)
+        try:
+            return self._rpc({"cmd": "select", "model": model})
+        finally:
+            self.sock.settimeout(self.timeout)
 
     def close(self) -> None:
         if self.sock is not None:

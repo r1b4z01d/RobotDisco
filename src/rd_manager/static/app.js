@@ -1257,6 +1257,7 @@ async function loadFolksView() {
     } catch (e) { /* keep the last status */ }
   }, 5000);
 }
+$("#folks-wink").addEventListener("click", async () => { try { await post("/api/people/any/wink", {}); } catch (e) { err(e); } });
 $("#folks-url").addEventListener("change", () => { const fr = $("#folks-frame"); fr.src = $("#folks-url").value; fr.dataset.src = fr.src; $("#folks-open").href = fr.src; });
 
 // ---- map view: the route editor's map mode (map + robot + lidar scans), embedded ----
@@ -1336,7 +1337,7 @@ function actlogRender() {
     chips.dataset.sig = d.units.map((u) => u.unit + u.state).join();
     chips.replaceChildren(...d.units.map((u) => el("span", {
       class: "chip" + (actlog.units.has(u.unit) ? " on" : "") + (u.state === "RUNNING" ? "" : " down"),
-      title: `${u.name}: ${u.state.toLowerCase()}`,
+      title: `${u.name}: ${u.state.toLowerCase()} — click to ${actlog.units.has(u.unit) ? "hide" : "show"} its lines`,
       onclick: () => { actlog.units.has(u.unit) ? actlog.units.delete(u.unit) : actlog.units.add(u.unit); chips.dataset.sig = ""; actlogRender(); },
     }, u.unit)));
   }
@@ -1352,13 +1353,14 @@ function actlogRender() {
   body.dataset.fresh = "1";
 }
 async function actlogRefresh() {
-  if (!actlog.open || state.view !== "map" || document.visibilityState !== "visible" || actlog.busy) return;
+  if (state.view !== "map" || document.visibilityState !== "visible" || actlog.busy) return;
   actlog.busy = true;
   try {
-    actlog.data = await api("/api/activity?lines=400");
-    if (!actlog.allUnits.length && actlog.data.units) {      // first fetch: every unit on, except the chatty infra ones
+    // collapsed, the bar still says how many units run and which are down: a few lines, less often
+    actlog.data = await api("/api/activity?lines=" + (actlog.open ? 400 : 10));
+    if (!actlog.allUnits.length && actlog.data.units) {      // first fetch: every unit's lines shown
       actlog.allUnits = actlog.data.units.map((u) => u.unit);
-      actlog.units = new Set(actlog.allUnits.filter((u) => !["base", "tag"].includes(u)));
+      actlog.units = new Set(actlog.allUnits);
     }
     actlogRender();
   } catch (e) { $("#actlog-summary").textContent = "○ " + e.message; $("#actlog-summary").className = "mono muted"; }
@@ -1370,7 +1372,8 @@ function actlogApply() {
   $("#actlog-body").hidden = !actlog.open;
   $("#actlog-ctl").hidden = !actlog.open;
   clearInterval(actlog.timer);
-  if (actlog.open) { actlog.timer = setInterval(actlogRefresh, 3000); actlogRefresh(); }
+  actlog.timer = setInterval(actlogRefresh, actlog.open ? 3000 : 10000);
+  actlogRefresh();
 }
 $("#actlog-toggle").addEventListener("click", () => {
   actlog.open = !actlog.open;

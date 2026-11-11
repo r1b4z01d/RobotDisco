@@ -21,7 +21,8 @@ _ROS_LINE2 = re.compile(r"^\[([\w.\-]+)-\d+\]\s*\[(INFO|WARN|WARNING|ERROR|FATAL
 _PY_LEVEL = re.compile(r"\b(ERROR|CRITICAL|Traceback|WARNING|WARN)\b")
 _ACT_NOISE = re.compile(r"(Publishing:|Received|get_state|lifecycle_manager.*(Waiting for service|Creating bond)|"
                         r"Transform data too old|Failed to bring up all nodes|GET /|POST /|HTTP/1\.[01]\" 200|"
-                        r"Message Filter dropping|UDP|keepalive|heartbeat|FIFO RT)", re.I)
+                        r"Message Filter dropping|UDP|keepalive|heartbeat|FIFO RT|"
+                        r"Velocity command timed out)", re.I)     # diff_cont's once-a-second "nobody is driving": not news
 _ACT_WAIT = re.compile(r"(wait|stop|abort|fail|timeout|time out|stuck|reject|cancel|no path|collision|blocked|"
                        r"recover|retry|lost|not reachable|unavailable)", re.I)
 

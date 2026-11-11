@@ -31,6 +31,8 @@ class Server:
         path = None
         if spec and self.backend_name != "fake":
             path = str(checkpoints.resolve(spec, self.models_dir))
+        if self.backend is not None and spec and (path or spec) == self.checkpoint:
+            return self.info()             # already serving it: a run that names the loaded checkpoint costs nothing
         b = make_backend(self.backend_name, path or spec, device=self.device, **self.kw)
         if self.backend_name == "fake":
             b.load(spec)

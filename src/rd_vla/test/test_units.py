@@ -181,3 +181,22 @@ def test_recorder_lerobot(tmp_path):
         w2.add_frame({"scene": img}, [0.0] * 16, [0.0] * 10, "pick")
     assert w2.save_episode()["episode"] == 1
     w2.close()
+
+
+def test_selecting_the_loaded_checkpoint_does_not_reload_it():
+    from rd_vla import infer_server
+    made = []
+    real = infer_server.make_backend
+
+    def counting(name, spec, **kw):
+        made.append(spec)
+        return real(name, spec, **kw)
+    infer_server.make_backend = counting
+    try:
+        s = infer_server.Server("fake", "one", "cpu")
+        assert made == ["one"]
+        assert s.command({"cmd": "select", "model": "one"})["ok"] and made == ["one"]          # the same: nothing loaded
+        assert s.command({"cmd": "select", "model": "two"})["ok"] and made == ["one", "two"]   # another: loaded
+        assert s.checkpoint == "two"
+    finally:
+        infer_server.make_backend = real
