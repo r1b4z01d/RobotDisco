@@ -40,6 +40,28 @@ def curls_to_offsets(curls) -> list[float]:
     return out
 
 
+ABDUCT_MAX_DEG = 20.0      # the sideways spread per finger, +-20 deg (the mechanism's limit)
+
+
+def flex_abduct_to_offsets(flex, abduct) -> list[float]:
+    """Per-finger flex [0,1] and abduction [-1,1] -> 8 per-servo offsets (deg). v1's amazing_hand_client.
+
+    A finger's two servos are A (even) and B (odd): flex = (A - B) / 2 and abduct = (A + B) / 2, so
+    A = flex_angle + abd and B = -flex_angle + abd, where flex_angle runs servo A's open..close range and
+    abd = abduct * ABDUCT_MAX_DEG. With abduct 0 this is curls_to_offsets.
+    """
+    flex, abduct = [float(v) for v in flex], [float(v) for v in abduct]
+    if len(flex) != 4 or len(abduct) != 4:
+        raise ValueError(f"need 4 flex + 4 abduct, got {len(flex)} + {len(abduct)}")
+    out = [0.0] * 8
+    for i, f in enumerate(FINGER_ORDER):
+        a, b = FINGER_TO_SERVO[f]
+        flex_angle = JOINT_OPEN_OFFSETS[a] + (JOINT_CLOSE_OFFSETS[a] - JOINT_OPEN_OFFSETS[a]) * clamp01(flex[i])
+        abd = max(-1.0, min(1.0, abduct[i])) * ABDUCT_MAX_DEG
+        out[a], out[b] = flex_angle + abd, -flex_angle + abd
+    return out
+
+
 def offsets_to_curls(offsets) -> list[float]:
     """Inverse of curls_to_offsets (mean over a finger's two servos)."""
     out = []

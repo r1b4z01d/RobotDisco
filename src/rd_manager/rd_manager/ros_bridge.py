@@ -173,6 +173,7 @@ class RosBridge:
         self.voice_task_pub = n.create_publisher(String, "/voice/run_task", 10)
         self.hand_curls_pub = n.create_publisher(Float32MultiArray, "/hand/curls", 10)
         self.hand_offsets_pub = n.create_publisher(Float32MultiArray, "/hand/offsets", 10)
+        self.hand_raw_pub = n.create_publisher(String, "/hand/raw", 10)
         self.face_pubs = {k: n.create_publisher(String, f"/face/{k}", 10) for k in ("set_person_name", "forget_person", "reset_greeting")}
         # clients
         self.cancel_clients = {a: n.create_client(CancelGoal, f"/{a}/_action/cancel_goal", callback_group=self.cb)

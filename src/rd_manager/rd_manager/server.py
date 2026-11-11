@@ -27,7 +27,9 @@ from rd_nav.maps_store import MapsStore, valid_name as valid_map_name
 from rd_vla import checkpoints
 from rd_vla.evals import EvalRegistry
 
-from . import datasets as ds_mod, models as models_mod, ops as ops_mod
+from rd_bringup import config as rd_config
+
+from . import datasets as ds_mod, hand_api, models as models_mod, ops as ops_mod
 from .capture import LANDMARK_CAMS, capture_landmark
 from .grids import MapView
 from .panels import PanelsRelay, panels_info, slash
@@ -401,24 +403,69 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
         h.cancel_goal_async()
         return {"ok": True}
 
+    hand_state = hand_api.HandState()
+    hand_host = "127.0.0.1" if sim else str(rd_config.get("hand.ip", "127.0.0.1"))
+    hand_port = int(rd_config.get("hand.ports.udp", 8766))
+
+    def hand_publish(pub, msg, line: str, **fields) -> None:
+        if not B:
+            raise HTTPException(503, "no ROS")
+        if pub.get_subscription_count() == 0:
+            hand_state.sent(line, error="the hand node is not running")
+            raise HTTPException(502, "the hand node is not running (unit rd_arm), nothing was sent")
+        pub.publish(msg)
+        hand_state.sent(line, **fields)
+
     @app.get("/api/hand")
     def api_hand(host: Optional[str] = None):
-        st = B.hand_state if B else []
-        return {"reachable": bool(st), "host": "ros", "port": 8766, "curls": st[:4] if st else None, "reported": st[4:8] if len(st) >= 8 else None, "mapping": "curls"}
+        """The hand's liveness (UDP probe), the last command this server sent it, and the gesture table."""
+        h = (host or hand_host).strip()
+        p = hand_api.probe(h, hand_port)
+        if p["alive"]:
+            hand_state.alive_t = time.time()
+        seen = None if hand_state.alive_t is None else round(time.time() - hand_state.alive_t, 1)
+        node = B.hand_state if B else []
+        return {"host": h, "udp_port": hand_port, "alive": p["alive"], "uptime_ms": p["uptime_ms"], "error": p["error"],
+                "last_alive_s": seen, "console_url": f"http://{h}/webserial", "gestures": hand_api.GESTURES,
+                "speed_range": [hand_api.SPEED_MIN, hand_api.SPEED_MAX], "state": hand_state.snapshot(),
+                "reported": node[4:8] if len(node) >= 8 else None}
 
     @app.post("/api/hand/curls")
     def api_hand_curls(body: dict = Body(...)):
+        """Per-finger curl and abduction -> one J: line (v1's mapping), sent by the hand node."""
         from std_msgs.msg import Float32MultiArray
-        if not B:
-            raise HTTPException(503, "no ROS")
-        curls = [float(v) for v in body.get("curls", [])]
-        if len(curls) == 4:
-            B.hand_curls_pub.publish(Float32MultiArray(data=curls))
-        elif len(curls) == 8:
-            B.hand_offsets_pub.publish(Float32MultiArray(data=curls))
-        else:
-            raise HTTPException(400, "curls: 4 values (fingers) or 8 (servo degrees)")
-        return {"ok": True}
+        try:
+            cmd = hand_api.build_command(body.get("curls", []), body.get("abduct"), body.get("speed") or hand_state.snapshot()["speed"])
+        except (TypeError, ValueError) as e:
+            raise HTTPException(400, str(e))
+        hand_publish(B.hand_offsets_pub if B else None, Float32MultiArray(data=cmd["offsets"] + [float(cmd["speed"])]), cmd["line"],
+                     curls=cmd["curls"], abduct=cmd["abduct"], speed=cmd["speed"])
+        return cmd
+
+    def hand_line(line: str) -> None:
+        from std_msgs.msg import String
+        hand_publish(B.hand_raw_pub if B else None, String(data=line), line)
+
+    @app.post("/api/hand/gesture")
+    def api_hand_gesture(body: dict = Body(...)):
+        """One of the firmware's gestures (a single character; it moves at the hand's own speed)."""
+        c = str(body.get("line", "")).strip()
+        if c not in hand_api.GESTURES:
+            raise HTTPException(400, f"gesture must be one of: {' '.join(hand_api.GESTURES)}")
+        hand_line(c)
+        return {"line": c, "gesture": hand_api.GESTURES[c]}
+
+    @app.post("/api/hand/raw")
+    def api_hand_raw(body: dict = Body(...)):
+        """Any one line as typed (J:..., a gesture character). Q is answered by the probe."""
+        line = str(body.get("line", "")).strip()
+        if not line or len(line) > 150 or not line.isascii() or not line.isprintable():
+            raise HTTPException(400, "one printable ASCII line of at most 150 characters")
+        if line == "Q":
+            p = hand_api.probe((body.get("host") or hand_host).strip(), hand_port)
+            return {"line": line, "reply": f"K:{p['uptime_ms']}" if p["alive"] else None, "error": p["error"]}
+        hand_line(line)
+        return {"line": line, "reply": None, "error": None}
 
     @app.post("/api/hand/{action}")
     def api_hand_action(action: str):

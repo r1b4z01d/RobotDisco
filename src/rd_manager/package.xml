@@ -8,6 +8,7 @@
   <license>CC-BY-NC-SA-4.0</license>
   <depend>rd_interfaces</depend>
   <exec_depend>rd_bringup</exec_depend>
+  <exec_depend>rd_arm</exec_depend>
   <exec_depend>rd_nav</exec_depend>
   <exec_depend>rd_vla</exec_depend>
   <exec_depend>rclpy</exec_depend>

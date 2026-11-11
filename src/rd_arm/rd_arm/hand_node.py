@@ -19,7 +19,7 @@ import time
 import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
-from std_msgs.msg import Float32MultiArray, MultiArrayDimension
+from std_msgs.msg import Float32MultiArray, MultiArrayDimension, String
 from std_srvs.srv import SetBool, Trigger
 
 from rd_bringup import config
@@ -46,6 +46,7 @@ class HandNode(Node):
         self.wiggle_t0 = None
         self.create_subscription(Float32MultiArray, "/hand/curls", self.on_curls, 10)
         self.create_subscription(Float32MultiArray, "/hand/offsets", self.on_offsets, 10)
+        self.create_subscription(String, "/hand/raw", self.on_raw, 10)
         self.state_pub = self.create_publisher(Float32MultiArray, "/hand/state", 10)
         self.create_service(Trigger, "/hand/open", lambda req, res: self._set_all(0.0, res))
         self.create_service(Trigger, "/hand/close", lambda req, res: self._set_all(1.0, res))
@@ -83,12 +84,24 @@ class HandNode(Node):
         self.send(curls_to_offsets(self.curls))
 
     def on_offsets(self, m: Float32MultiArray):
-        if len(m.data) != 8:
-            self.get_logger().warn(f"/hand/offsets wants 8 values, got {len(m.data)}", throttle_duration_sec=5.0)
+        if len(m.data) not in (8, 9):
+            self.get_logger().warn(f"/hand/offsets wants 8 servo offsets (and optionally the speed), got {len(m.data)}", throttle_duration_sec=5.0)
             return
         self.wiggle_t0 = None
-        self.curls = offsets_to_curls(m.data)
-        self.send([float(v) for v in m.data])
+        offsets = [float(v) for v in m.data[:8]]
+        self.curls = offsets_to_curls(offsets)
+        if self.link is not None:      # as given: the two servos of a finger may differ (abduction), a curl cannot say that
+            self.link.send_offsets(offsets, int(m.data[8]) if len(m.data) == 9 else self.speed)
+
+    def on_raw(self, m: String):
+        """One line exactly as the firmware reads it: a gesture character, a J: line, Q (the manager's Hand tab)."""
+        line = m.data.strip()
+        if not line or len(line) > 150 or not line.isascii() or not line.isprintable():
+            self.get_logger().warn("/hand/raw wants one printable ASCII line of at most 150 characters", throttle_duration_sec=5.0)
+            return
+        self.wiggle_t0 = None
+        if self.link is not None:
+            self.link.send_line(line + "\n")
 
     def _set_all(self, curl: float, res):
         self.wiggle_t0 = None
