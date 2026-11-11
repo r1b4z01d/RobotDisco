@@ -59,7 +59,20 @@ class ImageRotate(Node):
         self.height = int(self.get_parameter("height").value)
         qos = QoSProfile(depth=2, reliability=ReliabilityPolicy.BEST_EFFORT)
         self.pub = self.create_publisher(Image, "out", qos)
-        self.create_subscription(Image, "in", self.cb, qos)
+        # Take the camera's frames only while somebody takes ours. Three of these at 30 fps cost most of three of
+        # the Orin's cores for images nobody was looking at (2026-11-10); a subscriber now waits half a second at most.
+        self.qos = qos
+        self.sub = None
+        self.create_timer(0.5, self.follow_demand)
+        self.follow_demand()
+
+    def follow_demand(self):
+        wanted = self.pub.get_subscription_count() > 0
+        if wanted and self.sub is None:
+            self.sub = self.create_subscription(Image, "in", self.cb, self.qos)
+        elif not wanted and self.sub is not None:
+            self.destroy_subscription(self.sub)
+            self.sub = None
 
     def cb(self, m: Image):
         ch = max(1, m.step // max(1, m.width))

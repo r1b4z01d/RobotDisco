@@ -30,6 +30,7 @@ CAMERA_TOPICS = {"scene": "/cameras/scene/image", "wrist": "/cameras/wrist/image
 CAMERA_LABELS = {"scene": "Scene", "wrist": "Wrist", "side": "Side", "realsense": "RealSense", "face": "Face"}
 POLY_MAX_POINTS = {"stop": 3, "slowdown": 3}
 FRAME_FRESH_S, FRAME_HOLD_S = 2.0, 6.0
+CAM_LINGER_S = 10.0          # a camera stays subscribed this long after the last page asked for it
 SCAN_MAX_POINTS, CLOUD_MAX_POINTS, CLOUD_BIN_MAX = 720, 4000, 60000
 CLOUD_Z = (0.05, 2.0)
 DRIVE_HZ, DRIVE_STALE_S, DRIVE_MAX_VX, DRIVE_MAX_WZ, DRIVE_TURBO = 10.0, 0.4, 0.25, 0.5, 4.0   # scales + LB turbo of rd_base joystick.yaml (1.0 m/s, 2.0 rad/s)
@@ -154,9 +155,13 @@ class RosBridge:
             n.create_subscription(ParticleCloud, "/particle_cloud", keep("particles"), qos_profile_sensor_data, callback_group=self.cb)
         except Exception:  # noqa: BLE001
             pass
+        # A camera is subscribed only while a page (or a landmark capture) wants it, and for CAM_LINGER_S after: the
+        # bridge used to take every frame of every camera to throw it away, most of a core of deserialising (2026-11-10)
         self.cam_want: dict = {}
-        for name, topic in CAMERA_TOPICS.items():
-            n.create_subscription(Image, topic, (lambda nm: (lambda m: self._on_image(nm, m)))(name), best, callback_group=self.cb)
+        self._cam_subs: dict = {}
+        self._cam_lock = threading.Lock()
+        self._cam_qos, self._cam_type = best, Image
+        n.create_timer(1.0, self._cam_follow_demand, callback_group=self.cb)
         n.create_subscription(String, "/face/people", lambda m: self._set_json("people", m.data), 10, callback_group=self.cb)
         n.create_subscription(Float32MultiArray, "/hand/state", lambda m: setattr(self, "hand_state", list(m.data)), 10, callback_group=self.cb)
         n.create_subscription(String, "/arm/stream_state", lambda m: setattr(self, "stream_state", m.data), 10, callback_group=self.cb)
@@ -205,6 +210,39 @@ class RosBridge:
             setattr(self, key, json.loads(text))
         except ValueError:
             pass
+
+    def want_cam(self, name: str) -> None:
+        """A page is looking at this camera: subscribe now if it is not, and keep it for CAM_LINGER_S."""
+        if name not in CAMERA_TOPICS:
+            return
+        self.cam_want[name] = time.time()
+        with self._cam_lock:
+            if name not in self._cam_subs:
+                self._cam_subs[name] = self.node.create_subscription(
+                    self._cam_type, CAMERA_TOPICS[name], (lambda m, nm=name: self._on_image(nm, m)), self._cam_qos, callback_group=self.cb)
+
+    def _cam_follow_demand(self):
+        now = time.time()
+        with self._cam_lock:
+            for name in [n for n in self._cam_subs if now - self.cam_want.get(n, 0.0) > CAM_LINGER_S]:
+                self.node.destroy_subscription(self._cam_subs.pop(name))
+
+    def cam_alive(self, name: str) -> bool:
+        """Is the camera there: a frame in the last 3 s, or (not being watched) a publisher on its topic."""
+        if time.time() - (self.jpeg.get(name) or {}).get("seen", 0.0) < 3.0:
+            return True
+        return name in CAMERA_TOPICS and self.node.count_publishers(CAMERA_TOPICS[name]) > 0
+
+    def fresh_frames(self, names, timeout: float = 4.0, fresh_s: float = 1.5) -> None:
+        """Want these cameras and wait until each has a frame newer than fresh_s (a landmark photo), or the timeout."""
+        end = time.time() + timeout
+        while True:
+            for nm in names:
+                self.want_cam(nm)
+            now = time.time()
+            if all(now - (self.jpeg.get(nm) or {}).get("t", 0.0) < fresh_s for nm in names) or now > end:
+                return
+            time.sleep(0.1)
 
     def _on_image(self, name, m):
         # encode only what is being watched (the pages ask for a JPEG / stream first) and at most 10 Hz

@@ -147,12 +147,14 @@ class PolicyRunner(Node):
         t0 = time.monotonic()
         result = RunPolicy.Result()
         state = {"steps": 0, "run_dir": ""}
+        self.observer.cameras_on()
         try:
             ok, msg = self._run(handle, handle.request, t0, state)
         except Exception as e:  # noqa: BLE001
             ok, msg = False, f"error: {type(e).__name__}: {e}"
             self.get_logger().error(msg)
         finally:
+            self.observer.cameras_off()
             with self._lock:
                 self._active = None
                 if self.server_unit:
@@ -201,7 +203,7 @@ class PolicyRunner(Node):
                 ok, msg = self._home()
                 if not ok:
                     return False, f"homing failed: {msg}"
-            ready, why = self.observer.ready(float(p("obs_max_age_s")) + 1.0)
+            ready, why = self.observer.wait_ready(float(p("obs_max_age_s")) + 1.0, cancelled=cancelled)
             if not ready:
                 return False, f"no observation: {why}"
             # 3. the eval record, the recording, streaming on. From here every exit, an exception included, goes

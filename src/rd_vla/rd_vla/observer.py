@@ -48,11 +48,35 @@ class Observer:
         self._curls = [0.0, 0.0, 0.0, 0.0]
         self.tf = Buffer()
         self.tfl = TransformListener(self.tf, node)
-        qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT)
-        for cam in self.cameras:
-            node.create_subscription(Image, camera_topic.format(name=cam), self._on_image(cam), qos, callback_group=callback_group)
+        # the cameras are subscribed only between cameras_on() and cameras_off(): idle, the policy runner spent half a
+        # core receiving three 30 fps streams it never looked at
+        self._camera_topic, self._callback_group = camera_topic, callback_group
+        self._camera_subs: list = []
         node.create_subscription(JointState, "/joint_states", self._on_joints, 10, callback_group=callback_group)
         node.create_subscription(Float32MultiArray, "/hand/state", self._on_hand, 10, callback_group=callback_group)
+
+    def cameras_on(self) -> None:
+        if self._camera_subs or not self.cameras:
+            return
+        qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT)
+        self._camera_subs = [self.node.create_subscription(Image, self._camera_topic.format(name=cam), self._on_image(cam), qos,
+                                                           callback_group=self._callback_group) for cam in self.cameras]
+
+    def cameras_off(self) -> None:
+        for s in self._camera_subs:
+            self.node.destroy_subscription(s)
+        self._camera_subs = []
+        with self._lock:
+            self._images.clear()               # the next run must not start on this run's last frames
+
+    def wait_ready(self, max_age: float = 1.0, timeout: float = 6.0, cancelled=lambda: False) -> tuple[bool, str]:
+        """ready(), given the time the cameras need to start flowing after cameras_on()."""
+        end = time.monotonic() + timeout
+        ok, why = self.ready(max_age)
+        while not ok and time.monotonic() < end and not cancelled():
+            time.sleep(0.1)
+            ok, why = self.ready(max_age)
+        return ok, why
 
     def _on_image(self, cam):
         def cb(m):

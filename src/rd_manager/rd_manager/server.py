@@ -253,19 +253,17 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
     @app.get("/api/cameras")
     def api_cameras():
         from .ros_bridge import CAMERA_LABELS, CAMERA_TOPICS
-        now = time.time()
         out = []
         for n, t in CAMERA_TOPICS.items():
-            e = (B.jpeg.get(n) if B else None) or {}
             out.append({"name": n, "label": CAMERA_LABELS[n], "topic": t, "url": f"/cam/{n}.mjpg", "snapshot": f"/cam/{n}.jpg",
-                        "alive": now - e.get("seen", 0) < 3.0})
+                        "alive": B.cam_alive(n) if B else False})
         return {"cameras": out}
 
     @app.get("/cam/{name}.jpg")
     def cam_jpg(name: str):
         if not B:
             raise HTTPException(404, "no ROS")
-        B.cam_want[name] = time.time()
+        B.want_cam(name)
         e = B.jpeg.get(name)
         if not e or not e["data"]:
             raise HTTPException(404, "no frame yet")
@@ -280,7 +278,7 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
             last = 0.0
             deadline = time.time() + 3600
             while time.time() < deadline:
-                B.cam_want[name] = time.time()
+                B.want_cam(name)
                 e = B.jpeg.get(name)
                 if e and e["data"] and e["t"] != last:
                     last = e["t"]
@@ -649,10 +647,9 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
 
     # ------------------------------------------------------------------ landmarks
     def lm_payload(items):
-        now = time.time()
         return {"landmarks": items, "map": maps.active(), "pose": pose(), "ros": ros_status(), "ros_up": ros_up(), "sim": sim, "source": state["map_source"],
                 "voice": bool(B and B.voice_task_pub.get_subscription_count()) if B else False,
-                "cameras": {n: bool(B and (B.jpeg.get(n) or {}).get("data") and now - (B.jpeg.get(n) or {}).get("t", 0) < 3.0) for n in LANDMARK_CAMS}}
+                "cameras": {n: bool(B and B.cam_alive(n)) for n in LANDMARK_CAMS}}     # there to be photographed (a capture asks for frames itself)
 
     @app.get("/api/landmarks")
     def api_landmarks():
@@ -684,11 +681,13 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
         if "x" in body and "y" in body:
             cap = {"x": float(body["x"]), "y": float(body["y"]), "yaw": float(body.get("yaw", 0.0))}
             if B:
+                B.fresh_frames(LANDMARK_CAMS)
                 cap.update(capture_landmark(lid, landmarks.img_dir, None, B.jpeg, want_pose=False))
         else:
             if not B:
                 raise HTTPException(503, "no ROS bridge")
             try:
+                B.fresh_frames(LANDMARK_CAMS)
                 cap = capture_landmark(lid, landmarks.img_dir, pose(), B.jpeg)
             except LookupError as e:
                 raise HTTPException(409, f"{e}: {ros_status()}")
@@ -727,6 +726,7 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
             raise HTTPException(503, "no ROS bridge")
         want_pose = bool(body.get("pose", True))
         try:
+            B.fresh_frames(LANDMARK_CAMS)
             cap = capture_landmark(lid, landmarks.img_dir, pose(), B.jpeg, want_pose=want_pose)
         except LookupError as e:
             raise HTTPException(409, str(e))
