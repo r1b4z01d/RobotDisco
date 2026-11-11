@@ -93,9 +93,10 @@ address; rd_base's launch hands them to the xacro. Three things make it work:
    data"). `ttyTHS2` ships without DMA bindings and is fine, so the stock `/boot/dtb/kernel_tegra234-*.dtb` is
    copied to `...-uart1-pio.dtb` with `dmas`/`dma-names` removed from `serial@3100000` and booted via an `FDT`
    line in `/boot/extlinux/extlinux.conf` (what jetson-io does; a `stock` entry stays as the fallback). The
-   function only acts when the stock DTB binds DMA to that UART, so on JetPack 7.2 (kernel 6.8) it may find
-   nothing to do. Either way `dmesg | grep 3100000.serial` must say `RX in PIO mode`, and the phase re-runs
-   after a kernel/dtb package update (it rebuilds the copy when the stock file is newer).
+   function only acts when the stock DTB binds DMA to that UART. **On JetPack 7.2.1 (kernel 6.8.12) it is not
+   needed**: the stock tree still binds DMA, and `tools/roboclaw_crc_soak.py /dev/ttyTHS1 115200` read 3200
+   CRC-checked replies at 100 Hz without an error (2026-11-10), so the jetson phase leaves the boot config alone
+   unless `UART1_PIO=1`. Run the soak again after a kernel update before trusting the base.
 3. **Driver patches** (`patches/roboclaw_serial-baud-rate.patch`, `patches/roboclaw_hardware_interface-baud-rate.patch`,
    applied by `apply_patches.sh`): a `baud_rate` hardware parameter (the upstream driver never set the tty speed,
    USB CDC did not care), a failed open fails `on_init` instead of aborting controller_manager on the first read,
