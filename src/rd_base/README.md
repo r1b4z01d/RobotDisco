@@ -27,6 +27,11 @@ The RoboClaw (2x15A, firmware 4.4.9) is on the Jetson's 40-pin header UART since
 timeout as the watchdog (`robot.yaml sensors.roboclaw`; the launch passes port and baud to the xacro). The
 plugin is `vendor/roboclaw_hardware_interface` with the UART patches from `provision/patches`; the UART itself
 needs the PIO device tree from `provision.sh jetson`. See `provision/README.md`, *RoboClaw on the header UART*.
+The gamepad goes through `joy_guard`: joy's reader republishes a pad's last sticks and buttons after the pad is gone
+(Bluetooth drop, sleep) and keeps them until each control moves again, which after a reboot drove the base forward on
+the first press of the deadman with the stick at rest. The guard sends a neutral pad while the device is absent and
+holds a control at rest until it has really moved.
+
 A lost reply no longer ends driving: the interface asks twice and rides out half a second of failed exchanges
 (`provision/patches/roboclaw_hardware_interface-retry.patch`; before it, one late reply on a loaded Orin deactivated
 the hardware for good, 2026-11-10). If the link stays down, `hardware_watchdog` ends the launch after 5 s and the

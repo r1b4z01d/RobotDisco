@@ -96,7 +96,11 @@ def generate_launch_description():
         parameters=[joy_params, {'use_sim_time': use_sim_time},
                     {key: int(config.get(f'gamepad.{key}')) for key in ('enable_button', 'enable_turbo_button')
                      if config.get(f'gamepad.{key}', None) is not None}],
-        remappings=[('/cmd_vel', '/cmd_vel_joy')], arguments=quiet, condition=IfCondition(joystick))
+        # teleop reads the guarded pad: joy republishes a pad's last state after the pad is gone (rd_base/joy_guard.py)
+        remappings=[('/cmd_vel', '/cmd_vel_joy'), ('joy', '/joy_guarded'), ('/joy', '/joy_guarded')], arguments=quiet,
+        condition=IfCondition(joystick))
+    joy_guard = Node(package='rd_base', executable='joy_guard', name='joy_guard', output='screen',
+                     parameters=[{'use_sim_time': use_sim_time}], condition=IfCondition(joystick))
 
     return LaunchDescription([
         DeclareLaunchArgument('sim_mode', default_value='false', description='mock ros2_control hardware'),
@@ -111,5 +115,5 @@ def generate_launch_description():
         RegisterEventHandler(OnProcessStart(target_action=controller_manager, on_start=spawners)),
         twist_mux, watchdog,
         monitor, monitor_lifecycle,
-        joy, teleop,
+        joy, joy_guard, teleop,
     ])

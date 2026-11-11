@@ -65,3 +65,23 @@ def test_hardware_watchdog_gives_up_only_when_the_hardware_stays_down():
     never = Watch(grace_s=45.0, down_s=5.0)
     assert not never.update(0.0, None) and not never.update(44.0, None)
     assert not never.update(46.0, None) and never.update(51.0, None)           # never came up: grace, then the same 5 s
+
+
+def test_joy_guard_lets_no_stale_pad_state_through():
+    from rd_base.joy_guard import Guard, device_present
+    g = Guard(rest=0.1)
+    rest = [0.0, 0.0, 0.0, 0.0, 1.0, 1.0]
+    assert g.update(True, rest, [0] * 8) == ([0.0, 0.0, 0.0, 0.0, 0.0, 0.0], [0] * 8)      # triggers came up at 1.0: zero until they move
+    assert g.update(True, [0.0, 0.5, 0, 0, 1.0, 1.0], [0] * 7 + [1])[0][1] == 0.5           # a centred stick is live at once
+    # the pad drops with the stick forward and the deadman held: joy goes on publishing exactly that
+    stale_axes, stale_buttons = [0.0, 0.8, 0, 0, 1.0, 1.0], [0] * 7 + [1]
+    assert g.update(False, stale_axes, stale_buttons) == ([0.0] * 6, [0] * 8)                # gone: neutral
+    # it is back, joy still holds the old state: nothing of it passes
+    assert g.update(True, stale_axes, stale_buttons) == ([0.0] * 6, [0] * 8)
+    # the deadman is released and pressed again, the stick has not moved: still no drive
+    assert g.update(True, stale_axes, [0] * 8) == ([0.0] * 6, [0] * 8)
+    assert g.update(True, stale_axes, stale_buttons) == ([0.0] * 6, [0] * 7 + [1])
+    # the stick moves: from now on it is the real stick
+    assert g.update(True, [0.0, 0.3, 0, 0, 1.0, 1.0], stale_buttons)[0][1] == 0.3
+    listing = 'I: Bus=0005\nN: Name="8BitDo Ultimate 2C Wireless"\nH: Handlers=js1 event13\n'
+    assert device_present("8BitDo Ultimate 2C Wireless", listing) and not device_present("8BitDo Ultimate 2C Wireless Controller", listing)
