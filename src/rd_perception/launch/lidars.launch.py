@@ -32,6 +32,14 @@ def generate_launch_description():
     s1_cfg = config.get('sensors.rplidar_s1')
     s2e_cfg = config.get('sensors.rplidar_s2e')
     velo_cfg = config.get('sensors.velodyne')
+    # the S1's range error comes and goes, so scan_range_offset measures it against the robot's own body when
+    # robot.yaml names where the S1 sees it; without that it adds the fixed range_offset_m
+    s1_offset = {'in_topic': 'rp_s1_lidar/scan_uncorrected', 'out_topic': 'rp_s1_lidar/scan',
+                 'offset': float(s1_cfg.get('range_offset_m', 0.0))}
+    body = s1_cfg.get('body_reference') or {}
+    if body:
+        s1_offset['reference_sectors'] = [float(edge) for sector in body['sectors_deg'] for edge in sector]
+        s1_offset['reference_ranges'] = [float(r) for r in body['ranges_m']]
 
     s1_nodes = [
         Node(package='rplidar_ros', executable='rplidar_node', name='rplidar_s1_node', output='screen',
@@ -42,8 +50,7 @@ def generate_launch_description():
                           'topic_name': 'rp_s1_lidar/scan_uncorrected'}]),
         Node(package='rd_perception', executable='scan_range_offset', name='rplidar_s1_range_offset', output='screen',
              respawn=True, respawn_delay=3.0, condition=real(s1),
-             parameters=[{'in_topic': 'rp_s1_lidar/scan_uncorrected', 'out_topic': 'rp_s1_lidar/scan',
-                          'offset': float(s1_cfg.get('range_offset_m', 0.0))}]),
+             parameters=[s1_offset]),
         Node(package='laser_filters', executable='scan_to_scan_filter_chain', name='rp_s1_filter', condition=IfCondition(s1),
              remappings=[('/scan', '/rp_s1_lidar/scan'), ('/scan_filtered', '/rp_s1_lidar/scan_filtered')],
              parameters=[os.path.join(share, 'config', 's1_filter.yaml'), sim_time], arguments=quiet),

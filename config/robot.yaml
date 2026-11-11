@@ -71,7 +71,13 @@ sensors:
     serial_port: /dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0
     baudrate: 256000
     frame: rp_s1_lidar
-    range_offset_m: -0.33         # ADDED to every range: the faulty S1 reads +0.33 m in every mode (2026-11-02); 0.0 for a healthy unit
+    # This S1 reads every range too long by an amount that changes between days: +0.33 m on 2026-11-02 (taped box, both
+    # scan modes), nothing on 2026-11-10 after a week switched off. So the error is measured on every scan against the
+    # drive-wheel housings, which the S1 always sees at a known range, and that is what gets ADDED to every range.
+    body_reference:
+      sectors_deg: [[-72, -57], [57, 72]]   # scan-frame angles (the scan's own angle_min..angle_max), left then right housing
+      ranges_m: [0.367, 0.371]              # their true range: 2026-11-10 with the unit reading true (Velodyne agreed)
+    range_offset_m: -0.33         # ADDED to every range only while the reference cannot measure (and if it is removed); 0.0 for a healthy unit
   rplidar_s2e:                    # back, Ethernet (UDP)
     ip: 192.168.11.2
     udp_port: 8089
