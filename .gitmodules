@@ -7,3 +7,6 @@
 [submodule "vendor/roboclaw_hardware_interface"]
 	path = vendor/roboclaw_hardware_interface
 	url = https://github.com/dumbotics/roboclaw_hardware_interface.git
+[submodule "vendor/rplidar_ros"]
+	path = vendor/rplidar_ros
+	url = https://github.com/Slamtec/rplidar_ros.git

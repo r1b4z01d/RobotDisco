@@ -29,7 +29,8 @@ ros-jazzy-robot-localization
 # sensors (rd_perception)
 ros-jazzy-realsense2-camera
 ros-jazzy-realsense2-description
-ros-jazzy-rplidar-ros
+# NOT ros-jazzy-rplidar-ros: that is the old packaged driver (2.1.0, rplidar_composition only, no Ethernet). The S1 and
+# the S2E run Slamtec's own driver, built in the workspace from vendor/rplidar_ros (v1's submodule, same commit).
 ros-jazzy-velodyne
 ros-jazzy-laser-filters
 ros-jazzy-diagnostic-updater
