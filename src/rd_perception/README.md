@@ -10,7 +10,7 @@ ros2 launch rd_perception perception.launch.py sim_mode:=true       # rig: no dr
 
 | Topic | From |
 |---|---|
-| `/rp_s1_lidar/scan_filtered` | S1 driver → `scan_range_offset` (the faulty unit's constant, from robot.yaml) → body polygon + speckle filter |
+| `/rp_s1_lidar/scan_filtered` | S1 driver → `scan_range_offset` (the faulty unit's range error, measured on every scan against the wheel housings: robot.yaml `body_reference`) → body polygon + speckle filter. The filters need the robot's TF: started alone, `lidars.launch.py` publishes no `scan_filtered` until `robot_state_publisher` runs |
 | `/rp_s2e_lidar/scan_filtered` | S2E driver (UDP) → filter |
 | `/velodyne_points`, `/velodyne/scan` | velodyne driver + transform + laserscan |
 | `/camera/camera/color/image_raw`, `.../depth/color/points`, `.../infra*` | realsense2_camera (1280x720 @ 15 colour, 848x480 depth, IR only with `visual_slam`) |
