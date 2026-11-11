@@ -292,6 +292,18 @@ class HomeAssistantSkill:
 _AUDIO_EXT = (".mp3", ".flac", ".wav", ".m4a", ".ogg", ".opus", ".aac", ".aiff", ".aif")
 
 
+def default_player(which=shutil.which) -> List[str]:
+    """The command that plays one file to the default sound server and exits when it ends: ffplay where there is
+    one (v1's JetPack 6), else GStreamer's gst-play-1.0. NVIDIA's ffmpeg on JetPack 7 ships no ffplay; gst-play is
+    part of the base image, decodes the library's MP3 and FLAC, honours PULSE_SINK and shows up in PulseAudio under
+    its own pid, which is how the ducking finds its stream (tried on the robot, 2026-11-11)."""
+    if which("ffplay"):
+        return ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet"]
+    if which("gst-play-1.0"):
+        return ["gst-play-1.0", "--no-interactive", "-q"]
+    return ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet"]      # neither: play() says the player is missing
+
+
 class MusicSkill:
     """Local music through ffplay with a queue: play builds a shuffled queue (the whole library, an
     artist/album folder, or a requested song followed by the rest), auto-advances when a track ends,
@@ -302,7 +314,7 @@ class MusicSkill:
                  continuous: bool = True, duck_level: float = 0.25):
         self.sink = sink                                   # PulseAudio sink fragment for PULSE_SINK
         self.music_dir = os.path.expanduser(music_dir)
-        self.player_cmd = player_cmd or ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet"]
+        self.player_cmd = player_cmd or default_player()
         self.continuous = continuous
         self.duck_level = max(0.0, min(float(duck_level), 1.0))
         self._proc: Optional[subprocess.Popen] = None

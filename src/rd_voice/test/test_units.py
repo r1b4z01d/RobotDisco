@@ -135,3 +135,10 @@ def test_a_task_prepares_the_policy_before_it_drives():
                     lambda lm, t: (order.append("run"), (True, "done"))[1], lambda s: None, on_done=lambda *a: done.set(), prepare=boom)
     r2.start({"id": "a", "name": "A"}, {"id": "b", "name": "b"})
     assert done.wait(5.0) and order == ["navigate", "run"]
+
+
+def test_music_player_falls_back_to_gstreamer_without_ffplay():
+    from rd_voice.skills import default_player
+    assert default_player(lambda name: "/usr/bin/" + name)[0] == "ffplay"
+    assert default_player(lambda name: "/usr/bin/gst-play-1.0" if name == "gst-play-1.0" else None) == ["gst-play-1.0", "--no-interactive", "-q"]
+    assert default_player(lambda name: None)[0] == "ffplay"
