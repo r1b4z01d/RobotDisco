@@ -37,7 +37,7 @@ def default_maps_dir() -> Path:
         share = Path(get_package_share_directory("rd_nav")) / "maps"
     except Exception:  # noqa: BLE001 - no ROS: the source tree
         share = Path(__file__).resolve().parents[1] / "maps"
-    for probe in ("zone_one.yaml", "keepout_mask.yaml", "active_map"):
+    for probe in ("demo.yaml", "keepout_mask.yaml", "active_map"):
         p = share / probe
         if p.is_symlink():
             return p.resolve().parent
@@ -86,7 +86,7 @@ class MapsStore:
         except FileNotFoundError:
             pass
         names = self.names()
-        return "zone_one" if "zone_one" in names else (names[0] if names else None)
+        return "demo" if "demo" in names else (names[0] if names else None)
 
     def active_yaml(self) -> Path | None:
         a = self.active()

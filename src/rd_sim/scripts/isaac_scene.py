@@ -2,7 +2,7 @@
 (provision/gpu/provision_gpu.sh isaacsim), with the system Jazzy sourced first, RMW_IMPLEMENTATION=rmw_cyclonedds_cpp and
 OMNI_KIT_ACCEPT_EULA=YES in the environment:
 
-    ~/isaacsim-venv/bin/python ~/RobotDisco/src/rd_sim/scripts/isaac_scene.py --urdf /tmp/robot_disco.urdf [--headless] [--world zone_one]
+    ~/isaacsim-venv/bin/python ~/RobotDisco/src/rd_sim/scripts/isaac_scene.py --urdf /tmp/robot_disco.urdf [--headless] [--world demo]
 
 What it does (Isaac Sim 6.2 / isaacsim.* API, every call checked against the 6.2 docs on 2026-11-07, NOT yet run - phase 7
 validates it; the `# UNVERIFIED (6.2):` comments mark what the docs did not settle):
@@ -45,7 +45,7 @@ ROBOT = "/World/RobotDisco"
 def parse():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--urdf", default="/tmp/robot_disco.urdf")
-    ap.add_argument("--world", default="zone_one", help="a map from rd_nav/maps to build walls from ('' = empty)")
+    ap.add_argument("--world", default="demo", help="a map from rd_nav/maps to build walls from ('' = empty)")
     ap.add_argument("--maps-dir", default="")
     ap.add_argument("--headless", action="store_true")
     ap.add_argument("--x", type=float, default=0.6957)      # the Charger landmark (rd_nav landmarks.yaml), where the robot docks;
@@ -56,7 +56,7 @@ def parse():
 
 def map_boxes(maps_dir: Path, name: str, height: float = 2.5, merge: int = 1):
     """Occupied cells of a nav map as (x, y, size) blocks, merged merge x merge cells at a time. merge=1 is the map
-    itself (zone_one: ~3500 cells of 0.05 m); 4 x 4 blocks fattened thin walls to 0.2 m and closed a doorway on the way
+    itself (demo: ~3500 cells of 0.05 m); 4 x 4 blocks fattened thin walls to 0.2 m and closed a doorway on the way
     to the Dining Room (Nav2 planned no path in the sim where the map has one)."""
     import numpy as np
     import yaml

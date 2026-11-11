@@ -81,7 +81,7 @@ class TestManager(unittest.TestCase):
         p = get('/api/pose')['pose']
         self.assertAlmostEqual(p['x'], 0.6957, delta=0.1)
         m = get('/api/map')
-        self.assertEqual(m['name'], 'zone_one.yaml') and self.assertEqual(get('/map.png', raw=True)[:4], b'\x89PNG')
+        self.assertEqual(m['name'], 'demo.yaml') and self.assertEqual(get('/map.png', raw=True)[:4], b'\x89PNG')
         self.wait_for(lambda: get('/api/scans?layers=s2e')['scans'].get('s2e', {}).get('points'), 20, 'scan points in the map frame')
         tf = get('/api/tf')
         self.assertIn('base_footprint', tf['frames']) and self.assertIn('rp_s2e_lidar', tf['frames'])
@@ -96,7 +96,7 @@ class TestManager(unittest.TestCase):
         status, r = post('/api/landmarks', {'name': 'Test spot'})
         self.assertEqual(status, 200, r)
         lm = r['landmark']
-        self.assertEqual(lm['id'], 'test-spot') and self.assertEqual(lm['map'], 'zone_one')
+        self.assertEqual(lm['id'], 'test-spot') and self.assertEqual(lm['map'], 'demo')
         self.assertTrue(lm.get('photo'), r)
         self.assertEqual(get(f"/api/landmarks/img/{lm['photo']}", raw=True)[:2], b'\xff\xd8')
         self.wait_for(lambda: get('/api/nav').get('nav2_active'), 120, 'Nav2 to be active')

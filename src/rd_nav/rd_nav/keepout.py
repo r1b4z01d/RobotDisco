@@ -40,7 +40,7 @@ def inside(x: float, y: float, poly: list) -> bool:
 def build_mask(maps_dir: Path, zones_file: str = "keepout_zones.yaml") -> dict:
     """Write keepout_mask.pgm/.yaml next to the zones file. Returns per-zone cell counts."""
     zones = yaml.safe_load((maps_dir / zones_file).read_text()) or {}
-    map_yaml = maps_dir / str(zones.get("map", "zone_one.yaml"))
+    map_yaml = maps_dir / str(zones.get("map", "demo.yaml"))
     meta = yaml.safe_load(map_yaml.read_text())
     res = float(meta["resolution"])
     origin = [float(v) for v in meta["origin"]]

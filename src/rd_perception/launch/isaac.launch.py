@@ -34,7 +34,8 @@ def generate_launch_description():
     vslam = LaunchConfiguration('visual_slam')
     # the localizer reads the nav map's own keys (image, resolution, origin, thresholds) as ROS parameters, like
     # nav2's map_server, and joins `image` to the yaml's directory: with only map_yaml_path set it opens the bare directory
-    map_yaml = os.path.join(get_package_share_directory('rd_nav'), 'maps', 'zone_one.yaml')
+    from rd_nav.maps_store import MapsStore
+    map_yaml = str(MapsStore().active_yaml())        # the active map, wherever the maps live ($RD_MAPS_DIR on the robot)
     with open(map_yaml) as f:
         map_params = yaml.safe_load(f)
 

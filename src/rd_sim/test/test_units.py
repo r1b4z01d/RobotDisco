@@ -12,17 +12,17 @@ def test_export_urdf_resolves_meshes(tmp_path):
     assert 'filename="/' in text and "amazing_hand" in text
 
 
-def test_map_boxes_from_zone_one():
+def test_map_boxes_from_demo():
     spec = importlib.util.spec_from_file_location("isaac_scene", PKG / "scripts" / "isaac_scene.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     maps = PKG.parent / "rd_nav" / "maps"
-    boxes, height = mod.map_boxes(maps, "zone_one")
+    boxes, height = mod.map_boxes(maps, "demo")
     assert height == 2.5 and 50 < len(boxes) < 20000
     # every wall lies inside the map's own extent (origin + pixels * resolution, from the yaml and the pgm
     # header), so the test follows the map instead of a hard-coded width that went stale once
     import yaml
-    meta = yaml.safe_load((maps / "zone_one.yaml").read_text())
+    meta = yaml.safe_load((maps / "demo.yaml").read_text())
     with open(maps / meta["image"], "rb") as f:
         f.readline()
         line = f.readline()

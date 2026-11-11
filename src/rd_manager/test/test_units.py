@@ -22,8 +22,8 @@ def test_route_roundtrip(tmp_path):
             "post_actions": [{"vla": "m1", "task": "grab", "seconds": 30, "done": "closed"}, {"say": "done"}]},
            {"name": "c", "position": {"x": 5, "y": 6, "z": 0}, "orientation": {"x": 0, "y": 0, "z": 0, "w": 1}, "pause": 2}]
     p = tmp_path / "r.yaml"
-    save_route(p, wps, map_name="zone_one")
-    assert route_map(p) == "zone_one"
+    save_route(p, wps, map_name="demo")
+    assert route_map(p) == "demo"
     loaded, init = load_route(p)
     assert [w.name for w in loaded] == ["a", "b", "c"] and init is None
     assert abs(loaded[1].yaw - 1.5708) < 1e-3 and loaded[1].actions[0].kind == "vla" and loaded[2].pause == 2
@@ -103,7 +103,7 @@ def test_supervisor_against_the_fake():
 def test_mapview_file_and_grid(tmp_path):
     shutil.copytree(PKG.parent / "rd_nav" / "maps", tmp_path / "maps")
     mv = MapView()
-    meta = mv.load_file(tmp_path / "maps" / "zone_one.yaml")
+    meta = mv.load_file(tmp_path / "maps" / "demo.yaml")
     assert meta["resolution"] == 0.05 and meta["width"] > 100 and mv.png[:4] == b"\x89PNG" and meta["rev"] == 1
     grid = NS(data=[0] * 40 + [100] * 10 + [-1] * 50, info=NS(width=10, height=10, resolution=0.1, origin=NS(position=NS(x=1.0, y=2.0), orientation=NS(x=0, y=0, z=0, w=1))),
               header=NS(frame_id="map", stamp=NS(sec=5, nanosec=0)))

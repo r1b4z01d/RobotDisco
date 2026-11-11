@@ -4,7 +4,7 @@
       landmarks:
         - id: right-bookshelf
           name: Right Bookshelf
-          map: zone_one
+          map: demo
           x: 3.1
           y: -0.4
           yaw: 1.57

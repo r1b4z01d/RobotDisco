@@ -5,7 +5,7 @@ as bryan; it leaves v1's `~/VLA` and the `vla_webui` supervisor unit alone, 5.0 
 `/opt/vla` and `~/isaacsim-venv`):
 
 ```
-GIT_SSH_COMMAND="ssh -i ~/.ssh/github -o IdentitiesOnly=yes" git clone --recurse-submodules git@github.com:r1b4z01d/RobotDisco.git ~/RobotDisco   # private repo: the box's GitHub key
+GIT_SSH_COMMAND="ssh -i ~/.ssh/github -o IdentitiesOnly=yes" git clone --recurse-submodules git@github.com:r1b4z01d/RobotDisco.git ~/RobotDisco
 ~/RobotDisco/provision/gpu/provision_gpu.sh all        # Jazzy packages, colcon build, the test suite, /opt/vla, Isaac Sim 6.2 (pip)
 ~/RobotDisco/provision/gpu/provision_gpu.sh isaacros   # Isaac ROS 4.6 host install (venv mode): NVIDIA repos, CUDA 13.2, the CLI, the four debs
 ```

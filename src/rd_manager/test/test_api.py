@@ -102,7 +102,7 @@ def test_pages_and_static(client):
 
 def test_map_and_pose_without_ros(client):
     m = client.get("/api/map").json()
-    assert m["name"] == "zone_one.yaml" and m["resolution"] == 0.05
+    assert m["name"] == "demo.yaml" and m["resolution"] == 0.05
     assert client.get("/map.png").content[:4] == b"\x89PNG"
     p = client.get("/api/pose").json()
     assert p["pose"] is None and p["ros_up"] is False
@@ -116,27 +116,27 @@ def test_map_and_pose_without_ros(client):
 
 def test_maps_tab(client):
     d = client.get("/api/maps").json()
-    assert d["active"] == "zone_one" and d["units"]["rd_nav"] == "STOPPED" and d["source"] == "live"
-    assert client.get("/api/maps/zone_one.png").status_code == 200
+    assert d["active"] == "demo" and d["units"]["rd_nav"] == "STOPPED" and d["source"] == "live"
+    assert client.get("/api/maps/demo.png").status_code == 200
     r = client.post("/api/maps/slam/start", json={"mode": "new", "name": "kitchen"}).json()
     assert r["ok"] and client.get("/api/maps").json()["mapping"] is True
-    assert client.post("/api/maps/slam/stop", json={}).json()["active"] == "zone_one"
-    assert client.post("/api/maps/zone_one/activate", json={"restart": False}).json()["active"] == "zone_one"
-    assert client.delete("/api/maps/zone_one").status_code == 400          # the active map
-    png = client.get("/api/maps/zone_one.png").content
+    assert client.post("/api/maps/slam/stop", json={}).json()["active"] == "demo"
+    assert client.post("/api/maps/demo/activate", json={"restart": False}).json()["active"] == "demo"
+    assert client.delete("/api/maps/demo").status_code == 400          # the active map
+    png = client.get("/api/maps/demo.png").content
     import base64
-    r = client.post("/api/maps/zone_one/draw", json={"png": "data:image/png;base64," + base64.b64encode(png).decode(), "save_as": "zone_copy"}).json()
+    r = client.post("/api/maps/demo/draw", json={"png": "data:image/png;base64," + base64.b64encode(png).decode(), "save_as": "zone_copy"}).json()
     assert r["map"]["name"] == "zone_copy"
     assert client.delete("/api/maps/zone_copy").json()["ok"]
-    assert client.post("/api/maps/zone_one/keepout").json()["cells"]["top_box"] > 0
+    assert client.post("/api/maps/demo/keepout").json()["cells"]["top_box"] > 0
 
 
 def test_landmarks_and_tasks(client):
     d = client.get("/api/landmarks").json()
-    assert {lm["id"] for lm in d["landmarks"]} >= {"charger", "dining-room"} and d["map"] == "zone_one"
+    assert {lm["id"] for lm in d["landmarks"]} >= {"charger", "dining-room"} and d["map"] == "demo"
     assert client.post("/api/landmarks", json={}).status_code == 503                        # no ROS: no capture
     r = client.post("/api/landmarks", json={"name": "Kitchen", "x": 1.0, "y": 2.0, "yaw": 0.5}).json()
-    assert r["landmark"]["id"] == "kitchen" and r["landmark"]["map"] == "zone_one"
+    assert r["landmark"]["id"] == "kitchen" and r["landmark"]["map"] == "demo"
     t = client.post("/api/landmarks/kitchen/tasks", json={"name": "Make coffee", "model": "coffee_v1", "task": "make coffee", "seconds": 45}).json()["task"]
     assert t["id"] == "make-coffee" and t["seconds"] == 45.0
     t2 = client.post("/api/landmarks/kitchen/tasks/make-coffee", json={"done_when": "closed"}).json()["task"]
@@ -155,7 +155,7 @@ def test_routes(client):
     r = client.post("/api/route?name=test route", json={"waypoints": wps}).json()
     assert r["ok"] and "2 segment" in r["check"]
     d = client.get("/api/route?name=test route").json()
-    assert [w["name"] for w in d["waypoints"]] == ["a", "b"] and d["map"] == "zone_one"
+    assert [w["name"] for w in d["waypoints"]] == ["a", "b"] and d["map"] == "demo"
     assert client.get("/api/routes").json()["routes"] == ["test route"]
     assert client.post("/api/route/run", json={"name": "test route"}).status_code == 503       # no ROS
     assert client.delete("/api/route?name=test route").json()["ok"]

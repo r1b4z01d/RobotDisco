@@ -1,0 +1,19 @@
+# A route on the synthetic demo map (rd_nav/maps/demo): charger -> hallway -> dining room, where the policy runs.
+# A robot keeps its own routes in $RD_ROUTES_DIR.
+map: demo
+waypoints:
+  - name: charger
+    position: {x: 0.6957, y: 0.9208, z: 0.0}
+    orientation: {x: 0.0, y: 0.0, z: 0.0274, w: 0.9996}
+  - name: hallway
+    position: {x: 2.7181, y: 1.9097, z: 0.0}
+    orientation: {x: 0.0, y: 0.0, z: 0.0451, w: 0.9990}
+  - name: dining_room
+    position: {x: 7.784, y: 2.521, z: 0.0}
+    orientation: {x: 0.0, y: 0.0, z: 0.6819, w: 0.7314}
+    post_actions:
+      - vla: tigger_1_merged_smolvla_1
+        task: "Grab and hold tigger"
+        seconds: 60
+        done: closed
+        home: true

@@ -7,7 +7,7 @@ pose) composed with the spawn pose. Each lidar beam is ray-cast against the map 
 pose and not AMCL's: a localization error looks exactly like a lidar error (2026-11-08: the same scans scored 23-41%
 within 10 cm of the map against AMCL's pose and 91-94% within 5 cm against the truth).
 
-    python3 sim_truth_check.py [--spawn X Y YAW] [--map zone_one]
+    python3 sim_truth_check.py [--spawn X Y YAW] [--map demo]
 """
 import argparse
 import math
@@ -42,7 +42,7 @@ def load_map(name):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--spawn", nargs=3, type=float, default=[0.6957, 0.9208, 0.0548])
-    ap.add_argument("--map", default="zone_one")
+    ap.add_argument("--map", default="demo")
     a = ap.parse_args()
     occ, res, ox, oy = load_map(a.map)
     H, W = occ.shape

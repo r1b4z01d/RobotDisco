@@ -4,14 +4,14 @@
 landmarks:
   - id: charger
     name: Charger
-    map: zone_one
+    map: demo
     x: 0.6957
     y: 0.9208
     yaw: 0.0548
     tasks: []
   - id: dining-room
     name: Dining Room
-    map: zone_one
+    map: demo
     x: 7.784
     y: 2.521
     yaw: 1.501
@@ -26,7 +26,7 @@ landmarks:
         home: true
   - id: hallway
     name: Hallway
-    map: zone_one
+    map: demo
     x: 2.7181
     y: 1.9097
     yaw: 0.0903

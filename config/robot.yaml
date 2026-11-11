@@ -116,7 +116,7 @@ site:                            # where the robot lives: the voice assistant's 
   name: "Austin, Texas"
   weather:
     place: Austin                # the name the forecast is spoken with
-    latitude: 30.2672              # downtown Austin
+    latitude: 30.2672            # downtown Austin: city level is all a forecast needs
     longitude: -97.7431
 
 gamepad:                         # the 8BitDo Ultimate 2C; the name and the button numbers go together, per link:

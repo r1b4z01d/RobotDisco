@@ -20,6 +20,9 @@ done
 SSH="ssh -o ConnectTimeout=8 -o BatchMode=yes"
 cd "$ROOT"
 $SSH RD 'echo "RD reachable: $(hostname), up $(uptime -p)"'
+# the robot's maps moved out of the source tree (RD_MAPS_DIR=/mnt/data/maps): copy them there once, BEFORE the
+# rsync below, whose --delete would remove a map the repository no longer carries
+[ -n "$DRY" ] || $SSH RD 'if [ ! -e /mnt/data/maps/active_map ]; then mkdir -p /mnt/data/maps && cp -a /home/rd/RobotDisco/src/rd_nav/maps/. /mnt/data/maps/ && echo "maps copied to /mnt/data/maps"; fi'
 changed="$(rsync -ai $DRY -e "$SSH" --delete --exclude .git --exclude /rig/ --exclude build --exclude install --exclude log \
   --exclude __pycache__ --exclude '*.pyc' --exclude /src/rd_nav/landmarks/img/ --exclude '/src/rd_nav/maps/*.posegraph' \
   --exclude '/src/rd_nav/maps/*.data' --exclude /src/rd_nav/maps/active_map \
