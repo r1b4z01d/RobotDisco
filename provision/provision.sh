@@ -388,6 +388,10 @@ phase_services() {
   # (no RTC battery on the devkit) and jumps 56 years when chrony first syncs; started before that, Nav2's bringup
   # saw its timeouts expire at once and aborted (the robot, 2026-11-10, when the battery died). Supervisor waits for
   # chrony for at most a minute; without a network it then starts with the clock it has.
+  # fake-hwclock keeps the last known time on disk (hourly and at shutdown) and puts it back early in the boot, so
+  # without a network the clock is hours behind, not at 1970, and chrony's later step is the time spent off. The
+  # second boot showed the minute's wait alone is not enough: the router came up 16 s after it gave up.
+  apt_install fake-hwclock || warn "fake-hwclock not installed: after a power loss the clock starts at 1970"
   sudo tee /etc/systemd/system/rd-wait-clock.service >/dev/null <<'UNIT'
 [Unit]
 Description=Robot Disco: wait (at most a minute) for the clock to be set before the units start

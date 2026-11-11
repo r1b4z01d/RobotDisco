@@ -207,8 +207,10 @@ global_costmap:
       # Until someone says where the robot is (the manager's pose tool, a taught tag, the grid localizer) there is no
       # map frame. Jazzy's costmap gives up after 60 s by default, the lifecycle manager then aborts the whole bringup
       # and navigation stays half-started until its unit is restarted (the robot's first boot with the units,
-      # 2026-11-10). A day: the bringup simply waits for the first pose.
-      initial_transform_timeout: 86400.0
+      # 2026-11-10). The value is 158 years, not a day, because the wait is measured on the system clock: after a
+      # power loss the Jetson boots in 1970 and chrony steps it 56 years once the network is up, which expired a
+      # one-day timeout on the spot, twice that evening. (More than 9.2e9 s would overflow the nanosecond count.)
+      initial_transform_timeout: 5000000000.0
       update_frequency: 1.0
       publish_frequency: 1.0
       global_frame: map
