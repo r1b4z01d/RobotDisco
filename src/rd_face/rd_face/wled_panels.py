@@ -6,7 +6,7 @@ running by itself, so nothing has to be saved or restored and a lost packet cann
 up. The layout (matrix size, one heart per segment) is read from the WLED's JSON API.
 
 v1's robot_face/wled_panels.py (2026-11-09) with the two ports as arguments, so the tests can stand a fake WLED on
-loopback. Standalone test (no ROS):  python3 wled_panels.py 192.168.11.218 [seconds]
+loopback. Standalone test (no ROS):  python3 wled_panels.py <panels.ip from robot.yaml> [seconds]
 """
 import json
 import math
