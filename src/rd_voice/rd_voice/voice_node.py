@@ -25,6 +25,7 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 from rclpy.node import Node
 from std_msgs.msg import Bool, String
+from std_srvs.srv import Trigger
 
 from rd_bringup import config
 from rd_interfaces.action import GoToLandmark, RunPolicy, Say
@@ -160,9 +161,10 @@ class VoiceNode(Node):
         self.volume = VolumeSkill(str(p("volume_sink")) or "@DEFAULT_SINK@", int(p("volume_step")), int(p("volume_max")), defer=self.after_speech)
         self.landmarks = LandmarkStore(p("landmarks_dir") or None)
         self.nav = Navigator(self, self.landmarks, float(p("task_nav_timeout")))
+        self._prepare = self.create_client(Trigger, "/vla/prepare_server")
         self._policy_call: Optional[ActionCall] = None
         self.tasks = TaskRunner(self.landmarks, navigate=self.nav.go_to_landmark, run_policy=self.run_policy, say=self.say,
-                                cancel=self.cancel_task, log=lambda m: self.get_logger().info(m))
+                                cancel=self.cancel_task, log=lambda m: self.get_logger().info(m), prepare=self.prepare_policy)
         self.brain = Brain(self.weather, self.news, self.home, self.music, self.clock, self.nav, volume=self.volume, tasks=self.tasks,
                            persona=str(p("persona")), location_name=str(p("location_name")), model=str(p("llm_model")),
                            llm_enabled=bool(p("llm_enabled")), llm_backend=str(p("llm_backend")), ollama_url=str(p("ollama_url")),
@@ -311,6 +313,14 @@ class VoiceNode(Node):
             return ok, msg
         finally:
             self._policy_call = None
+
+    def prepare_policy(self, lm: dict, task: dict) -> None:
+        """A landmark task is setting off: ask the policy runner to start its server now, so the model is loaded by
+        the time the robot arrives (the server does not run at boot). Fire and forget."""
+        if self._prepare.service_is_ready():
+            self._prepare.call_async(Trigger.Request())
+        else:
+            self.get_logger().info("no /vla/prepare_server (rd_vla not running): the policy server starts when the run does")
 
     def cancel_task(self):
         self.nav.stop(quiet=True)

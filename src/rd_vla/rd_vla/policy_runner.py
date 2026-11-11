@@ -25,7 +25,7 @@ from rclpy.node import Node
 from std_msgs.msg import Float32MultiArray
 from std_srvs.srv import SetBool, Trigger
 
-from rd_bringup import config
+from rd_bringup import config, units
 from rd_interfaces.action import RunPolicy
 
 from . import evals, wire
@@ -56,6 +56,11 @@ class PolicyRunner(Node):
         dp("record_root", "")
         dp("evals_dir", "")
         dp("operator", "")
+        # the supervisor unit that serves the policy: started for a run (or by ~/prepare_server, when a landmark task
+        # sets off) and stopped once nothing has used it for a while. "" or "none" = whatever is serving stays as it is
+        dp("server_unit", "")
+        dp("server_start_timeout_s", 180.0)          # unit start + model load (14 s on the Orin once the weights are cached)
+        dp("server_idle_stop_s", 300.0)              # after a run, and three times as long after a prepare nobody used
         self.cb = ReentrantCallbackGroup()
         self.observer = Observer(self, tuple(self.get_parameter("cameras").value), self.get_parameter("camera_topic").value,
                                  base_frame=self.get_parameter("base_frame").value, tool_frame=self.get_parameter("tool_frame").value,
@@ -68,11 +73,55 @@ class PolicyRunner(Node):
         self._active = None
         self.server = ActionServer(self, RunPolicy, "run_policy", execute_callback=self.execute, goal_callback=self.on_goal,
                                    cancel_callback=lambda h: CancelResponse.ACCEPT, callback_group=self.cb)
-        self.get_logger().info(f"inference server {self.get_parameter('infer_host').value}:{self.get_parameter('infer_port').value}")
+        unit = str(self.get_parameter("server_unit").value)
+        self.server_unit = "" if unit.lower() in ("", "none") else unit
+        self._server_stop_at = None              # monotonic time to stop the unit at; None = no stop pending
+        self.create_service(Trigger, "/vla/prepare_server", self.on_prepare, callback_group=self.cb)
+        self.create_timer(5.0, self._server_tick, callback_group=self.cb)
+        self.get_logger().info(f"inference server {self.get_parameter('infer_host').value}:{self.get_parameter('infer_port').value}"
+                               + (f", unit '{self.server_unit}' started on demand" if self.server_unit else ""))
 
     def on_goal(self, goal):
         with self._lock:
             return GoalResponse.REJECT if self._active is not None else GoalResponse.ACCEPT
+
+    # ---- the server's unit, on demand
+    def on_prepare(self, req, res):
+        """Start the server's unit now and come back at once: the model loads while the robot drives to the task."""
+        if not self.server_unit:
+            res.success, res.message = True, "the server is not a unit here"
+            return res
+        res.success, res.message = units.start(self.server_unit)
+        with self._lock:
+            if self._active is None:             # nobody may ever come for it: stop it again later
+                self._server_stop_at = time.monotonic() + 3.0 * float(self.get_parameter("server_idle_stop_s").value)
+        self.get_logger().info(f"prepare: unit '{self.server_unit}' {res.message}")
+        return res
+
+    def _ensure_server(self, cancelled) -> tuple[bool, str]:
+        """The unit up and its port accepting before a run connects. True at once where no unit is managed."""
+        if not self.server_unit:
+            return True, ""
+        self._server_stop_at = None
+        p = lambda k: self.get_parameter(k).value  # noqa: E731
+        if units.wait_port(p("infer_host"), int(p("infer_port")), 0.5):
+            return True, "already serving"
+        ok, why = units.start(self.server_unit)
+        if not ok:
+            return False, f"could not start the unit '{self.server_unit}': {why}"
+        self.get_logger().info(f"unit '{self.server_unit}' {why}; waiting for the model")
+        if units.wait_port(p("infer_host"), int(p("infer_port")), float(p("server_start_timeout_s")), cancelled):
+            return True, "started"
+        return False, f"the unit '{self.server_unit}' did not serve within {float(p('server_start_timeout_s')):.0f} s (state {units.state(self.server_unit)})"
+
+    def _server_tick(self):
+        with self._lock:
+            due = self.server_unit and self._active is None and self._server_stop_at is not None and time.monotonic() >= self._server_stop_at
+            if due:
+                self._server_stop_at = None
+        if due and units.state(self.server_unit) in units.ACTIVE:
+            ok, why = units.stop(self.server_unit)
+            self.get_logger().info(f"unit '{self.server_unit}' idle: {why if ok else 'stop failed: ' + why}")
 
     # ---- helpers
     def _stream(self, on: bool) -> tuple[bool, str]:
@@ -106,6 +155,8 @@ class PolicyRunner(Node):
         finally:
             with self._lock:
                 self._active = None
+                if self.server_unit:
+                    self._server_stop_at = time.monotonic() + float(self.get_parameter("server_idle_stop_s").value)
         result.success, result.message = ok, msg
         result.steps = int(state["steps"])
         result.seconds = float(time.monotonic() - t0)
@@ -125,6 +176,9 @@ class PolicyRunner(Node):
         p = lambda k: self.get_parameter(k).value  # noqa: E731
         # 1. the server and the checkpoint
         self._feedback(handle, 0, t0, "serving", 0)
+        ok, why = self._ensure_server(cancelled)
+        if not ok:
+            return False, f"inference server: {why}"
         try:
             client = wire.PolicyClient(p("infer_host"), int(p("infer_port"))).connect()
         except OSError as e:

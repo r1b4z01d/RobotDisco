@@ -114,3 +114,24 @@ def test_brain_rules_without_an_llm():
     reply = b.handle("how far is the moon")
     assert isinstance(reply, str) and reply
     assert NoTaskRunner().run("x").startswith("Arm jobs")
+
+
+def test_a_task_prepares_the_policy_before_it_drives():
+    """The inference server does not run at boot: the task runner asks for it as it sets off, ahead of the drive."""
+    import threading
+    order, done = [], threading.Event()
+    store = type("S", (), {"load": lambda self: [], "tasks": lambda self: []})()
+    r = TaskRunner(store, lambda lm: (order.append("navigate"), (True, "arrived"))[1],
+                   lambda lm, t: (order.append("run"), (True, "done"))[1], lambda s: None,
+                   on_done=lambda *a: done.set(), prepare=lambda lm, t: order.append("prepare"))
+    r.start({"id": "left-bookshelf", "name": "Left Bookshelf"}, {"id": "pick-up-tigger", "name": "pick up tigger"})
+    assert done.wait(5.0)
+    assert order == ["prepare", "navigate", "run"]
+    # a failing prepare costs time at the landmark, not the task
+    order.clear(); done.clear()
+    def boom(lm, t):
+        raise RuntimeError("no supervisor")
+    r2 = TaskRunner(store, lambda lm: (order.append("navigate"), (True, "arrived"))[1],
+                    lambda lm, t: (order.append("run"), (True, "done"))[1], lambda s: None, on_done=lambda *a: done.set(), prepare=boom)
+    r2.start({"id": "a", "name": "A"}, {"id": "b", "name": "b"})
+    assert done.wait(5.0) and order == ["navigate", "run"]

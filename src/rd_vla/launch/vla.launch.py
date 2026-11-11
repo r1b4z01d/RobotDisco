@@ -31,7 +31,7 @@ def generate_launch_description():
     runner = ExecuteProcess(
         cmd=[LaunchConfiguration('python'), '-m', 'rd_vla.policy_runner', '--ros-args', '-r', '__node:=policy_runner',
              '--params-file', os.path.join(share, 'config', 'runner.yaml'),
-             '-p', ['use_sim_time:=', LaunchConfiguration('use_sim_time')], '-p', f'infer_port:={port}'],
+             '-p', ['use_sim_time:=', LaunchConfiguration('use_sim_time')], '-p', f'infer_port:={port}', '-p', ['server_unit:=', LaunchConfiguration('server_unit')]],
         output='screen')
     teleop = Node(package='rd_vla', executable='teleop', name='vla_teleop', output='screen',
                   parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
@@ -43,6 +43,7 @@ def generate_launch_description():
         DeclareLaunchArgument('python', default_value='/opt/vla/bin/python', description='the interpreter with lerobot'),
         DeclareLaunchArgument('infer_server', default_value='true'),
         DeclareLaunchArgument('teleop', default_value='true'),
+        DeclareLaunchArgument('server_unit', default_value='none', description='the supervisor unit that serves the policy, started for a run and stopped when idle (the robot: vla_infer_server); none = leave the server alone'),
         DeclareLaunchArgument('use_sim_time', default_value='false'),
         DeclareLaunchArgument('fake_close_after', default_value='10'),
         DeclareLaunchArgument('n_action_steps', default_value='0', description='smolvla: execute only the first N actions of each 50-step chunk before re-observing (v1 drove with 4..8); 0 = the whole chunk, open loop'),

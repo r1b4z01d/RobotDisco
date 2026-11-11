@@ -44,11 +44,13 @@ def match_task(text: str, tasks: List[Tuple[dict, dict]], cutoff: float = 0.78) 
 class TaskRunner:
     def __init__(self, store, navigate: Callable[[dict], Tuple[bool, str]], run_policy: Callable[[dict, dict], Tuple[bool, str]],
                  say: Callable[[str], None], cancel: Callable[[], None] = lambda: None, log: Optional[Callable[[str], None]] = None,
-                 on_done: Optional[Callable[[dict, dict, bool, str], None]] = None):
+                 on_done: Optional[Callable[[dict, dict, bool, str], None]] = None,
+                 prepare: Optional[Callable[[dict, dict], None]] = None):
         self.store = store
         self.navigate, self.run_policy, self.say, self.cancel_fn = navigate, run_policy, say, cancel
         self._log = log or (lambda m: None)
         self.on_done = on_done
+        self.prepare = prepare       # called as the task sets off: whatever the policy needs can warm up during the drive
         self._lock = threading.Lock()
         self._thread: Optional[threading.Thread] = None
         self._current: Optional[Tuple[dict, dict]] = None
@@ -108,6 +110,11 @@ class TaskRunner:
         ok, reason = False, "unknown"
         try:
             self._log(f"task {task['name']!r}: driving to {lm['name']!r}")
+            if self.prepare is not None:
+                try:
+                    self.prepare(lm, task)
+                except Exception as e:  # noqa: BLE001  a cold server only costs time at the landmark
+                    self._log(f"prepare failed: {e}")
             ok, why = self.navigate(lm)
             if self._cancel.is_set():
                 ok, reason = False, "cancelled on the way"
