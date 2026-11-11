@@ -84,7 +84,11 @@ def generate_launch_description():
         arguments=quiet, condition=IfCondition(joystick))
     teleop = Node(
         package='teleop_twist_joy', executable='teleop_node', name='teleop_node',
-        parameters=[joy_params, {'use_sim_time': use_sim_time}],
+        # the deadman and turbo buttons have other indices on Bluetooth than on the 2.4 GHz receiver, so they sit
+        # in robot.yaml beside the device name they belong to (joystick.yaml holds the receiver's as the default)
+        parameters=[joy_params, {'use_sim_time': use_sim_time},
+                    {key: int(config.get(f'gamepad.{key}')) for key in ('enable_button', 'enable_turbo_button')
+                     if config.get(f'gamepad.{key}', None) is not None}],
         remappings=[('/cmd_vel', '/cmd_vel_joy')], arguments=quiet, condition=IfCondition(joystick))
 
     return LaunchDescription([

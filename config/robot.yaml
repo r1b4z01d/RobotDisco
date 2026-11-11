@@ -110,5 +110,9 @@ audio:
   mic: TONOR
   tts_voice: af_heart            # Kokoro-82M
 
-gamepad:
-  device_name: "8BitDo Ultimate 2C Wireless Controller"   # kernel xpad over the 2.4 GHz receiver
+gamepad:                         # the 8BitDo Ultimate 2C; the name and the button numbers go together, per link:
+                                 #   Bluetooth:        "8BitDo Ultimate 2C Wireless",            RB 7, LB 6  (measured 2026-11-10)
+                                 #   2.4 GHz receiver: "8BitDo Ultimate 2C Wireless Controller", RB 5, LB 4  (kernel xpad, v1 2026-10-31)
+  device_name: "8BitDo Ultimate 2C Wireless"
+  enable_button: 7               # RB = deadman: nothing drives unless it is held
+  enable_turbo_button: 6         # LB = turbo

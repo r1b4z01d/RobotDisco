@@ -40,3 +40,14 @@ def test_joystick_deadman():
     j = load('joystick.yaml')['teleop_node']['ros__parameters']
     assert j['require_enable_button'] is True and j['enable_button'] >= 0
     assert j['publish_stamped_twist'] is True
+
+
+def test_gamepad_buttons_in_robot_yaml_belong_to_its_link():
+    """The deadman's number depends on the link (Bluetooth 7, receiver 5): robot.yaml must name both or neither."""
+    g = yaml.safe_load((CFG.parents[2] / 'config' / 'robot.yaml').read_text())['gamepad']
+    known = {'8BitDo Ultimate 2C Wireless': (7, 6), '8BitDo Ultimate 2C Wireless Controller': (5, 4)}
+    assert g['device_name'] in known
+    if 'enable_button' in g or 'enable_turbo_button' in g:
+        assert (g['enable_button'], g['enable_turbo_button']) == known[g['device_name']]
+    else:
+        assert g['device_name'] == '8BitDo Ultimate 2C Wireless Controller'    # joystick.yaml's defaults are the receiver's
