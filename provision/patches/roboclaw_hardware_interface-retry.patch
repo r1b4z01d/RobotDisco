@@ -1,0 +1,125 @@
+--- a/src/roboclaw_hardware_interface.cpp
++++ b/src/roboclaw_hardware_interface.cpp
+@@ -14,12 +14,62 @@
+ 
+ #include "roboclaw_hardware_interface/roboclaw_hardware_interface.hpp"
+ 
++#include <chrono>
+ #include <iostream>
++#include <string>
+ #include <roboclaw_serial/device.hpp>
+ 
+ namespace roboclaw_hardware_interface
+ {
+ 
++namespace
++{
++// One failed exchange is usually a late reply (the serial device waits 25 ms for the first byte, and a loaded
++// computer can take longer to hand it over): ask once more before giving the cycle up.
++constexpr int kAttempts = 2;
++// How long cycles may keep failing before the hardware reports an error. The board's own serial timeout (1 s on
++// Robot Disco) stops the motors when nothing valid reaches it, so the interface gives up before the board does.
++constexpr std::chrono::milliseconds kMaxFailing{500};
++
++template<typename Exchange>
++bool attempt(Exchange && exchange, std::string & what)
++{
++  for (int i = 0; i < kAttempts; ++i) {
++    try {
++      exchange();
++      return true;
++    } catch (const std::exception & e) {
++      what = e.what();
++    }
++  }
++  return false;
++}
++}  // namespace
++
++return_type RoboClawHardwareInterface::cycle_result(
++  const char * which, bool ok, const std::string & what, FailureRun & run)
++{
++  const auto now = std::chrono::steady_clock::now();
++  if (ok) {
++    if (run.cycles > 0) {
++      std::cerr << "RoboClaw " << which << " recovered after " << run.cycles << " failed cycle(s)." << std::endl;
++    }
++    run.cycles = 0;
++    return return_type::OK;
++  }
++  if (run.cycles++ == 0) {
++    run.since = now;
++    std::cerr << "RoboClaw " << which << " failed after " << kAttempts << " attempts (" << what <<
++      "); tolerating failures for " << kMaxFailing.count() << " ms." << std::endl;
++  }
++  if (now - run.since > kMaxFailing) {
++    std::cerr << "RoboClaw " << which << " has failed for " << run.cycles << " cycles in a row (" << what <<
++      "): giving up." << std::endl;
++    return return_type::ERROR;
++  }
++  return return_type::OK;
++}
++
+ CallbackReturn RoboClawHardwareInterface::on_init(const HardwareInfo & hardware_info)
+ {
+   // Validate serial port parameter
+@@ -104,18 +154,25 @@
+ 
+ return_type RoboClawHardwareInterface::write(const rclcpp::Time &, const rclcpp::Duration &)
+ {
++  // A failed exchange used to throw into controller_manager, which then deactivated the hardware and both
++  // controllers for good: one late reply ended driving until the launch was restarted (Robot Disco, 2026-11-10).
++  bool ok = true;
++  std::string what;
+   for (auto & roboclaw : roboclaw_units_) {
+-    roboclaw.write();
++    ok = attempt([&roboclaw]() {roboclaw.write();}, what) && ok;
+   }
+-  return return_type::OK;
++  return cycle_result("write", ok, what, write_failing_);
+ }
+ 
+ return_type RoboClawHardwareInterface::read(const rclcpp::Time &, const rclcpp::Duration &)
+ {
++  // On a failed cycle the position states keep their last values.
++  bool ok = true;
++  std::string what;
+   for (auto & roboclaw : roboclaw_units_) {
+-    roboclaw.read();
++    ok = attempt([&roboclaw]() {roboclaw.read();}, what) && ok;
+   }
+-  return return_type::OK;
++  return cycle_result("read", ok, what, read_failing_);
+ }
+ 
+ RoboClawConfiguration RoboClawHardwareInterface::parse_roboclaw_configuration(
+--- a/include/roboclaw_hardware_interface/roboclaw_hardware_interface.hpp
++++ b/include/roboclaw_hardware_interface/roboclaw_hardware_interface.hpp
+@@ -15,6 +15,7 @@
+ #ifndef ROBOCLAW_HARDWARE_INTERFACE__ROBOCLAW_HARDWARE_INTERFACE_HPP_
+ #define ROBOCLAW_HARDWARE_INTERFACE__ROBOCLAW_HARDWARE_INTERFACE_HPP_
+ 
++#include <chrono>
+ #include <map>
+ #include <string>
+ #include <vector>
+@@ -128,6 +129,19 @@
+ 
+   /// Vector of uniqely addressable roboclaw units
+   std::vector<RoboClawUnit> roboclaw_units_;
++
++  /// A run of consecutive failed cycles: how many, and since when
++  struct FailureRun
++  {
++    int cycles = 0;
++    std::chrono::steady_clock::time_point since;
++  };
++
++  /// OK for a good cycle and for a short run of failed ones, ERROR once they have failed for too long.
++  return_type cycle_result(const char * which, bool ok, const std::string & what, FailureRun & run);
++
++  FailureRun read_failing_;
++  FailureRun write_failing_;
+ };
+ }  // namespace roboclaw_hardware_interface
+ 

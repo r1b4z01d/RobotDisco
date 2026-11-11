@@ -27,8 +27,10 @@ The RoboClaw (2x15A, firmware 4.4.9) is on the Jetson's 40-pin header UART since
 timeout as the watchdog (`robot.yaml sensors.roboclaw`; the launch passes port and baud to the xacro). The
 plugin is `vendor/roboclaw_hardware_interface` with the UART patches from `provision/patches`; the UART itself
 needs the PIO device tree from `provision.sh jetson`. See `provision/README.md`, *RoboClaw on the header UART*.
-After a link loss the controller manager is restarted by hand (`sudo supervisorctl restart rd_base`): the
-launch does not respawn it.
+A lost reply no longer ends driving: the interface asks twice and rides out half a second of failed exchanges
+(`provision/patches/roboclaw_hardware_interface-retry.patch`; before it, one late reply on a loaded Orin deactivated
+the hardware for good, 2026-11-10). If the link stays down, `hardware_watchdog` ends the launch after 5 s and the
+unit's autorestart starts a fresh one; nothing has to be restarted by hand.
 
 Tests (`rig/rig.sh test rd_base`): the YAML contracts, and a launch test on mock hardware that drives the
 robot through the whole velocity path and checks the collision monitor stops it for an object 0.35 m ahead.

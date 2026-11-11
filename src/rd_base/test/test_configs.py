@@ -51,3 +51,17 @@ def test_gamepad_buttons_in_robot_yaml_belong_to_its_link():
         assert (g['enable_button'], g['enable_turbo_button']) == known[g['device_name']]
     else:
         assert g['device_name'] == '8BitDo Ultimate 2C Wireless Controller'    # joystick.yaml's defaults are the receiver's
+
+
+def test_hardware_watchdog_gives_up_only_when_the_hardware_stays_down():
+    from rd_base.hardware_watchdog import Watch
+    w = Watch(grace_s=45.0, down_s=5.0)
+    assert not w.update(0.0, None) and not w.update(30.0, "unconfigured")     # coming up: inside the grace period
+    assert not w.update(31.0, "active")
+    assert not w.update(40.0, "unconfigured") and not w.update(44.0, None)    # down, but not yet for 5 s
+    assert not w.update(44.5, "active")                                        # came back: the clock starts again
+    assert not w.update(50.0, "unconfigured") and not w.update(54.9, "unconfigured")
+    assert w.update(55.0, "unconfigured")                                      # down for 5 s: give up
+    never = Watch(grace_s=45.0, down_s=5.0)
+    assert not never.update(0.0, None) and not never.update(44.0, None)
+    assert not never.update(46.0, None) and never.update(51.0, None)           # never came up: grace, then the same 5 s

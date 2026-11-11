@@ -18,7 +18,7 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, RegisterEventHandler, TimerAction
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, RegisterEventHandler, Shutdown, TimerAction
 from launch.conditions import IfCondition
 from launch.event_handlers import OnProcessStart
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -59,6 +59,13 @@ def generate_launch_description():
         Node(package='controller_manager', executable='spawner',
              arguments=[name, '--controller-manager-timeout', '30'] + quiet, output='screen')
         for name in ('joint_broad', 'diff_cont')]
+
+    # ros2_control never reactivates a hardware component that reported an error, and the controller manager stays
+    # up without it: this node exits once the wheel hardware has been down for 5 s, that ends the launch, and the
+    # unit's autorestart starts a fresh one (rd_base/hardware_watchdog.py)
+    watchdog = Node(package='rd_base', executable='hardware_watchdog', name='hardware_watchdog', output='screen',
+                    parameters=[{'use_sim_time': use_sim_time}], condition=IfCondition(controllers),
+                    on_exit=Shutdown(reason='the wheel hardware went down'))
 
     twist_mux = Node(
         package='twist_mux', executable='twist_mux',
@@ -102,7 +109,7 @@ def generate_launch_description():
         rsp,
         TimerAction(period=2.0, actions=[controller_manager]),
         RegisterEventHandler(OnProcessStart(target_action=controller_manager, on_start=spawners)),
-        twist_mux,
+        twist_mux, watchdog,
         monitor, monitor_lifecycle,
         joy, teleop,
     ])
