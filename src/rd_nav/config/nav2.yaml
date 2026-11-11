@@ -270,6 +270,9 @@ global_costmap:
 local_costmap:
   local_costmap:
     ros__parameters:
+      # as the global costmap's: its wait for odom -> base_footprint is on the system clock too, and a 66 s step at
+      # boot (the saved clock catching up with NTP) was past the default 60 s and aborted the bringup (2026-11-10)
+      initial_transform_timeout: 5000000000.0
       update_frequency: 5.0
       publish_frequency: 2.0
       global_frame: odom
