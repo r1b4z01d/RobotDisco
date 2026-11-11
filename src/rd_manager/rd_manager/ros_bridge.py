@@ -595,7 +595,7 @@ class RosBridge:
     def call_trigger(self, client, timeout=5.0) -> dict:
         if not client.wait_for_service(timeout_sec=timeout):
             return {"success": False, "message": f"no {client.srv_name} service"}
-        r = client.call(type(client.srv_type.Request)())
+        r = client.call(client.srv_type.Request())      # was type(...Request)(): the metaclass, a TypeError on every hand button
         return {"success": r.success, "message": r.message}
 
     def set_stream(self, on: bool) -> dict:
