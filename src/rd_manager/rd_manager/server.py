@@ -96,6 +96,21 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
                          set_initial_pose=lambda x, y, yaw: B and B.publish_initialpose(x, y, yaw), log=print)
     app.state.bridge, app.state.maps, app.state.landmarks, app.state.runner, app.state.state = B, maps, landmarks, runner, state
 
+    def resume_mapping():
+        """A mapping session outlives a restart of the manager: slam_toolbox runs in its own unit. Whether one is on
+        was only in this process's memory, so after a restart the live map stopped being shown and Save had no
+        session to save. The unit's state and the request file say it."""
+        try:
+            if sv and sv.states({MAPS_UNITS["slam"]}).get(MAPS_UNITS["slam"]) == "RUNNING":
+                req = maps.slam_request()
+                if req:
+                    state["mapping"] = True
+                    state["slam"] = {"request": req, "started": time.time(), "seed": None, "resumed": True}
+                    print(f"mapping session {req.get('name')!r} ({req.get('mode')}) is running: resumed")
+        except Exception as e:  # noqa: BLE001  no supervisor: nothing to resume
+            print(f"resume_mapping: {type(e).__name__}: {e}")
+    threading.Thread(target=resume_mapping, daemon=True, name="resume-mapping").start()
+
     def ros_up() -> bool:
         return bool(B and B.up)
 
@@ -169,6 +184,7 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
 
     @app.get("/api/pose")
     def api_pose():
+        live_map_tick()      # a page that only polls the state still gets the map slam is drawing (its map_rev moves)
         return {"pose": pose(), "ros": ros_status(), "sim": sim, "halted": False, "ros_up": ros_up(), "map_rev": mapview.rev, "mapping": state["mapping"]}
 
     @app.get("/api/scans")
@@ -212,6 +228,7 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
         if not B:
             return {"frames": {}, "joints": {}, "t": time.time(), "ros": ros_status(), "ros_up": False}
         B.touch("joints")
+        live_map_tick()
         return {"frames": B.frames, "joints": B.joints, "t": time.time(), "ros": ros_status(), "published": B.published, "sim": sim,
                 "halted": False, "tf_debug": B.tf_debug, "map_rev": mapview.rev, "mapping": state["mapping"]}
 

@@ -82,6 +82,15 @@ class RosBridge:
         self.arm_status: dict = {}
         self.voice: dict = {}
         self.want: dict = {"names": [], "t": 0.0}
+        # the on-demand subscriptions' books exist before the ROS thread does: a page's request can arrive first, and
+        # touch() / want_cam() then simply find nothing to subscribe yet (they used to raise, 122 times at one start)
+        self.node = None
+        self.cam_want: dict = {}
+        self._cam_subs: dict = {}
+        self._cam_lock = threading.Lock()
+        self._cam_qos = self._cam_type = None
+        self._demand: dict = {}
+        self._demand_lock = threading.Lock()
         self.want3d: dict = {}
         self.drive = {"vx": 0.0, "wz": 0.0, "t": 0.0, "n": 0}
         self.published: dict = {}
@@ -147,8 +156,6 @@ class RosBridge:
         # The heavy and the fast topics are subscribed only while a page asks for what they feed (touch()), and for
         # DEMAND_LINGER_S after. Taken all the time, the Velodyne cloud alone was 7 MB/s into this process and the
         # manager held most of a core with nobody looking (2026-11-10).
-        self._demand: dict = {}
-        self._demand_lock = threading.Lock()
         for name, topic in SCAN_TOPICS.items():
             self._on_demand(name, LaserScan, topic, qos_profile_sensor_data, keep(name), forget=lambda nm=name: self.latest.pop(nm, None))
         for name, topic in CLOUD_TOPICS.items():
@@ -175,9 +182,6 @@ class RosBridge:
             pass
         # A camera is subscribed only while a page (or a landmark capture) wants it, and for CAM_LINGER_S after: the
         # bridge used to take every frame of every camera to throw it away, most of a core of deserialising (2026-11-10)
-        self.cam_want: dict = {}
-        self._cam_subs: dict = {}
-        self._cam_lock = threading.Lock()
         self._cam_qos, self._cam_type = best, Image
         n.create_timer(1.0, self._cam_follow_demand, callback_group=self.cb)
         n.create_timer(1.0, self._demand_tick, callback_group=self.cb)
@@ -242,7 +246,7 @@ class RosBridge:
                 if d is None:
                     continue
                 d["t"] = now
-                if d["sub"] is None:
+                if d["sub"] is None and self.node is not None:
                     d["sub"] = self.node.create_subscription(d["type"], d["topic"], d["cb"], d["qos"], callback_group=self.cb)
 
     def _demand_tick(self):
@@ -264,6 +268,8 @@ class RosBridge:
         if name not in CAMERA_TOPICS:
             return
         self.cam_want[name] = time.time()
+        if self.node is None or self._cam_type is None:
+            return
         with self._cam_lock:
             if name not in self._cam_subs:
                 self._cam_subs[name] = self.node.create_subscription(
