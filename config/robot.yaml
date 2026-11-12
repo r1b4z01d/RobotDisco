@@ -46,6 +46,11 @@ arm:                              # Universal Robots UR5e, PolyScope 5.21
                                   # UR5e, and the driver warns that it does not match). Extract once, arm powered:
                                   #   ros2 launch ur_calibration calibration_correction.launch.py robot_ip:=<arm.ip> target_filename:=/mnt/data/ur5e_calibration.yaml
                                   # then restart rd_base, rd_arm (robot_state_publisher, the driver and MoveIt all read it)
+  workspace:                      # where a streamed tool target may not go (policies and teleop), in the UR's base frame;
+                                  # v1's calibrate_workspace.py values from the robot (outputs/workspace_calib.json)
+    z_floor: -0.2257              # targets below this are lifted to it
+    no_go_xy: [-0.233, 0.261, 0.241, 0.279]   # xmin, xmax, ymin, ymax over the robot's body: a target inside is pushed to the nearest edge
+    no_go_margin: 0.03
   home: vla_home                  # named pose in rd_arm's pose library that policies start from
 
 hand:                             # AmazingHand, ESP32 on the tool flange (firmware/AmazingHand)

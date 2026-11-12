@@ -9,7 +9,12 @@
                                              as the action the pose and curls just commanded), parameters `dataset`, `task`
   /teleop/episode/save    std_srvs/Trigger   close the episode and write it (LeRobot v3 under <data>/outputs/datasets)
   /teleop/episode/discard std_srvs/Trigger
-  /teleop/state           std_msgs/String    JSON once a second: device, enabled, recording, frames, dataset, task
+  /teleop/cmd             std_msgs/String    JSON {name, args}: what the console's teleop page sends (v1's panel commands):
+                                             enable {on}, rec, save, discard, home, quit, grasp_hold {dir}, grasp {delta},
+                                             grasp_mark (flag a re-grasp stretch), task {text}, dataset {name}
+  /teleop/state           std_msgs/String    JSON five times a second: device, enabled, recording, frames, episodes, grasps,
+                                             dataset, task, the tool's pose, the grasp, the tick rate, the last saved episode
+  /teleop/log             std_msgs/String    one line per event, for the page's log
 
 Runs under the LeRobot venv's python (vla.launch.py), like the policy runner: the recorder needs lerobot.
 """
@@ -32,7 +37,7 @@ from std_srvs.srv import SetBool, Trigger
 
 from rd_bringup import config
 
-from .geometry import clamp_box, clamp_step, quat_to_rotvec, rotvec_to_quat
+from .geometry import clamp_box, clamp_step, keep_out, quat_to_rotvec, rotvec_to_quat, workspace_limits
 from .observer import Observer
 from .schema import CAMERA_KEYS
 from .spacemouse import SpaceMouse
@@ -60,6 +65,31 @@ def integrate(target, axes: dict, axis_map: dict, linear: float, angular: float,
     else:
         out += list(target[3:])
     return out
+
+
+def write_annotation(dataset_root, episode: int, **fields) -> None:
+    """Merge fields into <dataset>/meta/annotations.json[episode] (rd_manager annotations.py's sidecar: grasps,
+    regrasp_ranges, rating, notes). Outside the LeRobot schema, so it never touches the dataset's format."""
+    p = Path(dataset_root) / "meta" / "annotations.json"
+    try:
+        data = json.loads(p.read_text()) if p.is_file() else {}
+    except (ValueError, OSError):
+        data = {}
+    data.setdefault(str(int(episode)), {}).update(fields)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(data, indent=2, sort_keys=True))
+    os.replace(tmp, p)
+
+
+def episodes_on_disk(dataset_root) -> int:
+    """How many episodes a dataset already holds (LeRobot's meta/info.json, or the npz fallback's meta.json)."""
+    for rel, key in (("meta/info.json", "total_episodes"), ("meta.json", "episodes")):
+        try:
+            return int(json.loads((Path(dataset_root) / rel).read_text())[key])
+        except (OSError, ValueError, KeyError):
+            continue
+    return 0
 
 
 def step_grasp(grasp: float, buttons, close_rate: float, open_rate: float, close_button: int = 0, open_button: int = 1) -> float:
@@ -127,6 +157,8 @@ class Teleop(Node):
         self.pose_pub = self.create_publisher(PoseStamped, "/arm/target_pose", 10)
         self.hand_pub = self.create_publisher(Float32MultiArray, "/hand/curls", 10)
         self.state_pub = self.create_publisher(String, "/teleop/state", 10)
+        self.log_pub = self.create_publisher(String, "/teleop/log", 50)
+        self.create_subscription(String, "/teleop/cmd", self.on_cmd, 20, callback_group=self.cb)
         self.stream = self.create_client(SetBool, "/arm/stream", callback_group=self.cb)
         self.home = self.create_client(Trigger, "/arm/go_home", callback_group=self.cb)
         self.create_service(SetBool, "/teleop/enable", self.on_enable, callback_group=self.cb)
@@ -134,6 +166,7 @@ class Teleop(Node):
         self.create_service(Trigger, "/teleop/episode/start", self.on_start, callback_group=self.cb)
         self.create_service(Trigger, "/teleop/episode/save", self.on_save, callback_group=self.cb)
         self.create_service(Trigger, "/teleop/episode/discard", self.on_discard, callback_group=self.cb)
+        self.limits = workspace_limits()
         self.enabled = False
         self.target = None
         self.grasp = 0.0
@@ -143,8 +176,79 @@ class Teleop(Node):
         self.saving = False
         self.frames = 0
         self.message = ""
+        self.episodes = 0                     # in the current dataset
+        self._episodes_of = None
+        self.regrasp_ranges: list = []        # [start, end] frames flagged in this episode (the operator's "that grasp missed")
+        self._regrasp_open = None
+        self.last = {}                        # the last saved episode: ep, frames, grasps, dataset
+        self.web_hold = (0, 0.0)              # the page's hold-to-close / hold-to-open: direction and when it was last asked
+        self.pose = None
+        self._ticks: list = []
         self.create_timer(1.0 / float(p("fps")), self.tick, callback_group=self.cb)
-        self.create_timer(1.0, self.publish_state, callback_group=self.cb)
+        self.create_timer(0.2, self.publish_state, callback_group=self.cb)
+
+    # ---- the page's commands
+    def log(self, line: str) -> None:
+        self.message = line
+        self.get_logger().info(line)
+        self.log_pub.publish(String(data=time.strftime("%H:%M:%S ") + line))
+
+    def _set(self, name: str, value: str) -> None:
+        from rclpy.parameter import Parameter
+        self.set_parameters([Parameter(name, Parameter.Type.STRING, value)])
+
+    def on_cmd(self, m: String):
+        try:
+            c = json.loads(m.data)
+            name, a = str(c.get("name", "")), c.get("args") or {}
+        except (ValueError, AttributeError):
+            return
+        tr = Trigger.Request()
+        try:
+            if name == "enable":
+                r = self.on_enable(SetBool.Request(data=bool(a.get("on"))), SetBool.Response())
+                if not r.success:
+                    self.log(r.message)
+            elif name == "quit":
+                self.on_enable(SetBool.Request(data=False), SetBool.Response())
+            elif name in ("rec", "save", "discard", "home"):
+                handler = {"rec": self.on_start, "save": self.on_save, "discard": self.on_discard, "home": self.on_home}[name]
+                r = handler(tr, Trigger.Response())
+                if name != "rec" or not r.success:      # a started recording has logged itself
+                    self.log(r.message)
+            elif name == "grasp_hold":
+                self.web_hold = (max(-1, min(1, int(a.get("dir", 0)))), time.monotonic())
+            elif name == "grasp":
+                self.grasp = max(0.0, min(1.0, self.grasp + float(a.get("delta", 0.1))))
+            elif name == "grasp_mark":
+                self.log(self.regrasp_mark())
+            elif name == "task":
+                text = str(a.get("text", "")).strip()
+                if text:
+                    self._set("task", text)
+                    self.log(f"task: {text}")
+            elif name == "dataset":
+                text = str(a.get("name", "")).strip()
+                if self.recording or self.saving:
+                    self.log("dataset: not while recording or saving")
+                elif text:
+                    self._set("dataset", text)
+                    self.log(f"dataset: {text} ({episodes_on_disk(self._root() / text)} episodes so far)")
+            else:
+                self.log(f"unknown command {name!r}")
+        except Exception as e:  # noqa: BLE001  a bad command must never stop the node
+            self.log(f"command {name} failed: {type(e).__name__}: {e}")
+
+    def regrasp_mark(self) -> str:
+        """Toggle a re-grasp range: the first press opens it at this frame, the second closes it."""
+        if not self.recording:
+            return "+GRASP: not recording"
+        if self._regrasp_open is None:
+            self._regrasp_open = self.frames
+            return f"re-grasp flagged from frame {self.frames} (press again when it holds)"
+        self.regrasp_ranges.append([self._regrasp_open, self.frames])
+        self._regrasp_open = None
+        return f"re-grasp range closed: {self.regrasp_ranges[-1]} ({len(self.regrasp_ranges) + 1} grasps)"
 
     # ---- services
     def on_enable(self, req, res):
@@ -207,9 +311,10 @@ class Teleop(Node):
                         self.writer.close()
                     self.writer = EpisodeWriter(self._root(), dataset, fps=int(round(float(self.p("fps")))), cameras=tuple(self.p("cameras")))
                 self.frames, self.recording = 0, True
-            res.success, res.message = True, f"recording into {self.writer.path} ({self.writer.backend})"
+                self.regrasp_ranges, self._regrasp_open = [], None
+            res.success, res.message = True, f"REC into {self.writer.path} ({self.writer.backend})"
+            self.log(res.message)
         self.message = res.message
-        self.get_logger().info(res.message)
         return res
 
     def on_save(self, _req, res):
@@ -220,18 +325,26 @@ class Teleop(Node):
                 return res
             self.recording, self.saving = False, True
             writer, frames = self.writer, self.frames
+            if self._regrasp_open is not None:               # a range left open ends with the episode
+                self.regrasp_ranges.append([self._regrasp_open, frames])
+                self._regrasp_open = None
+            ranges = [list(r) for r in self.regrasp_ranges]
 
         def work():                           # the video encoding takes seconds: not on a service thread
             try:
                 saved = writer.save_episode()
                 writer.close()                # finalize, so the dataset is loadable after every episode
-                self.message = f"episode {saved['episode'] + 1} saved: {frames} frames in {saved['path']}"
+                ep = int(saved["episode"])
+                write_annotation(saved["path"], ep, grasps=len(ranges) + 1, regrasp_ranges=ranges)
+                self.episodes, self._episodes_of = ep + 1, str(self.p("dataset"))
+                self.last = {"ep": ep, "frames": frames, "grasps": len(ranges) + 1, "dataset": Path(saved["path"]).name}
+                line = f"episode {ep + 1} saved: {frames} frames, {len(ranges) + 1} grasp(s), in {saved['path']}"
             except Exception as e:  # noqa: BLE001
-                self.message = f"SAVE FAILED: {type(e).__name__}: {e}"
+                line = f"SAVE FAILED: {type(e).__name__}: {e}"
             with self.lock:
                 self.writer = None            # re-opened (appending) by the next start
                 self.saving = False
-            self.get_logger().info(self.message)
+            self.log(line)
 
         threading.Thread(target=work, daemon=True).start()
         res.success, res.message = True, f"saving {frames} frames"
@@ -265,9 +378,11 @@ class Teleop(Node):
         self._read_device()
         if not self.enabled:
             return
-        pose = self.observer.ee_pose()
+        pose = self.pose = self.observer.ee_pose()
         if pose is None:
             return
+        now = time.monotonic()
+        self._ticks = [t for t in self._ticks if now - t < 2.0] + [now]
         if self.target is None:
             self.target = list(pose)
         p = self.p
@@ -278,9 +393,13 @@ class Teleop(Node):
         # the target never runs more than a step ahead of the tool or out of the box, so letting go stops the arm
         xyz = clamp_box(clamp_step(self.target[:3], pose[:3], float(p("max_step_m"))),
                         [float(v) for v in p("workspace_min")], [float(v) for v in p("workspace_max")])
+        xyz, _ = keep_out(xyz, **self.limits)   # never over the robot's own body or under the floor (robot.yaml arm.workspace)
         self.target[:3] = list(xyz)
         self.grasp = step_grasp(self.grasp, buttons, float(p("grasp_close_rate")), float(p("grasp_open_rate")),
                                 int(p("button_close")), int(p("button_open")))
+        hold, asked = self.web_hold           # the page's hold buttons, at the same rates; they let go by themselves after 0.6 s
+        if hold and time.monotonic() - asked < 0.6:
+            self.grasp = step_grasp(self.grasp, [hold > 0, hold < 0], float(p("grasp_close_rate")), float(p("grasp_open_rate")))
         curls = [self.grasp * float(m) for m in p("max_curls")]
         msg = PoseStamped()
         msg.header.frame_id = self.observer.base_frame
@@ -301,9 +420,17 @@ class Teleop(Node):
 
     def publish_state(self):
         w = self.writer
+        dataset, fps = str(self.p("dataset")), float(self.p("fps"))
+        if dataset != self._episodes_of and not self.saving:     # another dataset chosen: how much it already holds
+            self.episodes, self._episodes_of = (episodes_on_disk(self._root() / dataset) if dataset else 0), dataset
+        hz = (len(self._ticks) - 1) / (self._ticks[-1] - self._ticks[0]) if self.enabled and len(self._ticks) > 2 else 0.0
         self.state_pub.publish(String(data=json.dumps({
             "device": self.device_ok, "enabled": self.enabled, "recording": self.recording, "saving": self.saving,
-            "frames": self.frames, "grasp": round(self.grasp, 3), "dataset": str(self.p("dataset")), "task": str(self.p("task")),
+            "frames": self.frames, "rec_s": self.frames / fps, "episodes": self.episodes,
+            "grasps": len(self.regrasp_ranges) + 1, "regrasp_open": self._regrasp_open is not None,
+            "grasp": round(self.grasp, 3), "dataset": dataset, "task": str(self.p("task")),
+            "pose": [round(float(v), 4) for v in self.pose] if self.enabled and self.pose else [],
+            "tick_hz": round(hz, 1), "last": self.last,
             "backend": getattr(w, "backend", None), "message": self.message})))
 
 

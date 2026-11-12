@@ -12,6 +12,7 @@ parameter, slam_toolbox save, the face topics, hand curls.
 """
 from __future__ import annotations
 
+import collections
 import json
 import math
 import threading
@@ -231,6 +232,13 @@ class RosBridge:
         self.power_client = n.create_client(ArmPower, "/arm/power", callback_group=self.cb)
         self.stream_client = n.create_client(SetBool, "/arm/stream", callback_group=self.cb)
         self.home_client = n.create_client(Trigger, "/arm/go_home", callback_group=self.cb)
+        # the SpaceMouse teleop and its recorder (rd_vla teleop.py): its state once a second, its services
+        self.teleop = None
+        n.create_subscription(String, "/teleop/state", lambda m: setattr(self, "teleop", (m.data, time.time())), 10, callback_group=self.cb)
+        self.teleop_cmd_pub = n.create_publisher(String, "/teleop/cmd", 20)
+        self.teleop_log: collections.deque = collections.deque(maxlen=400)      # (seq, line) for the page's log
+        self._teleop_seq = 0
+        n.create_subscription(String, "/teleop/log", lambda m: self.teleop_note(m.data), 50, callback_group=self.cb)
         self.hand_open = n.create_client(Trigger, "/hand/open", callback_group=self.cb)
         self.hand_close = n.create_client(Trigger, "/hand/close", callback_group=self.cb)
         self.wink_client = n.create_client(Trigger, "/face/wink", callback_group=self.cb)
@@ -708,6 +716,22 @@ class RosBridge:
             return {"success": False, "message": f"no {client.srv_name} service"}
         r = client.call(client.srv_type.Request())      # was type(...Request)(): the metaclass, a TypeError on every hand button
         return {"success": r.success, "message": r.message}
+
+    def teleop_state(self) -> dict:
+        if not self.teleop or time.time() - self.teleop[1] > 5.0:
+            return {"running": False}
+        try:
+            return {"running": True, **json.loads(self.teleop[0])}
+        except ValueError:
+            return {"running": False}
+
+    def teleop_note(self, line: str) -> None:
+        self._teleop_seq += 1
+        self.teleop_log.append((self._teleop_seq, line))
+
+    def teleop_cmd(self, name: str, args: dict | None = None) -> None:
+        from std_msgs.msg import String
+        self.teleop_cmd_pub.publish(String(data=json.dumps({"name": name, "args": args or {}})))
 
     def set_stream(self, on: bool) -> dict:
         from std_srvs.srv import SetBool

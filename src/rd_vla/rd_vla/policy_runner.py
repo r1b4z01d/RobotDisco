@@ -30,7 +30,7 @@ from rd_bringup import config, units
 from rd_interfaces.action import RunPolicy
 
 from . import evals, wire
-from .geometry import clamp_box, clamp_step, rotvec_to_quat
+from .geometry import clamp_box, clamp_step, keep_out, rotvec_to_quat, workspace_limits
 from .observer import Observer
 from .recorder import EpisodeWriter
 from .schema import CAMERA_KEYS, split_action
@@ -240,6 +240,7 @@ class PolicyRunner(Node):
                     was_closed = False
                     ended = ""
                     max_step = float(p("max_step_m"))
+                    limits = workspace_limits()      # the robot's own body and the floor (robot.yaml arm.workspace)
                     lo, hi = [float(v) for v in p("workspace_min")], [float(v) for v in p("workspace_max")]
                     clevel, olevel = float(p("done_closed_level")), float(p("done_open_level"))
                     still_s = float(goal.still_seconds) if goal.still_seconds > 0 else float(p("done_still_s"))
@@ -278,7 +279,7 @@ class PolicyRunner(Node):
                             break
                         infer_ms = (time.monotonic() - ti) * 1000
                         pose, curls = split_action(action)
-                        xyz = clamp_box(clamp_step(pose[:3], st[:3], max_step), lo, hi)
+                        xyz, _ = keep_out(clamp_box(clamp_step(pose[:3], st[:3], max_step), lo, hi), **limits)
                         msg = PoseStamped()
                         msg.header.frame_id = self.observer.base_frame
                         msg.header.stamp = self.get_clock().now().to_msg()

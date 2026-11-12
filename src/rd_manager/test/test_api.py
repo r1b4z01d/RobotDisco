@@ -181,7 +181,7 @@ def test_services_and_robot_tabs(client):
     assert client.post("/api/services/rd_nav", json={"action": "dance"}).status_code == 400
     assert client.get("/api/activity").json()["reachable"]
     r = client.get("/api/robot").json()
-    assert r["reachable"] is False and r["url"] == "http://robot:8092/arm/"
+    assert r["reachable"] is False and r["url"] == "http://robot:8092/teleop/"
     assert client.get("/api/route_editor").json()["url"] == "http://robot:8092/live/"
     assert client.get("/api/folks").json()["reachable"] is False
     assert client.get("/api/volume").json()["volume"] is None
@@ -219,3 +219,14 @@ def test_panels_unreachable(tmp_path, monkeypatch):
     s.close()                                                                               # nothing listens here
     c = TestClient(_app(tmp_path, monkeypatch, "", panels_url=url))
     assert c.get("/api/panels").json() == {"url": url + "/", "reachable": False, "info": None}
+
+
+def test_teleop_page_and_its_config(client):
+    r = client.get("/teleop/")
+    assert r.status_code == 200 and "btn-teleop" in r.text and "/static/pages/robot/robot.js" in r.text
+    assert client.get("/static/pages/robot/robot.js").status_code == 200 and client.get("/static/pages/robot/robot.css").status_code == 200
+    c = client.get("/api/teleop/config").json()
+    assert c["mode"] == "teleop" and c["api"] >= 2 and set(c["cams"]) == {"scene", "side", "wrist"}
+    assert client.get("/api/teleop").json()["running"] is False                   # no ROS in this test
+    assert client.post("/api/teleop/cmd", json={"name": "rec"}).status_code == 503
+    assert client.get("/api/robot").json()["url"].endswith("/teleop/")

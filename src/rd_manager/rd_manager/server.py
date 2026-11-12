@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import math
 import os
 import re
 import threading
@@ -29,7 +30,7 @@ from rd_vla.evals import EvalRegistry
 
 from rd_bringup import config as rd_config
 
-from . import datasets as ds_mod, hand_api, models as models_mod, ops as ops_mod
+from . import annotations as ann_mod, datasets as ds_mod, exposure as exposure_mod, hand_api, models as models_mod, ops as ops_mod
 from .capture import LANDMARK_CAMS, capture_landmark
 from .grids import MapView
 from .panels import PanelsRelay, panels_info, slash
@@ -146,6 +147,10 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
     @app.get("/arm/", response_class=HTMLResponse)
     def arm_page():
         return (STATIC / "pages" / "arm.html").read_text()
+
+    @app.get("/teleop/", response_class=HTMLResponse)
+    def teleop_page_html():
+        return (STATIC / "pages" / "robot" / "index.html").read_text()
 
     @app.get("/folks/", response_class=HTMLResponse)
     def folks_page():
@@ -394,6 +399,138 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
     @app.post("/api/arm/stream")
     def api_arm_stream(body: dict = Body(...)):
         return B.set_stream(bool(body.get("on"))) if B else {"success": False, "message": "no ROS"}
+
+    @app.get("/api/teleop")
+    def api_teleop():
+        """The SpaceMouse teleop and its recorder: device, enabled, recording, frames, dataset, task, the last message."""
+        return B.teleop_state() if B else {"running": False, "error": "no ROS"}
+
+    @app.get("/api/teleop/config")
+    def api_teleop_config():
+        """What v1's robot page asks first: the mode, its API level, where the camera streams are."""
+        return {"mode": "teleop", "api": 2, "title": rd_config.get("robot.host", "robot"), "cams": {n: f"/cam/{n}.mjpg" for n in ("scene", "side", "wrist")}}
+
+    teleop_page = {"exposure": {}, "exposure_t": 0.0, "status_t": 0.0, "status_busy": False}
+
+    def _teleop_last(t: dict) -> dict:
+        """The last saved episode with its rating and notes from the dataset's annotations sidecar."""
+        last = dict(t.get("last") or {})
+        if last.get("ep") is not None and last.get("dataset"):
+            a = ann_mod.load(str(datasets_dir / last["dataset"])).get(str(last["ep"]), {})
+            last.update({k: a[k] for k in ("rating", "notes") if k in a})
+        return last
+
+    def teleop_page_state() -> dict:
+        """The state v1's robot page renders, composed from the teleop node, the arm, the hand and the cameras."""
+        t = B.teleop_state() if B else {"running": False}
+        now = time.time()
+        if B and now - teleop_page["status_t"] > 3.0 and not teleop_page["status_busy"]:     # the dashboard, off this thread
+            teleop_page["status_t"], teleop_page["status_busy"] = now, True
+
+            def poll():
+                try:
+                    B.arm_power(0, 5.0)
+                except Exception:  # noqa: BLE001
+                    pass
+                teleop_page["status_busy"] = False
+            threading.Thread(target=poll, daemon=True).start()
+        if now - teleop_page["exposure_t"] > 2.0:
+            teleop_page["exposure_t"] = now
+            try:
+                teleop_page["exposure"] = exposure_mod.state(rd_config.get("sensors.usb_cameras", {}) or {})
+            except Exception:  # noqa: BLE001  no v4l2-ctl, no cameras: the card stays empty
+                teleop_page["exposure"] = {}
+        arm = (B.arm_status if B else {}) or {}
+        fresh = bool(arm) and now - arm.get("t", 0) < 15.0
+        safety, mode = str(arm.get("safety_status", "")), str(arm.get("robot_mode", ""))
+        fault = None if not fresh or safety in ("", "NORMAL", "REDUCED") else f"{safety} ({mode}): {arm.get('message', '')}".strip()
+        pose = t.get("pose") or []
+        ex = teleop_page["exposure"].get("cameras", {})
+        cams = rd_config.get("sensors.usb_cameras", {}) or {}
+        hand = (B.hand_state if B else []) or []
+        stream = (B.stream_state if B else "") or ""
+        return {
+            "mode": "teleop", "running": bool(t.get("running")), "device": bool(t.get("device")), "enabled": bool(t.get("enabled")),
+            "input": "spacemouse" if t.get("device") else "no spacemouse", "task": t.get("task", ""),
+            "recording": bool(t.get("recording")), "frames": t.get("frames", 0), "episodes": t.get("episodes", 0),
+            "grasps": t.get("grasps", 1), "regrasp_open": bool(t.get("regrasp_open")), "rec_s": t.get("rec_s", 0.0),
+            "save_in_flight": bool(t.get("saving")),
+            "dataset": {"name": t.get("dataset", ""), "root": str(datasets_dir / t.get("dataset", "")), "storage": t.get("backend") or ""},
+            "ur": {"connected": fresh and mode == "RUNNING", "ready": fresh and bool(arm.get("program_running")), "pose": pose,
+                   "reach": round(math.hypot(pose[0], pose[1]), 3) if len(pose) >= 2 else None, "base_deg": None,
+                   "fault": fault, "freedrive": False, "homing": False, "mode": mode or None},
+            "hand": {"ok": bool(hand) or None, "grasp": t.get("grasp")},
+            "tick": {"hz": t.get("tick_hz", 0.0), "ms": 0.0},
+            "servo": {"short": "stream " + (stream.split() or ["off"])[0], "on": stream.startswith("on"), "slow": False, "detail": stream},
+            "exposure": {"values": {n: c["exposure"] for n, c in ex.items() if c.get("exposure") is not None},
+                         "locked": bool(teleop_page["exposure"].get("locked")), "phase": False, "medians": {}},
+            "crop": {n: cams[n].get("square") for n in ("scene", "side") if isinstance(cams.get(n), dict) and cams[n].get("square") is not None},
+            "crop_locked": True, "last": _teleop_last(t), "status": t.get("message", ""),
+        }
+
+    @app.post("/api/teleop/cmd")
+    def api_teleop_cmd(body: dict = Body(...)):
+        """A command from the teleop page: most go to the teleop node's own loop (/teleop/cmd); the cameras' exposure,
+        the last episode's rating and notes, and the arm's recovery are done here."""
+        if not B:
+            raise HTTPException(503, "no ROS")
+        name, a = str(body.get("name", "")), body.get("args") or {}
+        if name == "expo":
+            try:
+                teleop_page["exposure"] = exposure_mod.adjust(rd_config.get("sensors.usb_cameras", {}) or {}, str(a.get("action", "")), a.get("cam"))
+                teleop_page["exposure_t"] = time.time()
+                B.teleop_note(time.strftime("%H:%M:%S ") + f"exposure {a.get('action')}{' ' + a['cam'] if a.get('cam') else ''}: "
+                              + ", ".join(f"{n} {c['exposure']}" for n, c in teleop_page["exposure"].get("cameras", {}).items()))
+            except Exception as e:  # noqa: BLE001
+                B.teleop_note(time.strftime("%H:%M:%S ") + f"exposure failed: {e}")
+        elif name in ("rating", "notes"):
+            last = (B.teleop_state().get("last") or {})
+            if last.get("ep") is None or not last.get("dataset"):
+                B.teleop_note(time.strftime("%H:%M:%S ") + "no saved episode to annotate yet")
+            else:
+                fields = {"rating": int(a.get("stars", 0))} if name == "rating" else {"notes": str(a.get("text", "")).strip()}
+                ann_mod.set_episode(str(datasets_dir / last["dataset"]), int(last["ep"]), fields)
+                B.teleop_note(time.strftime("%H:%M:%S ") + f"episode {last['ep'] + 1}: {name} saved")
+        elif name == "reconnect":
+            def recover():
+                status = B.arm_power(0, 5.0)
+                r = B.arm_power(3 if status.get("safety_status") not in ("NORMAL", "REDUCED") else 1, 60.0)
+                B.teleop_note(time.strftime("%H:%M:%S ") + f"arm: {r.get('message', '')} ({r.get('robot_mode', '?')} / {r.get('safety_status', '?')})")
+            threading.Thread(target=recover, daemon=True).start()
+        elif name == "crop":
+            B.teleop_note(time.strftime("%H:%M:%S ") + "the crops are fixed in robot.yaml (sensors.usb_cameras)")
+        elif name in ("freedrive", "recover_hand", "input_mode"):
+            B.teleop_note(time.strftime("%H:%M:%S ") + f"{name}: not part of 5.0's teleop")
+        else:
+            B.teleop_cmd(name, a)
+        return {"ok": True}
+
+    @app.get("/api/teleop/events")
+    async def api_teleop_events(request: Request):
+        """Server-Sent Events for the teleop page: `state` five times a second, `log` lines as they come."""
+        import asyncio
+
+        async def gen():
+            seq = B._teleop_seq - min(len(B.teleop_log), 50) if B else 0        # the page starts with the recent lines
+            while not await request.is_disconnected():
+                if B:
+                    for n, line in list(B.teleop_log):
+                        if n > seq:
+                            seq = n
+                            yield f"event: log\ndata: {json.dumps(line)}\n\n"
+                st = await asyncio.get_running_loop().run_in_executor(None, teleop_page_state)
+                yield f"event: state\ndata: {json.dumps(st)}\n\n"
+                await asyncio.sleep(0.2)
+        return StreamingResponse(gen(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+    @app.get("/api/cameras/exposure")
+    def api_exposure():
+        return exposure_mod.state(rd_config.get("sensors.usb_cameras", {}) or {})
+
+    @app.post("/api/cameras/exposure")
+    def api_exposure_set(body: dict = Body(...)):
+        """{locked: true} freezes each policy camera at the exposure and white balance it has now; false = auto again."""
+        return exposure_mod.set_locked(rd_config.get("sensors.usb_cameras", {}) or {}, bool(body.get("locked")))
 
     @app.post("/api/arm/wave")
     def api_arm_wave(body: dict = Body(default={})):
@@ -882,7 +1019,7 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
     # ------------------------------------------------------------------ the other instances (the GPU box's tabs)
     @app.get("/api/robot")
     def api_robot(request: Request):
-        return {"reachable": ros_up(), "url": "/arm/" if ros else robot_url + "/arm/", "config": {"mode": "sim" if sim else "robot", "title": "arm + hand + policy"}}
+        return {"reachable": ros_up(), "url": "/teleop/" if ros else robot_url + "/teleop/", "config": {"mode": "sim" if sim else "robot", "title": "teleop + recording"}}
 
     @app.get("/api/route_editor")
     def api_route_editor(request: Request, scope: str = "routes"):

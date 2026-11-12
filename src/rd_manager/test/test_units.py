@@ -120,3 +120,51 @@ def test_typed_text_gets_the_wake_phrase_once():
     from rd_manager.ros_bridge import with_wake_phrase
     assert with_wake_phrase("what time is it") == "robot disco, what time is it"
     assert with_wake_phrase("  Robot Disco what time is it ") == "Robot Disco what time is it"
+
+
+def test_exposure_lock_freezes_each_camera_where_auto_left_it():
+    from rd_manager import exposure
+    cfg = {"by_path": "/dev/fake-{port}", "scene": {"port": "4.2"}, "wrist": {"port": "1.1"}, "side": {"port": "2.4"}}
+    ctrls = {d: {"auto_exposure": 3, "exposure_time_absolute": 150 + i, "white_balance_automatic": 1, "white_balance_temperature": 4600}
+             for i, d in enumerate(exposure.devices(cfg).values())}
+    calls = []
+
+    def run(args):
+        dev = args[2]
+        if "--list-ctrls" in args:
+            return "\n".join(f"   {k} 0x009a0901 (int)    : min=0 max=5000 step=1 default=3 value={v} flags=inactive" for k, v in ctrls[dev].items())
+        calls.append(args)
+        for kv in args[4].split(","):
+            k, v = kv.split("=")
+            ctrls[dev][k] = int(v)
+        return ""
+    assert exposure.state(cfg, run)["locked"] is False
+    s = exposure.set_locked(cfg, True, run)
+    assert s["locked"] and [c["exposure"] for c in s["cameras"].values()] == [150, 151, 152]     # what auto had chosen
+    assert all(c["auto_exposure"] == 1 and c["white_balance_automatic"] == 0 and c["white_balance_temperature"] == 4600 for c in ctrls.values())
+    s = exposure.set_locked(cfg, False, run)
+    assert not s["locked"] and all(c["auto_exposure"] == 3 and c["white_balance_automatic"] == 1 for c in ctrls.values())
+    assert exposure.state({"by_path": "/dev/x-{port}", "scene": {"port": "1"}}, lambda a: "")["cameras"]["scene"]["found"] is False
+
+
+def test_exposure_keys_of_the_teleop_page():
+    from rd_manager import exposure
+    cfg = {"by_path": "/dev/fake-{port}", "scene": {"port": "4.2"}, "wrist": {"port": "1.1"}, "side": {"port": "2.4"}}
+    ctrls = {d: {"auto_exposure": 3, "exposure_time_absolute": 156} for d in exposure.devices(cfg).values()}
+
+    def run(args):
+        if "--list-ctrls" in args:
+            return "\n".join(f"  {k} 0x1 (int) : min=1 max=5000 value={v}" for k, v in ctrls[args[2]].items())
+        for kv in args[4].split(","):
+            k, v = kv.split("=")
+            ctrls[args[2]][k] = int(v)
+        return ""
+    s = exposure.adjust(cfg, "plus", "scene", run)                 # one camera brighter: manual, the others untouched
+    assert s["cameras"]["scene"]["exposure"] > 156 and s["cameras"]["scene"]["locked"]
+    assert s["cameras"]["side"]["exposure"] == 156 and not s["cameras"]["side"]["locked"] and not s["locked"]
+    s = exposure.adjust(cfg, "minus", None, run)                   # all darker
+    assert s["cameras"]["side"]["exposure"] < 156 and s["locked"]
+    up = exposure.adjust(cfg, "plus", "side", run)["cameras"]["side"]["exposure"]
+    assert up > s["cameras"]["side"]["exposure"]
+    assert exposure.adjust(cfg, "auto", None, run)["locked"] is False
+    assert exposure.adjust(cfg, "lock", None, run)["locked"] is True

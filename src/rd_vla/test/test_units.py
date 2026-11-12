@@ -351,3 +351,22 @@ def test_teleop_integration_and_grasp():
     assert abs(g - 0.52) < 1e-9 and step_grasp(g, [0, 1], 0.104, 0.060) == g - 0.060
     assert step_grasp(g, [1, 1], 0.1, 0.1) == g and step_grasp(g, [], 0.1, 0.1) == g      # both or none: hold
     assert step_grasp(0.98, [1, 0], 0.104, 0.06) == 1.0 and step_grasp(0.03, [0, 1], 0.104, 0.06) == 0.0
+
+
+def test_keep_out_pushes_a_target_off_the_body_and_above_the_floor():
+    from rd_vla.geometry import keep_out
+    box = (-0.27, 0.27, 0.0, 0.88)
+    assert keep_out([0.5, 0.5, 0.3], box, 0.03, -0.2) == ([0.5, 0.5, 0.3], False)          # beside the body: untouched
+    xyz, changed = keep_out([0.25, 0.4, 0.3], box, 0.03, -0.2)                             # inside, nearest the +x edge
+    assert changed and abs(xyz[0] - 0.30) < 1e-9 and xyz[1:] == [0.4, 0.3]
+    xyz, changed = keep_out([0.0, 0.01, 0.3], box, 0.03, -0.2)                             # just inside the front edge
+    assert changed and abs(xyz[1] + 0.03) < 1e-9 and xyz[0] == 0.0
+    assert keep_out([0.5, 0.5, -0.4], box, 0.03, -0.2) == ([0.5, 0.5, -0.2], True)         # under the floor: lifted
+    assert keep_out([0.0, 0.4, -0.4], None, 0.03, None) == ([0.0, 0.4, -0.4], False)       # no limits configured
+
+
+def test_robot_yaml_carries_the_arms_workspace_limits():
+    from rd_vla.geometry import workspace_limits
+    w = workspace_limits()
+    assert w["z_floor"] is not None and w["z_floor"] < 0 and len(w["no_go_xy"]) == 4 and 0 < w["margin"] < 0.2
+    assert w["no_go_xy"][0] < w["no_go_xy"][1] and w["no_go_xy"][2] < w["no_go_xy"][3]
