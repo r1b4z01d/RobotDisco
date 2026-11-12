@@ -27,6 +27,7 @@ setup(
         'arm_power = rd_arm.arm_power:main',
         'wave_server = rd_arm.wave_server:main',
         'stream = rd_arm.stream:main',
+        'freedrive = rd_arm.freedrive:main',
         'fake_hand = rd_arm.fake_hand:main',
         'fake_dashboard = rd_arm.fake_dashboard:main',
         'description_publisher = rd_arm.description_publisher:main',

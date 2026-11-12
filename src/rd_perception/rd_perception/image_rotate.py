@@ -57,6 +57,7 @@ class ImageRotate(Node):
         self.degrees = int(self.get_parameter("degrees").value)
         self.square = float(self.get_parameter("square").value)
         self.height = int(self.get_parameter("height").value)
+        self.add_on_set_parameters_callback(self._on_params)     # `square` moves live: the teleop page's crop sliders
         qos = QoSProfile(depth=2, reliability=ReliabilityPolicy.BEST_EFFORT)
         self.pub = self.create_publisher(Image, "out", qos)
         # Take the camera's frames only while somebody takes ours. Three of these at 30 fps cost most of three of
@@ -65,6 +66,17 @@ class ImageRotate(Node):
         self.sub = None
         self.create_timer(0.5, self.follow_demand)
         self.follow_demand()
+
+    def _on_params(self, params):
+        from rcl_interfaces.msg import SetParametersResult
+        for p in params:
+            if p.name == "square":
+                if self.square < 0.0 or not 0.0 <= float(p.value) <= 1.0:
+                    return SetParametersResult(successful=False, reason="this camera is not cropped" if self.square < 0.0 else "square is a fraction 0..1")
+                self.square = float(p.value)
+            elif p.name in ("degrees", "height"):
+                return SetParametersResult(successful=False, reason=f"{p.name} is fixed at launch")
+        return SetParametersResult(successful=True)
 
     def follow_demand(self):
         wanted = self.pub.get_subscription_count() > 0

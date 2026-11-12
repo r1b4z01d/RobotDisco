@@ -355,6 +355,8 @@ phase_venvs() {
   /opt/vla/bin/pip install -q --upgrade pip
   /opt/vla/bin/pip install -q "torch==2.10.0" "torchvision==0.25.0" --index-url "$torch_index" --extra-index-url https://pypi.org/simple || warn "torch install failed (index $torch_index)"
   /opt/vla/bin/pip install -q --extra-index-url "$torch_index" "lerobot>=0.3,<0.5" "transformers" "num2words" || warn "lerobot install failed"
+  # the Stream Deck's library for the teleop (rd_vla/deck.py); pure python, it talks through the libhidapi already installed
+  /opt/vla/bin/pip install -q --no-deps "streamdeck>=0.9" || warn "streamdeck install failed: the teleop runs without the deck"
   # The venv sees the system site-packages (it needs rclpy), and Ubuntu's scipy, pandas and matplotlib are built for
   # numpy 1: they satisfy pip, so it installs nothing, and then fail to import under the venv's numpy 2 (transformers
   # probes scipy, datasets imports pandas). Give the venv its own copy of whichever resolves outside it.

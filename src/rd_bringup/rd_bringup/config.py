@@ -87,6 +87,27 @@ def get(key: str, default: Any = _MISSING, as_type: type | None = None) -> Any:
     return value
 
 
+def camera_squares_file() -> Path:
+    return data_dir() / "outputs" / "camera_squares.json"
+
+
+def camera_squares() -> dict:
+    """{camera: fraction or None}: where each policy camera's square is cut along the upright frame's long axis.
+    robot.yaml sensors.usb_cameras.<cam>.square, overridden by the file the teleop page's crop sliders write
+    (<data>/outputs/camera_squares.json), so a crop chosen for a new dataset survives a restart."""
+    import json
+    cams = get("sensors.usb_cameras", {}) or {}
+    out = {name: (float(c["square"]) if c.get("square") is not None else None)
+           for name, c in cams.items() if isinstance(c, dict) and "port" in c}
+    try:
+        for name, v in json.loads(camera_squares_file().read_text()).items():
+            if name in out and out[name] is not None and v is not None:
+                out[name] = min(1.0, max(0.0, float(v)))
+    except (OSError, ValueError, TypeError):
+        pass
+    return out
+
+
 def ur_kinematics_arg() -> str:
     """' ur_kinematics:=<file>' for the xacro when this arm's own calibration has been extracted (robot.yaml
     arm.kinematics_file exists), else '': the model then uses ur_description's nominal UR5e. Every launch that

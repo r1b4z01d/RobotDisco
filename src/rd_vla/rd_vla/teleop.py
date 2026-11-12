@@ -11,7 +11,12 @@
   /teleop/episode/discard std_srvs/Trigger
   /teleop/cmd             std_msgs/String    JSON {name, args}: what the console's teleop page sends (v1's panel commands):
                                              enable {on}, rec, save, discard, home, quit, grasp_hold {dir}, grasp {delta},
-                                             grasp_mark (flag a re-grasp stretch), task {text}, dataset {name}
+                                             grasp_mark (flag a re-grasp stretch), task {text}, dataset {name},
+                                             freedrive (toggle hand-guiding: the arm is moved by hand, the hand by the
+                                             buttons, and the recorded action is the pose the arm is actually at),
+                                             recover_hand (power-cycle the tool connector), reconnect (recover the arm)
+  Stream Deck     -> v1's keys when a deck is plugged in (rd_vla/deck.py): REC / +GRASP, SAVE / HOME, DISCARD / FREEDRIVE,
+                     reconnect, teleop off, per-finger open and close, and the stars after a save
   /teleop/state           std_msgs/String    JSON five times a second: device, enabled, recording, frames, episodes, grasps,
                                              dataset, task, the tool's pose, the grasp, the tick rate, the last saved episode
   /teleop/log             std_msgs/String    one line per event, for the page's log
@@ -82,6 +87,26 @@ def write_annotation(dataset_root, episode: int, **fields) -> None:
     os.replace(tmp, p)
 
 
+def write_capture(dataset_root) -> None:
+    """<dataset>/meta/capture.json, once, when the dataset gets its first episode: how the cameras were cut and
+    turned for it (v1's file; rd_manager's dataset cards and anyone serving a policy trained on it read it)."""
+    p = Path(dataset_root) / "meta" / "capture.json"
+    now = time.strftime("%Y-%m-%dT%H:%M:%S")
+    try:
+        data = json.loads(p.read_text()) if p.is_file() else None
+    except (ValueError, OSError):
+        data = None
+    if data is None:
+        cams = config.get("sensors.usb_cameras", {}) or {}
+        data = {"version": 1, "host": str(config.get("robot.host", "")),
+                "squares": {k: v for k, v in config.camera_squares().items()},
+                "rotate": {k: int(c.get("rotate", 0)) for k, c in cams.items() if isinstance(c, dict) and "port" in c},
+                "recorded": {"first": now}}
+    data.setdefault("recorded", {})["last"] = now
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(data, indent=2))
+
+
 def episodes_on_disk(dataset_root) -> int:
     """How many episodes a dataset already holds (LeRobot's meta/info.json, or the npz fallback's meta.json)."""
     for rel, key in (("meta/info.json", "total_episodes"), ("meta.json", "episodes")):
@@ -144,6 +169,7 @@ class Teleop(Node):
         dp("dataset", ""); dp("task", "")
         dp("record_root", "")
         dp("debug_input", False)              # the rig: the puck is the topic /teleop/debug_input
+        dp("deck", True); dp("deck_flip", True)   # the Stream Deck, mounted upside down on the robot (v1)
         p = self.p = lambda name: self.get_parameter(name).value
         self.cb = ReentrantCallbackGroup()
         self.axis_map = {k: (str(v[0]), int(v[1])) for k, v in json.loads(p("axis_map")).items()}
@@ -160,6 +186,9 @@ class Teleop(Node):
         self.log_pub = self.create_publisher(String, "/teleop/log", 50)
         self.create_subscription(String, "/teleop/cmd", self.on_cmd, 20, callback_group=self.cb)
         self.stream = self.create_client(SetBool, "/arm/stream", callback_group=self.cb)
+        self.freedrive_client = self.create_client(SetBool, "/arm/freedrive", callback_group=self.cb)
+        self.hand_power = self.create_client(Trigger, "/hand/power_cycle", callback_group=self.cb)
+        self.arm_power = None
         self.home = self.create_client(Trigger, "/arm/go_home", callback_group=self.cb)
         self.create_service(SetBool, "/teleop/enable", self.on_enable, callback_group=self.cb)
         self.create_service(Trigger, "/teleop/home", self.on_home, callback_group=self.cb)
@@ -168,8 +197,9 @@ class Teleop(Node):
         self.create_service(Trigger, "/teleop/episode/discard", self.on_discard, callback_group=self.cb)
         self.limits = workspace_limits()
         self.enabled = False
+        self.freedrive = False                # hand-guiding: the arm is moved by hand, nothing is streamed
         self.target = None
-        self.grasp = 0.0
+        self.curls = [0.0] * 4                # each finger's grasp 0..1 (index, middle, ring, thumb), before max_curls
         self.lock = threading.Lock()          # the writer: the tick adds frames, the services open / save / discard
         self.writer = None
         self.recording = False
@@ -186,6 +216,21 @@ class Teleop(Node):
         self._ticks: list = []
         self.create_timer(1.0 / float(p("fps")), self.tick, callback_group=self.cb)
         self.create_timer(0.2, self.publish_state, callback_group=self.cb)
+        self.deck = None
+        if bool(p("deck")) and not bool(p("debug_input")):
+            from .deck import Deck
+            self.deck = Deck(self, flip=bool(p("deck_flip")))
+            self.create_timer(0.1, self.deck.poll, callback_group=self.cb)
+
+    @property
+    def grasp(self) -> float:
+        """The whole hand's grasp: the mean of the fingers (what the page shows and the puck's buttons move)."""
+        return sum(self.curls) / len(self.curls)
+
+    def nudge(self, delta: float, finger: int = -1) -> None:
+        """Close (delta > 0) or open one finger, or all of them with finger < 0."""
+        for i in (range(4) if finger < 0 else (finger,)):
+            self.curls[i] = max(0.0, min(1.0, self.curls[i] + delta))
 
     # ---- the page's commands
     def log(self, line: str) -> None:
@@ -203,6 +248,11 @@ class Teleop(Node):
             name, a = str(c.get("name", "")), c.get("args") or {}
         except (ValueError, AttributeError):
             return
+        self.command(name, a)
+
+    def command(self, name: str, a: dict | None = None) -> None:
+        """One of the panel's commands, from the page (/teleop/cmd) or a Stream Deck key."""
+        a = a or {}
         tr = Trigger.Request()
         try:
             if name == "enable":
@@ -219,7 +269,15 @@ class Teleop(Node):
             elif name == "grasp_hold":
                 self.web_hold = (max(-1, min(1, int(a.get("dir", 0)))), time.monotonic())
             elif name == "grasp":
-                self.grasp = max(0.0, min(1.0, self.grasp + float(a.get("delta", 0.1))))
+                self.nudge(float(a.get("delta", 0.1)))
+            elif name == "freedrive":
+                self.log(self.set_freedrive(not self.freedrive))
+            elif name == "recover_hand":
+                threading.Thread(target=self._recover_hand, daemon=True).start()
+            elif name == "reconnect":
+                threading.Thread(target=self._reconnect_arm, daemon=True).start()
+            elif name == "rating":
+                self.log(self.rate(int(a.get("stars", 0))))
             elif name == "grasp_mark":
                 self.log(self.regrasp_mark())
             elif name == "task":
@@ -239,6 +297,55 @@ class Teleop(Node):
         except Exception as e:  # noqa: BLE001  a bad command must never stop the node
             self.log(f"command {name} failed: {type(e).__name__}: {e}")
 
+    def set_freedrive(self, on: bool) -> str:
+        if on and self.recording and not self.freedrive:
+            return "freedrive: not in the middle of a recording"
+        if not self.freedrive_client.wait_for_service(timeout_sec=2.0):
+            return "rd_arm's /arm/freedrive is not there"
+        if on:
+            if self.enabled and self.stream.service_is_ready():
+                self.stream.call(SetBool.Request(data=False))      # the streamer lets go before the arm goes limp
+            self.observer.cameras_on()
+        r = self.freedrive_client.call(SetBool.Request(data=bool(on)))
+        if not r.success:
+            return f"freedrive: {r.message}"
+        self.freedrive, self.target = bool(on), None
+        if not on:
+            if self.enabled and self.stream.service_is_ready():
+                self.stream.call(SetBool.Request(data=True))       # back under the puck, from where the hand left it
+            elif not self.recording:
+                self.observer.cameras_off()
+        return r.message
+
+    def _recover_hand(self) -> None:
+        if not self.hand_power.wait_for_service(timeout_sec=2.0):
+            self.log("hand: rd_arm's /hand/power_cycle is not there")
+            return
+        self.log("hand: power-cycling the tool connector…")
+        r = self.hand_power.call(Trigger.Request())
+        self.log(f"hand: {r.message}")
+
+    def _reconnect_arm(self) -> None:
+        from rd_interfaces.srv import ArmPower
+        if self.arm_power is None:
+            self.arm_power = self.create_client(ArmPower, "/arm/power", callback_group=self.cb)
+        if not self.arm_power.wait_for_service(timeout_sec=2.0):
+            self.log("arm: no /arm/power service")
+            return
+        st = self.arm_power.call(ArmPower.Request(command=ArmPower.Request.STATUS, timeout_s=5.0))
+        cmd = ArmPower.Request.POWER_ON if st.safety_status in ("NORMAL", "REDUCED") else ArmPower.Request.UNLOCK
+        r = self.arm_power.call(ArmPower.Request(command=cmd, timeout_s=60.0))
+        self.log(f"arm: {r.message} ({r.robot_mode} / {r.safety_status})")
+
+    def rate(self, stars: int) -> str:
+        """1..5 stars for the last saved episode, into the dataset's annotations sidecar."""
+        if self.last.get("ep") is None:
+            return "no saved episode to rate yet"
+        stars = max(1, min(5, int(stars)))
+        write_annotation(self._root() / self.last["dataset"], self.last["ep"], rating=stars)
+        self.last["rating"] = stars
+        return f"episode {self.last['ep'] + 1}: {'★' * stars}"
+
     def regrasp_mark(self) -> str:
         """Toggle a re-grasp range: the first press opens it at this frame, the second closes it."""
         if not self.recording:
@@ -253,6 +360,8 @@ class Teleop(Node):
     # ---- services
     def on_enable(self, req, res):
         on = bool(req.data)
+        if on and self.freedrive:
+            self.log(self.set_freedrive(False))        # the puck takes over from the hand
         if on:
             self.observer.cameras_on()        # the tool's pose (and the cameras a recording needs) only while in use
             end = time.monotonic() + 6.0
@@ -278,6 +387,8 @@ class Teleop(Node):
         if self.recording:
             res.success, res.message = False, "recording: save or discard the episode first"
             return res
+        if self.freedrive:
+            self.set_freedrive(False)
         self.enabled, self.target = False, None
         if self.stream.service_is_ready():
             self.stream.call_async(SetBool.Request(data=False))
@@ -298,8 +409,8 @@ class Teleop(Node):
             res.success, res.message = False, "set the parameters `dataset` and `task` first"
         elif self.recording or self.saving:
             res.success, res.message = False, "an episode is already being recorded or saved"
-        elif not self.enabled:
-            res.success, res.message = False, "teleop is off (/teleop/enable)"
+        elif not self.enabled and not self.freedrive:
+            res.success, res.message = False, "teleop is off (TELEOP ON, or freedrive)"
         else:
             ok, why = self.observer.wait_ready(timeout=6.0)
             if not ok:
@@ -336,9 +447,12 @@ class Teleop(Node):
                 writer.close()                # finalize, so the dataset is loadable after every episode
                 ep = int(saved["episode"])
                 write_annotation(saved["path"], ep, grasps=len(ranges) + 1, regrasp_ranges=ranges)
+                write_capture(saved["path"])
                 self.episodes, self._episodes_of = ep + 1, str(self.p("dataset"))
                 self.last = {"ep": ep, "frames": frames, "grasps": len(ranges) + 1, "dataset": Path(saved["path"]).name}
                 line = f"episode {ep + 1} saved: {frames} frames, {len(ranges) + 1} grasp(s), in {saved['path']}"
+                if self.deck is not None:
+                    self.deck.enter_rating()
             except Exception as e:  # noqa: BLE001
                 line = f"SAVE FAILED: {type(e).__name__}: {e}"
             with self.lock:
@@ -376,37 +490,44 @@ class Teleop(Node):
 
     def tick(self):
         self._read_device()
-        if not self.enabled:
+        if not self.enabled and not self.freedrive:
             return
         pose = self.pose = self.observer.ee_pose()
         if pose is None:
             return
         now = time.monotonic()
         self._ticks = [t for t in self._ticks if now - t < 2.0] + [now]
-        if self.target is None:
-            self.target = list(pose)
         p = self.p
         dt = 1.0 / float(p("fps"))
         axes = self.device.axes if self.device_ok else dict.fromkeys(AXES, 0.0)
         buttons = self.device.buttons if self.device_ok else []
-        self.target = integrate(self.target, axes, self.axis_map, float(p("linear_speed")), float(p("angular_speed")), dt)
-        # the target never runs more than a step ahead of the tool or out of the box, so letting go stops the arm
-        xyz = clamp_box(clamp_step(self.target[:3], pose[:3], float(p("max_step_m"))),
-                        [float(v) for v in p("workspace_min")], [float(v) for v in p("workspace_max")])
-        xyz, _ = keep_out(xyz, **self.limits)   # never over the robot's own body or under the floor (robot.yaml arm.workspace)
-        self.target[:3] = list(xyz)
-        self.grasp = step_grasp(self.grasp, buttons, float(p("grasp_close_rate")), float(p("grasp_open_rate")),
-                                int(p("button_close")), int(p("button_open")))
-        hold, asked = self.web_hold           # the page's hold buttons, at the same rates; they let go by themselves after 0.6 s
+        if self.freedrive:
+            self.target = list(pose)            # hand-guided: the action recorded is the pose the arm is actually at
+        else:
+            if self.target is None:
+                self.target = list(pose)
+            self.target = integrate(self.target, axes, self.axis_map, float(p("linear_speed")), float(p("angular_speed")), dt)
+            # the target never runs more than a step ahead of the tool or out of the box, so letting go stops the arm
+            xyz = clamp_box(clamp_step(self.target[:3], pose[:3], float(p("max_step_m"))),
+                            [float(v) for v in p("workspace_min")], [float(v) for v in p("workspace_max")])
+            xyz, _ = keep_out(xyz, **self.limits)   # never over the robot's own body or under the floor (robot.yaml arm.workspace)
+            self.target[:3] = list(xyz)
+        close_rate, open_rate = float(p("grasp_close_rate")), float(p("grasp_open_rate"))
+        # the puck's two buttons and the page's hold buttons move the whole hand; the deck's keys one finger each
+        step = step_grasp(0.5, buttons, close_rate, open_rate, int(p("button_close")), int(p("button_open"))) - 0.5
+        hold, asked = self.web_hold           # the page's hold buttons let go by themselves after 0.6 s
         if hold and time.monotonic() - asked < 0.6:
-            self.grasp = step_grasp(self.grasp, [hold > 0, hold < 0], float(p("grasp_close_rate")), float(p("grasp_open_rate")))
-        curls = [self.grasp * float(m) for m in p("max_curls")]
-        msg = PoseStamped()
-        msg.header.frame_id = self.observer.base_frame
-        msg.header.stamp = self.get_clock().now().to_msg()
-        msg.pose.position.x, msg.pose.position.y, msg.pose.position.z = [float(v) for v in xyz]
-        (msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w) = rotvec_to_quat(self.target[3:])
-        self.pose_pub.publish(msg)
+            step += close_rate if hold > 0 else -open_rate
+        if step:
+            self.nudge(step)
+        curls = [c * float(m) for c, m in zip(self.curls, p("max_curls"))]
+        if not self.freedrive:
+            msg = PoseStamped()
+            msg.header.frame_id = self.observer.base_frame
+            msg.header.stamp = self.get_clock().now().to_msg()
+            msg.pose.position.x, msg.pose.position.y, msg.pose.position.z = [float(v) for v in self.target[:3]]
+            (msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w) = rotvec_to_quat(self.target[3:])
+            self.pose_pub.publish(msg)
         self.hand_pub.publish(Float32MultiArray(data=curls))
         if self.recording:
             obs = self.observer.observe()
@@ -423,13 +544,14 @@ class Teleop(Node):
         dataset, fps = str(self.p("dataset")), float(self.p("fps"))
         if dataset != self._episodes_of and not self.saving:     # another dataset chosen: how much it already holds
             self.episodes, self._episodes_of = (episodes_on_disk(self._root() / dataset) if dataset else 0), dataset
-        hz = (len(self._ticks) - 1) / (self._ticks[-1] - self._ticks[0]) if self.enabled and len(self._ticks) > 2 else 0.0
+        hz = (len(self._ticks) - 1) / (self._ticks[-1] - self._ticks[0]) if (self.enabled or self.freedrive) and len(self._ticks) > 2 else 0.0
         self.state_pub.publish(String(data=json.dumps({
             "device": self.device_ok, "enabled": self.enabled, "recording": self.recording, "saving": self.saving,
             "frames": self.frames, "rec_s": self.frames / fps, "episodes": self.episodes,
             "grasps": len(self.regrasp_ranges) + 1, "regrasp_open": self._regrasp_open is not None,
             "grasp": round(self.grasp, 3), "dataset": dataset, "task": str(self.p("task")),
-            "pose": [round(float(v), 4) for v in self.pose] if self.enabled and self.pose else [],
+            "freedrive": self.freedrive, "deck": bool(self.deck and self.deck.pad is not None),
+            "pose": [round(float(v), 4) for v in self.pose] if (self.enabled or self.freedrive) and self.pose else [],
             "tick_hz": round(hz, 1), "last": self.last,
             "backend": getattr(w, "backend", None), "message": self.message})))
 
@@ -451,6 +573,8 @@ def main():
         except Exception:  # noqa: BLE001
             pass
         node.device.close()
+        if node.deck is not None:
+            node.deck.close()
         node.destroy_node()
         rclpy.try_shutdown()
 

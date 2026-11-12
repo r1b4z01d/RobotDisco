@@ -370,3 +370,102 @@ def test_robot_yaml_carries_the_arms_workspace_limits():
     w = workspace_limits()
     assert w["z_floor"] is not None and w["z_floor"] < 0 and len(w["no_go_xy"]) == 4 and 0 < w["margin"] < 0.2
     assert w["no_go_xy"][0] < w["no_go_xy"][1] and w["no_go_xy"][2] < w["no_go_xy"][3]
+
+
+class _FakePad:
+    key_count = 15
+
+    def __init__(self):
+        self.labels, self.cb = {}, None
+
+    def set_label(self, key, text, bg=None, fg=None):
+        self.labels[key] = text
+
+    def on_key(self, cb):
+        self.cb = cb
+
+    def close(self):
+        pass
+
+
+class _FakeTeleop:
+    def __init__(self):
+        self.recording = self.freedrive = self.enabled = False
+        self._regrasp_open, self.regrasp_ranges = None, []
+        self.commands, self.nudges, self.rated, self.logs = [], [], [], []
+
+    def p(self, name):
+        return {"grasp_close_rate": 0.104, "grasp_open_rate": 0.060, "fps": 12.0}[name]
+
+    def command(self, name, a=None):
+        self.commands.append(name)
+
+    def nudge(self, delta, finger=-1):
+        self.nudges.append((round(delta, 4), finger))
+
+    def rate(self, stars):
+        self.rated.append(stars)
+        return f"rated {stars}"
+
+    def log(self, line):
+        self.logs.append(line)
+
+
+def test_stream_deck_keys():
+    from rd_vla.deck import Deck
+    now = [100.0]
+    t, pad = _FakeTeleop(), _FakePad()
+    d = Deck(t, pad=pad, clock=lambda: now[0])
+    press = lambda k: (pad.cb(k, True), pad.cb(k, False), d.poll())  # noqa: E731
+    d.poll()
+    assert pad.labels[0] == "●" and pad.labels[1] == "⌂" and pad.labels[2] == "🆓" and pad.labels[10] == "✊" and pad.labels[11] == "1"
+    press(0); press(1); press(2); press(3); press(4)                # idle: REC, home, freedrive, recover the arm, teleop off
+    assert t.commands == ["rec", "home", "freedrive", "reconnect", "quit"]
+    t.commands.clear(); t.recording = True
+    d.poll()
+    assert pad.labels[0] == "+\n1" and pad.labels[1] == "💾" and pad.labels[2] == "🗑"
+    press(0); t._regrasp_open = 5; d.poll()
+    assert pad.labels[0] == "END\n2"                                 # a flagged stretch is open: the key says how to close it
+    press(2); press(1)
+    assert t.commands == ["grasp_mark", "discard", "save"]
+    # fingers: held keys ramp, the thumb is key 1 -> channel 3, the whole hand is the first column
+    pad.cb(11, True); d.poll(); d.poll(); pad.cb(11, False); d.poll()
+    assert t.nudges == [(0.1248, 3), (0.1248, 3)]                    # 0.104 per teleop tick, this poll runs every 0.1 s at 12 Hz
+    t.nudges.clear(); pad.cb(5, True); d.poll(); pad.cb(5, False); d.poll()
+    assert t.nudges == [(-0.072, -1)]
+    pad.cb(7, True); d.poll(); pad.cb(7, False); assert t.nudges[-1] == (-0.072, 2)      # finger 2 = the index = channel 2
+    # after a save the bottom row is the stars for 30 s, then the fingers again
+    t.recording = False; t.nudges.clear()
+    d.enter_rating(); d.poll()
+    assert pad.labels[10] == "1\n★" and pad.labels[14] == "5\n★"
+    press(13)
+    assert t.rated == [4] and t.nudges == [] and pad.labels[13] == "3"
+    d.enter_rating(); d.poll(); now[0] += 31; d.poll()
+    assert pad.labels[10] == "✊"
+    pad.cb(12, True); d.poll(); assert t.nudges and t.nudges[-1][1] == 2 and t.rated == [4]
+
+
+def test_tool_voltage_is_twelve_or_nothing(monkeypatch):
+    import importlib.util
+    src = (Path(__file__).resolve().parents[2] / "rd_arm" / "rd_arm" / "freedrive.py").read_text()
+    ns = {}
+    start, end = src.index("HAND_VOLTAGE = 12"), src.index("class Freedrive")
+    from rd_bringup import config
+    exec("from rd_bringup import config\n" + src[start:end], ns)
+    assert ns["tool_voltage"]() == 12                                # robot.yaml as it is
+    monkeypatch.setattr(config, "get", lambda key, default=None: 24 if key == "arm.tool_voltage" else default)
+    ns["config"] = config
+    with pytest.raises(ValueError):
+        ns["tool_voltage"]()
+
+
+def test_camera_squares_follow_the_pages_file(tmp_path, monkeypatch):
+    from rd_bringup import config
+    monkeypatch.setattr(config, "data_dir", lambda: tmp_path)
+    assert config.camera_squares() == {"scene": 0.4, "wrist": None, "side": 0.3}
+    f = config.camera_squares_file()
+    f.parent.mkdir(parents=True)
+    f.write_text(json.dumps({"scene": 0.75, "wrist": 0.5, "side": 7}))
+    assert config.camera_squares() == {"scene": 0.75, "wrist": None, "side": 1.0}     # the wrist is never cropped; clamped to 0..1
+    f.write_text("not json")
+    assert config.camera_squares()["scene"] == 0.4

@@ -75,6 +75,7 @@ class RosBridge:
         self.nav: dict = {}
         self.particles: list = []
         self.jpeg: dict = {}
+        self.cam_median: dict = {}
         self.urdf = ""
         self.people: dict = {}
         self.hand_state: list = []
@@ -335,6 +336,8 @@ class RosBridge:
             else:
                 return
             self.jpeg[name] = {"data": encode_jpeg(rgb), "t": now, "seen": now, "w": m.width, "h": m.height}
+            if now - self.cam_median.get(name, (0, 0.0))[1] > 1.0:       # how bright the frame is, for the exposure keys (target ~120)
+                self.cam_median[name] = (int(np.median(rgb[::8, ::8].mean(axis=2))), now)
         except Exception as ex:  # noqa: BLE001
             self.status = f"{name}: {ex}"
 
@@ -724,6 +727,21 @@ class RosBridge:
             return {"running": True, **json.loads(self.teleop[0])}
         except ValueError:
             return {"running": False}
+
+    def set_camera_square(self, cam: str, at: float) -> dict:
+        """Move a policy camera's square cut live: the `square` parameter of its image_rotate node."""
+        from rcl_interfaces.msg import Parameter, ParameterType, ParameterValue
+        from rcl_interfaces.srv import SetParameters
+        client = self.node.create_client(SetParameters, f"/cameras/{cam}/{cam}_rotate/set_parameters", callback_group=self.cb)
+        try:
+            if not client.wait_for_service(timeout_sec=2.0):
+                return {"success": False, "message": f"the {cam} camera's rotate node is not running"}
+            r = client.call(SetParameters.Request(parameters=[Parameter(name="square", value=ParameterValue(
+                type=ParameterType.PARAMETER_DOUBLE, double_value=float(at)))]))
+            ok = bool(r.results and r.results[0].successful)
+            return {"success": ok, "message": "" if ok else (r.results[0].reason if r.results else "no answer")}
+        finally:
+            self.node.destroy_client(client)
 
     def teleop_note(self, line: str) -> None:
         self._teleop_seq += 1

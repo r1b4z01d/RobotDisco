@@ -20,6 +20,8 @@
       type: position_controllers/JointGroupPositionController
     ur_configuration_controller:
       type: ur_controllers/URConfigurationController
+    freedrive_mode_controller:              # hand-guiding, for teleop recording (rd_arm/freedrive.py switches it in)
+      type: ur_controllers/FreedriveModeController
     tcp_pose_broadcaster:
       type: pose_broadcaster/PoseBroadcaster
 
@@ -36,6 +38,10 @@
     tf_prefix: "ur_"
 
 /**/io_and_status_controller:
+  ros__parameters:
+    tf_prefix: "ur_"
+
+/**/freedrive_mode_controller:
   ros__parameters:
     tf_prefix: "ur_"
 

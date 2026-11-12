@@ -25,6 +25,7 @@ ros2 service call /arm/stream std_srvs/srv/SetBool "{data: true}"  # then /arm/t
 | `rd_arm/hand_node.py` + `hand_link.py` + `hand_protocol.py` | the hand over UDP with the liveness probe; `/hand/curls`, `/hand/offsets`, `/hand/state`, open / close / wiggle services | `amazing_hand_client.py`, `hand_wiggle.py` |
 | `rd_arm/stream.py` | 50 Hz streaming on `forward_position_controller`: IK once per new target (`/compute_ik`), per-tick step cap, branch-flip rejection; `/arm/stream` switches controllers | `rtde_arm.py`'s servoJ thread |
 | `rd_arm/motions.py`, `motions/wave.json`, `config/poses.yaml` | recorded motions (`$RD_MOTIONS_DIR` for the robot's own) and named poses; `vla_home` is the robot's recorded home (v1's `home_pose.json`, 2026-10-11) | `~/.robot_face/motions`, `VLA/outputs/home_pose.json` |
+| `rd_arm/freedrive.py` | `/arm/freedrive` (the driver's `freedrive_mode_controller` switched in and kept alive; it drops out by itself a second after the node stops asking) and `/hand/power_cycle` (the tool connector off for two seconds and back at 12 V, refused if robot.yaml says anything else) | the panel's freedrive mode and hand recovery |
 | `rd_arm/fake_dashboard.py`, `fake_hand.py` | the rig's UR dashboard and hand on loopback | |
 
 cuMotion (`cumotion:=true`, needs the Isaac ROS 4.6 debs from `provision/isaac-packages.txt`): the Wave plans its two

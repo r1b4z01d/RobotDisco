@@ -60,6 +60,7 @@ def generate_launch_description():
         spawner('joint_trajectory_controller', real, inactive=True),
         spawner('forward_position_controller', inactive=True),
         spawner('ur_configuration_controller', real),
+        spawner('freedrive_mode_controller', inactive=True),
     ]
     # the driver's helpers (robot only)
     dashboard = Node(package='ur_robot_driver', executable='dashboard_client', name='dashboard_client', namespace='ur5e',
@@ -90,6 +91,8 @@ def generate_launch_description():
                                                              "' == 'true' else '/ur5e/scaled_joint_trajectory_controller'"])}])
     stream = Node(package='rd_arm', executable='stream', name='arm_stream', output='screen',
                   parameters=[{'use_sim_time': use_sim_time}], condition=IfCondition(LaunchConfiguration('stream')))
+    freedrive = Node(package='rd_arm', executable='freedrive', name='freedrive', output='screen',
+                     parameters=[{'use_sim_time': use_sim_time}])
     moveit = IncludeLaunchDescription(PythonLaunchDescriptionSource(os.path.join(share, 'launch', 'moveit.launch.py')),
                                       launch_arguments=[('sim_mode', sim_mode), ('use_sim_time', use_sim_time), ('cumotion', LaunchConfiguration('cumotion'))],
                                       condition=IfCondition(LaunchConfiguration('moveit')))
@@ -107,5 +110,5 @@ def generate_launch_description():
         RegisterEventHandler(OnProcessStart(target_action=cm, on_start=spawners)),
         dashboard, stopper, urscript,
         TimerAction(period=2.0, actions=[arm_power, hand, moveit]),
-        TimerAction(period=4.0, actions=[wave, stream]),
+        TimerAction(period=4.0, actions=[wave, stream, freedrive]),
     ])

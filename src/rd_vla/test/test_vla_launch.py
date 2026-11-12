@@ -175,6 +175,40 @@ class TestVla(unittest.TestCase):
         push(1.0, x=1.0)
         self.assertEqual(len(targets), n_targets, 'targets kept coming after teleop was switched off')
 
+    def test_4_freedrive_records_where_the_arm_is(self):
+        """Freedrive through the page's command channel: rd_arm switches the driver's freedrive controller in, the
+        teleop stops streaming targets, and an episode recorded meanwhile stores the arm's actual pose as its action."""
+        import json as _json
+        import numpy as np
+        from geometry_msgs.msg import PoseStamped
+        from std_msgs.msg import Bool, String
+        node = self.node
+        states, free, targets = [], [], []
+        node.create_subscription(String, '/teleop/state', lambda m: states.append(_json.loads(m.data)), 10)
+        node.create_subscription(Bool, '/arm/freedrive_state', lambda m: free.append(m.data), 10)
+        node.create_subscription(PoseStamped, '/arm/target_pose', targets.append, 10)
+        cmd = node.create_publisher(String, '/teleop/cmd', 10)
+        send = lambda _n, **a: cmd.publish(String(data=_json.dumps({'name': _n, 'args': a})))  # noqa: E731
+        self.wait_for(lambda: bool(states), 20, 'the teleop state')
+        self.wait_for(lambda: cmd.get_subscription_count() > 0, 10, 'the teleop to listen')
+        send('dataset', name='freedrive_test'); send('task', text='hold')
+        send('freedrive')
+        self.wait_for(lambda: states[-1].get('freedrive') and free and free[-1], 20, 'freedrive on')
+        targets.clear()
+        send('rec')
+        self.wait_for(lambda: states[-1]['recording'] and states[-1]['frames'] >= 12, 20, 'frames recorded in freedrive')
+        self.assertEqual(targets, [], 'targets were streamed while the arm was in freedrive')
+        send('save')
+        ep = TMP / 'datasets' / 'freedrive_test' / 'episodes' / 'episode_000000.npz'
+        self.wait_for(ep.exists, 30, 'the saved episode')
+        time.sleep(0.5)
+        d = np.load(ep)
+        self.assertLess(float(np.abs(d['action'][:, :3] - d['observation.state'][:, :3]).max()), 0.01)   # the action is the pose it was at
+        capture = _json.loads((TMP / 'datasets' / 'freedrive_test' / 'meta' / 'capture.json').read_text())
+        self.assertEqual(capture['squares'], {'scene': 0.4, 'wrist': None, 'side': 0.3})
+        send('freedrive')
+        self.wait_for(lambda: not states[-1].get('freedrive') and not free[-1], 20, 'freedrive off')
+
 
 @launch_testing.post_shutdown_test()
 class TestShutdown(unittest.TestCase):

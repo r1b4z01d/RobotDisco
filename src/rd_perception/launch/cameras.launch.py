@@ -22,6 +22,7 @@ def _nodes(context):
     wanted = [c.strip() for c in LaunchConfiguration('cameras').perform(context).split(',') if c.strip()]
     cams = config.get('sensors.usb_cameras')
     by_path = str(cams['by_path'])
+    squares = config.camera_squares()        # robot.yaml, or what the teleop page's crop sliders last set
     out = []
     for name in wanted:
         c = cams[name]
@@ -37,7 +38,7 @@ def _nodes(context):
                          'camera_name': name, 'frame_id': f'{name}_camera', 'io_method': 'mmap'}],
             arguments=['--ros-args', '--log-level', 'WARN']))
         rot = int(c.get('rotate', 0))
-        square = c.get('square')      # fraction along the upright frame's long axis, or absent = the whole frame
+        square = squares.get(name)    # fraction along the upright frame's long axis, or None = the whole frame
         # every camera, also one with nothing to rotate or cut (the wrist): /cameras/<name>/image is what everything reads
         out.append(Node(package='rd_perception', executable='image_rotate', name=f'{name}_rotate',
                         namespace=f'cameras/{name}',

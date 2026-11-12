@@ -451,21 +451,23 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
         stream = (B.stream_state if B else "") or ""
         return {
             "mode": "teleop", "running": bool(t.get("running")), "device": bool(t.get("device")), "enabled": bool(t.get("enabled")),
-            "input": "spacemouse" if t.get("device") else "no spacemouse", "task": t.get("task", ""),
+            "input": "freedrive" if t.get("freedrive") else "spacemouse" if t.get("device") else "no spacemouse", "task": t.get("task", ""),
             "recording": bool(t.get("recording")), "frames": t.get("frames", 0), "episodes": t.get("episodes", 0),
             "grasps": t.get("grasps", 1), "regrasp_open": bool(t.get("regrasp_open")), "rec_s": t.get("rec_s", 0.0),
             "save_in_flight": bool(t.get("saving")),
             "dataset": {"name": t.get("dataset", ""), "root": str(datasets_dir / t.get("dataset", "")), "storage": t.get("backend") or ""},
             "ur": {"connected": fresh and mode == "RUNNING", "ready": fresh and bool(arm.get("program_running")), "pose": pose,
                    "reach": round(math.hypot(pose[0], pose[1]), 3) if len(pose) >= 2 else None, "base_deg": None,
-                   "fault": fault, "freedrive": False, "homing": False, "mode": mode or None},
+                   "fault": fault, "freedrive": bool(t.get("freedrive")), "homing": False, "mode": mode or None},
             "hand": {"ok": bool(hand) or None, "grasp": t.get("grasp")},
             "tick": {"hz": t.get("tick_hz", 0.0), "ms": 0.0},
             "servo": {"short": "stream " + (stream.split() or ["off"])[0], "on": stream.startswith("on"), "slow": False, "detail": stream},
             "exposure": {"values": {n: c["exposure"] for n, c in ex.items() if c.get("exposure") is not None},
-                         "locked": bool(teleop_page["exposure"].get("locked")), "phase": False, "medians": {}},
-            "crop": {n: cams[n].get("square") for n in ("scene", "side") if isinstance(cams.get(n), dict) and cams[n].get("square") is not None},
-            "crop_locked": True, "last": _teleop_last(t), "status": t.get("message", ""),
+                         "locked": bool(teleop_page["exposure"].get("locked")), "phase": False,
+                         "medians": {n: m[0] for n, m in (B.cam_median if B else {}).items() if now - m[1] < 5.0}},
+            "crop": {n: v for n, v in rd_config.camera_squares().items() if v is not None},
+            "crop_locked": bool(t.get("recording") or t.get("saving") or t.get("episodes", 0) > 0),
+            "deck": bool(t.get("deck")), "last": _teleop_last(t), "status": t.get("message", ""),
         }
 
     @app.post("/api/teleop/cmd")
@@ -491,16 +493,27 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
                 fields = {"rating": int(a.get("stars", 0))} if name == "rating" else {"notes": str(a.get("text", "")).strip()}
                 ann_mod.set_episode(str(datasets_dir / last["dataset"]), int(last["ep"]), fields)
                 B.teleop_note(time.strftime("%H:%M:%S ") + f"episode {last['ep'] + 1}: {name} saved")
-        elif name == "reconnect":
-            def recover():
-                status = B.arm_power(0, 5.0)
-                r = B.arm_power(3 if status.get("safety_status") not in ("NORMAL", "REDUCED") else 1, 60.0)
-                B.teleop_note(time.strftime("%H:%M:%S ") + f"arm: {r.get('message', '')} ({r.get('robot_mode', '?')} / {r.get('safety_status', '?')})")
-            threading.Thread(target=recover, daemon=True).start()
         elif name == "crop":
-            B.teleop_note(time.strftime("%H:%M:%S ") + "the crops are fixed in robot.yaml (sensors.usb_cameras)")
-        elif name in ("freedrive", "recover_hand", "input_mode"):
-            B.teleop_note(time.strftime("%H:%M:%S ") + f"{name}: not part of 5.0's teleop")
+            cam, at = str(a.get("cam", "")), float(a.get("at", -1))
+            t = B.teleop_state()
+            squares = rd_config.camera_squares()
+            if squares.get(cam) is None or not 0.0 <= at <= 1.0:
+                note = f"crop: {cam or '?'} is not a cropped camera"
+            elif t.get("recording") or t.get("saving") or t.get("episodes", 0) > 0:
+                note = f"crop: fixed, the dataset {t.get('dataset') or ''} already has episodes cut at {squares[cam]:.2f} (choose a new dataset name first)"
+            else:
+                r = B.set_camera_square(cam, at)
+                if r["success"]:
+                    squares[cam] = at
+                    f = rd_config.camera_squares_file()
+                    f.parent.mkdir(parents=True, exist_ok=True)
+                    f.write_text(json.dumps({k: v for k, v in squares.items() if v is not None}, indent=1))
+                    note = f"crop {cam}: {at:.2f} (kept in {f.name}; datasets and policies must agree on it)"
+                else:
+                    note = f"crop {cam}: {r['message']}"
+            B.teleop_note(time.strftime("%H:%M:%S ") + note)
+        elif name == "input_mode":
+            B.teleop_note(time.strftime("%H:%M:%S ") + "the SpaceMouse (or freedrive) is the only input")
         else:
             B.teleop_cmd(name, a)
         return {"ok": True}

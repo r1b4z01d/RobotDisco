@@ -162,6 +162,8 @@
   function renderTeleop(st) {
     $("#btn-rec").classList.toggle("on", !!st.recording);
     $("#btn-home").classList.toggle("on", !!(st.ur || {}).homing);
+    $("#btn-free").classList.toggle("on", !!(st.ur || {}).freedrive);
+    pill("#pill-deck", st.deck ? "deck ok" : "no deck", st.deck ? "ok" : "");
     const tb = $("#btn-teleop"); tb.classList.toggle("on", !!st.enabled); tb.textContent = st.enabled ? "TELEOP ON" : "TELEOP OFF";
     pill("#pill-sm", st.running === false ? "teleop node down" : st.device ? "puck ok" : "no puck", st.running === false ? "bad" : st.device ? "ok" : "warn");
     const rs = $("#rec-state"); rs.textContent = st.recording ? "● REC" : (st.save_in_flight ? "finalizing…" : "idle"); rs.className = st.recording ? "on" : "";
@@ -187,7 +189,7 @@
       val.textContent = v == null ? "off" : Number(v).toFixed(2);
       inp.disabled = !!st.crop_locked;
     });
-    $("#crop-note").textContent = st.crop_locked ? "fixed (robot.yaml)" : "live";
+    $("#crop-note").textContent = st.crop_locked ? "fixed (dataset has episodes)" : "live";
   }
 
   function renderEval(st) {
@@ -254,7 +256,7 @@
     inp.addEventListener("change", () => cmd("crop", { cam: inp.dataset.crop, at: inp.value / 100 }));
   });
   const KEYS = {
-    teleop: { r: ["rec"], s: ["save"], d: ["discard"], h: ["home"], g: ["grasp_mark"],
+    teleop: { r: ["rec"], s: ["save"], d: ["discard"], h: ["home"], f: ["freedrive"], g: ["grasp_mark"],
       o: ["grasp", { delta: -0.06 }], c: ["grasp", { delta: 0.06 }], "1": ["rating", { stars: 1 }], "2": ["rating", { stars: 2 }],
       "3": ["rating", { stars: 3 }], "4": ["rating", { stars: 4 }], "5": ["rating", { stars: 5 }] },
     eval: { p: ["play"], " ": ["play"], f: ["freedrive"], r: ["reset"], h: ["home"], n: ["newrun"], o: ["open_hand"], c: ["close_hand"],
