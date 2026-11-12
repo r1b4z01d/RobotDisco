@@ -288,3 +288,66 @@ def test_chunk_scheduler_retries_a_failed_prefetch_and_passes_the_tail():
     assert calls[1] == (1, [(0, 1), (0, 2), (0, 3)])               # the prefetch got the outgoing chunk from its own step on
     one = ChunkScheduler(_chunk_policy()[0], horizon=1, prefetch_at=2, log=lambda m: None)   # nothing to refill ahead of
     assert [one.next_action(i) for i in range(3)] == [(0, 0), (1, 0), (2, 0)] and one.stats["inline"] == 3
+
+
+def test_spacemouse_reports():
+    import struct
+    from rd_vla.spacemouse import SpaceMouseState, normalise
+    assert normalise(0, 350, 0.12) == 0.0 and normalise(30, 350, 0.12) == 0.0            # inside the deadband
+    assert abs(normalise(350, 350, 0.12) - 1.0) < 1e-9 and abs(normalise(-700, 350, 0.12) + 1.0) < 1e-9
+    assert 0.0 < normalise(60, 350, 0.12) < 0.07                                          # ramps from the deadband's edge
+    s = SpaceMouseState()
+    s.feed(bytes([1]) + struct.pack("<hhh", 350, -350, 0))                                # translation
+    s.feed(bytes([2]) + struct.pack("<hhh", 0, 175, -350))                                # rotation
+    assert s.axes["x"] == 1.0 and s.axes["y"] == -1.0 and s.axes["z"] == 0.0
+    assert s.axes["roll"] == 0.0 and 0.4 < s.axes["pitch"] < 0.5 and s.axes["yaw"] == -1.0
+    s.feed(bytes([1]) + struct.pack("<hhhhhh", 0, 0, 350, 350, 0, 0))                     # both in one report
+    assert s.axes["x"] == 0.0 and s.axes["z"] == 1.0 and s.axes["roll"] == 1.0 and s.axes["yaw"] == 0.0
+    s.feed(bytes([3, 0b10])); assert s.buttons[:2] == [0, 1]
+    s.feed(bytes([23, 1, 2])); s.feed(b""); assert s.reports == 4                         # battery and such: ignored
+    s.zero(); assert not any(s.axes.values()) and not any(s.buttons)
+
+
+def test_spacemouse_finds_only_spacemice(tmp_path):
+    from rd_vla.spacemouse import find_nodes
+    for name, hid_id in (("hidraw0", "0003:00008086:00000B3A"), ("hidraw4", "0003:0000256F:0000C652"),
+                         ("hidraw9", "0003:0000046D:0000C534"), ("hidraw11", "0003:0000046D:0000C626")):
+        d = tmp_path / name / "device"
+        d.mkdir(parents=True)
+        (d / "uevent").write_text(f"DRIVER=hid-generic\nHID_ID={hid_id}\nHID_NAME=x\n")
+    # 3Dconnexion's own id, and the old Logitech-branded SpaceNavigator; never Logitech's mouse receiver
+    assert find_nodes(str(tmp_path)) == ["/dev/hidraw11", "/dev/hidraw4"]
+
+
+def test_teleop_integration_and_grasp():
+    import importlib.util
+    import math
+    import re
+    # the two pure functions, without importing rclpy: lifted out of the module's source
+    src = (Path(__file__).resolve().parents[1] / "rd_vla" / "teleop.py").read_text()
+    from rd_vla.geometry import quat_to_rotvec, rotvec_to_quat
+    ns = {"quat_to_rotvec": quat_to_rotvec, "rotvec_to_quat": rotvec_to_quat}
+    start, end = src.index("AXIS_MAP = "), src.index("class Teleop")
+    exec(src[start:end], ns)
+    integrate, step_grasp, amap = ns["integrate"], ns["step_grasp"], ns["AXIS_MAP"]
+    still = dict.fromkeys(("x", "y", "z", "roll", "pitch", "yaw"), 0.0)
+    home = [0.1, 0.2, 0.9, 0.0, 0.0, 0.0]
+    assert integrate(home, still, amap, 0.131, 0.45, 1 / 12) == home                      # puck at rest: nothing moves
+    out = integrate(home, {**still, "x": 1.0, "z": -1.0}, amap, 0.12, 0.45, 0.5)          # the map inverts x and z
+    assert abs(out[0] - (0.1 - 0.06)) < 1e-9 and abs(out[2] - (0.9 + 0.06)) < 1e-9 and out[1] == 0.2 and out[3:] == [0.0, 0.0, 0.0]
+    out = integrate(home, {**still, "pitch": 1.0}, amap, 0.12, 0.5, 1.0)                  # puck pitch -> robot yaw, sign -1
+    assert out[:3] == home[:3] and abs(out[5] + 0.5) < 1e-6 and abs(out[3]) < 1e-9 and abs(out[4]) < 1e-9
+    # rotations compose about the BASE axes: a quarter turn about z, then a quarter turn about base x
+    pose = [0, 0, 0, 0.0, 0.0, math.pi / 2]
+    out = integrate(pose, {**still, "yaw": -1.0}, amap, 0.0, math.pi / 2, 1.0)            # puck yaw -> robot roll, sign -1: +90 deg about x
+    q = rotvec_to_quat(out[3:])
+    # the tool's x axis, turned to +y by the first rotation, now points along +z
+    x, y, z, w = q
+    tool_x = (1 - 2 * (y * y + z * z), 2 * (x * y + z * w), 2 * (x * z - y * w))
+    assert abs(tool_x[0]) < 1e-6 and abs(tool_x[1]) < 1e-6 and abs(tool_x[2] - 1.0) < 1e-6
+    g = 0.0
+    for _ in range(5):
+        g = step_grasp(g, [1, 0], 0.104, 0.060)
+    assert abs(g - 0.52) < 1e-9 and step_grasp(g, [0, 1], 0.104, 0.060) == g - 0.060
+    assert step_grasp(g, [1, 1], 0.1, 0.1) == g and step_grasp(g, [], 0.1, 0.1) == g      # both or none: hold
+    assert step_grasp(0.98, [1, 0], 0.104, 0.06) == 1.0 and step_grasp(0.03, [0, 1], 0.104, 0.06) == 0.0

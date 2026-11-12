@@ -5,7 +5,10 @@ teleop, the checkpoint and eval registries. Observations and actions keep v1's c
 10-D action (EE pose + 4 curls), a 16-D state, three cameras.
 
 ```
-ros2 launch rd_vla vla.launch.py                       # robot: smolvla server + runner under the LeRobot venv's python, teleop
+ros2 launch rd_vla vla.launch.py                       # robot: smolvla server + runner + SpaceMouse teleop under the LeRobot venv's python
+ros2 param set /vla_teleop dataset tigger_2 ; ros2 param set /vla_teleop task "Grab and hold tigger"     # recording a demonstration:
+ros2 service call /teleop/enable std_srvs/srv/SetBool "{data: true}"      # the puck now moves the arm
+ros2 service call /teleop/episode/start std_srvs/srv/Trigger ; ros2 service call /teleop/episode/save std_srvs/srv/Trigger
 ros2 launch rd_sim sim.launch.py vla_backend:=smolvla vla_ckpt:=tigger_1_merged_smolvla_1   # GPU box: the real policy against Isaac Sim
 ros2 launch rd_vla vla.launch.py backend:=fake         # rig
 ros2 action send_goal /run_policy rd_interfaces/action/RunPolicy "{task: 'pick up tigger', checkpoint: tigger_1_merged_smolvla_1, max_seconds: 60, record: true, done_when: closed}" --feedback
@@ -18,7 +21,7 @@ python3 -m rd_vla.infer_server --backend fake          # the server alone (ROS-f
 | `rd_vla/observer.py` | cameras (rgb8 topics, no cv_bridge), `/joint_states`, TF `ur_base → ur_tool0` as a rotation vector (the UR controller's base frame, see Frames), `/hand/state` → the 16-D state | `ur_amazinghand_robot.py`, `eval_hw.py observe()` |
 | `rd_vla/policy_runner.py` | `RunPolicy`: select the checkpoint, `/arm/go_home`, streaming on, the loop at `fps` with the step and workspace clamps, `done_when` by grasp level, cancel, recording, the eval.json | `eval_hw.py`, `vla_action.py` |
 | `rd_vla/recorder.py` | LeRobot v3 episode writer (each camera keeps its own frame size, as v1's sets: scene and side 540x540 squares, the wrist 540x960), with an npz fallback where lerobot is absent | `manual_panel.py`'s SimSession |
-| `rd_vla/teleop.py` | `/joy` → `/arm/target_pose` + `/hand/curls` through the streamer | `gamepad.py` + the panel |
+| `rd_vla/teleop.py` + `spacemouse.py` | the SpaceMouse (read from hidraw, no pip module) → `/arm/target_pose` + `/hand/curls` through the streamer, and the recording of demonstrations: `/teleop/enable`, `/teleop/home`, `/teleop/episode/start` / `save` / `discard`, parameters `dataset` and `task`, `/teleop/state`. The only arm teleop device; v1's gamepad and freedrive inputs are not ported | `spacemouse.py` + `manual_panel.py`'s SpaceMouse path |
 | `rd_vla/checkpoints.py`, `evals.py` | `run[@step]` resolution under `$RD_DATA_DIR`/outputs/train (a run copied without its `last` symlink resolves to its newest step) and the serve link; the eval registry rd_manager shows | `services.py`, `webui/evals.py` |
 
 Tests (`rig/rig.sh test rd_vla`): schema / geometry / wire RPC against the fake server / checkpoints / registry /

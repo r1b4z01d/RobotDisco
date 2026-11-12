@@ -40,7 +40,7 @@ def generate_test_description():
                                    launch_arguments=[('sim_mode', 'true')])
     vla = IncludeLaunchDescription(PythonLaunchDescriptionSource(get_package_share_directory('rd_vla') + '/launch/vla.launch.py'),
                                    launch_arguments=[('backend', 'fake'), ('python', 'python3'), ('device', 'cpu'),
-                                                     ('teleop', 'false'), ('fake_close_after', '8')])
+                                                     ('teleop', 'true'), ('teleop_debug_input', 'true'), ('fake_close_after', '8')])
     cams = Node(package='rd_perception', executable='fake_cameras', name='fake_cameras')
     return launch.LaunchDescription([rsp, arm, vla, cams, launch_testing.actions.ReadyToTest()]), {}
 
@@ -109,6 +109,71 @@ class TestVla(unittest.TestCase):
         res = fut.result().get_result_async()
         self.wait_for(res.done, 30, 'the run to time out')
         self.assertEqual(res.result().result.message, 'timeout')
+
+    def test_3_teleop_moves_the_arm_and_records_an_episode(self):
+        """The SpaceMouse teleop with the rig's topic for a puck: enabled, a deflection moves the tool and a held
+        button closes the hand; an episode recorded meanwhile holds the frames with the commanded pose as the action."""
+        import numpy as np
+        from geometry_msgs.msg import PoseStamped
+        from rcl_interfaces.msg import Parameter, ParameterType, ParameterValue
+        from rcl_interfaces.srv import SetParameters
+        from std_srvs.srv import SetBool, Trigger
+        node = self.node
+        targets = []
+        node.create_subscription(PoseStamped, '/arm/target_pose', targets.append, 10)
+        puck = node.create_publisher(Float32MultiArray, '/teleop/debug_input', 10)
+
+        def call(srv_type, name, req):
+            cl = node.create_client(srv_type, name)
+            self.assertTrue(cl.wait_for_service(timeout_sec=30), name)
+            f = cl.call_async(req)
+            rclpy.spin_until_future_complete(node, f, timeout_sec=30)
+            self.assertIsNotNone(f.result(), name)
+            return f.result()
+
+        def push(seconds, x=0.0, close=0.0):
+            end = time.monotonic() + seconds
+            while time.monotonic() < end:
+                puck.publish(Float32MultiArray(data=[x, 0.0, 0.0, 0.0, 0.0, 0.0, close, 0.0]))
+                rclpy.spin_once(node, timeout_sec=0.05)
+
+        strings = lambda **kw: [Parameter(name=k, value=ParameterValue(type=ParameterType.PARAMETER_STRING, string_value=v)) for k, v in kw.items()]  # noqa: E731
+        call(SetParameters, '/vla_teleop/set_parameters', SetParameters.Request(parameters=strings(dataset='teleop_test', task='pick up tigger')))
+        r = call(Trigger, '/teleop/episode/start', Trigger.Request())
+        self.assertFalse(r.success, 'recording must not start while teleop is off')
+        push(1.0, x=1.0)
+        self.assertEqual(targets, [], 'the puck moved the arm while teleop was off')
+        r = call(SetBool, '/teleop/enable', SetBool.Request(data=True))
+        self.assertTrue(r.success, r.message)
+        push(1.0)
+        self.assertTrue(targets, 'no target pose while enabled')
+        x0, q0 = targets[-1].pose.position.x, dict(self.q)
+        r = call(Trigger, '/teleop/episode/start', Trigger.Request())
+        self.assertTrue(r.success, r.message)
+        self.hand.clear()
+        push(3.0, x=1.0, close=1.0)
+        # robot x = -puck x (the axis map); the target leads the tool by at most a step, so it moved with the arm
+        self.assertLess(targets[-1].pose.position.x, x0 - 0.05, 'the target did not move along -x')
+        self.assertGreater(max(abs(self.q[j] - q0[j]) for j in q0 if j.startswith('ur_')), 0.02, 'the arm did not follow')
+        self.assertTrue(self.hand and max(self.hand[-1].data) > 0.5, 'the held button did not close the hand')
+        r = call(Trigger, '/teleop/episode/save', Trigger.Request())
+        self.assertTrue(r.success, r.message)
+        ep = TMP / 'datasets' / 'teleop_test' / 'episodes' / 'episode_000000.npz'
+        self.wait_for(ep.exists, 30, 'the saved episode')
+        time.sleep(0.5)
+        d = np.load(ep)
+        n = d['action'].shape[0]
+        self.assertGreaterEqual(n, 20)
+        self.assertEqual(d['action'].shape, (n, 10)); self.assertEqual(d['observation.state'].shape, (n, 16))
+        self.assertLess(d['action'][-1, 0], d['action'][0, 0] - 0.05)             # the commanded x, as recorded
+        self.assertGreater(d['action'][-1, 6], d['action'][0, 6] + 0.5)           # the curls closing
+        self.assertEqual({k for k in d.files if k.startswith('observation.images.')},
+                         {'observation.images.scene', 'observation.images.wrist', 'observation.images.side'})
+        self.assertTrue(call(SetBool, '/teleop/enable', SetBool.Request(data=False)).success)
+        push(0.5, x=1.0)                       # what was already on its way arrives
+        n_targets = len(targets)
+        push(1.0, x=1.0)
+        self.assertEqual(len(targets), n_targets, 'targets kept coming after teleop was switched off')
 
 
 @launch_testing.post_shutdown_test()
