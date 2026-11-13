@@ -115,3 +115,11 @@ def test_battery_alerts_hold_then_speak_once_and_repeat_only_when_critical():
     assert all(quiet.update(1.0, t) is None for t in range(0, 100, 5))       # no levels configured: never
     assert sentence("low", 22.5, None) == "My battery is low, 22.5 volts."
     assert "20 percent" in sentence("critical", 21.0, 0.2) and "charge me" in sentence("critical", 21.0, 0.2)
+
+
+def test_battery_levels_in_robot_yaml_are_in_order():
+    from rd_bringup import config
+    b = config.get("battery")
+    assert b["empty_v"] < b["critical_v"] < b["low_v"] < b["full_v"]
+    cells = round(b["full_v"] / 4.2)                         # lithium-ion: 4.2 V a cell when full
+    assert abs(b["full_v"] - cells * 4.2) < 0.05 and 3.0 <= b["empty_v"] / cells <= 3.5

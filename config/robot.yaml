@@ -79,11 +79,12 @@ battery:                          # the monitor board on the pack: ESP32 + INA22
   ports:
     udp: 8889
   current_sign: 1                 # -1 if the shunt is wired so that discharge reads positive (/battery: negative = discharging)
-  # The pack's own voltages. Until they are set rd_base's battery_monitor reports volts and amps and warns about nothing.
-  full_v: null                    # resting voltage fully charged     } the percentage, linear between the two
-  empty_v: null                   # where the pack counts as empty    }
-  low_v: null                     # "my battery is low", said once
-  critical_v: null                # "please charge me now", repeated every five minutes
+  # The pack: 10S10P lithium-ion (Bryan, 2026-11-12): 42.0 V full, 36 V nominal. Per cell: full 4.20, low 3.50,
+  # critical 3.35, counted empty at 3.30 (the BMS cuts off lower still; below 3.3 V a cell has almost nothing left).
+  full_v: 42.0                    # resting voltage fully charged     } the percentage, linear between the two: a rough
+  empty_v: 33.0                   # where the pack counts as empty    } gauge, a lithium cell's curve is flat in the middle
+  low_v: 35.0                     # "my battery is low", said once (roughly 15 to 20 % left)
+  critical_v: 33.5                # "please charge me now", repeated every five minutes
 
 sensors:
   velodyne:
