@@ -176,6 +176,9 @@ def start_training(repo_root: str, datasets_dir: str, dataset_name: str,
     """
     import sys
 
+    # the interpreter with lerobot: the manager itself runs under the system python, which has none (the first
+    # training started from 5.0's console, 2026-11-12, would have died on its first import)
+    python = os.environ.get("RD_VLA_PYTHON") or ("/opt/vla/bin/python" if os.path.exists("/opt/vla/bin/python") else sys.executable)
     active = _running_runs()
     if active:
         raise ValueError(f"a training run is already active ({', '.join(sorted(active))}); "
@@ -231,12 +234,12 @@ def start_training(repo_root: str, datasets_dir: str, dataset_name: str,
         # to 47 % — a policy that mostly practises retrying. Aim for roughly a fifth to a third.
         share = _regrasp_share(root, info)
         weight = 3 if share < 0.10 else 2 if share < 0.20 else 1   # 1 = report only, no oversampling
-        cmd = [sys.executable, os.path.join("scripts", "train_regrasp.py"), "--regrasp-weight", str(weight),
+        cmd = [python, os.path.join(os.path.dirname(os.path.abspath(__file__)), "trainers", "train_regrasp.py"), "--regrasp-weight", str(weight),
                "--policy.path=lerobot/smolvla_base", f"--rename_map={json.dumps(rename)}"] + common
         extra = {"regrasp_share": round(share, 3), "regrasp_weight": weight}
     else:
         extra = {}
-        cmd = [sys.executable, "-m", "lerobot.scripts.lerobot_train", f"--policy.type={policy_type}"] + common
+        cmd = [python, "-m", "lerobot.scripts.lerobot_train", f"--policy.type={policy_type}"] + common
 
     # Memory cap: a transient systemd user unit with MemoryMax, so a dataloader blow-up kills THIS run
     # and not the login session / web UI / SSH (the 2026-09-24 reboot). systemd-run --user needs the
@@ -323,3 +326,35 @@ def checkpoint_dir(repo_root: str, name: str, step: str | None = None) -> str:
         raise ValueError(f"{name} has no checkpoints")
     step = step if (step and step in ckpts) else ckpts[-1]
     return os.path.join(run, "checkpoints", step, "pretrained_model")
+
+
+def push_checkpoint(repo_root: str, name: str, step: str | None = None, dest: str | None = None) -> dict[str, Any]:
+    """Copy one checkpoint of a run to the robot (rsync over ssh), where the policy server can then be told to serve
+    it. Only the pretrained_model folder travels (the weights and configs: about a gigabyte), with the run's
+    capture.json; the training state and the other steps stay here. `dest` is the robot's train folder,
+    <user>@<ip>:<data>/outputs/train by default (robot.yaml); a local path works too (the tests)."""
+    _guard_name(name)
+    src = checkpoint_dir(repo_root, name, step)
+    step_name = os.path.basename(os.path.dirname(os.path.realpath(src)))
+    if dest is None:
+        from rd_bringup import config as _cfg
+        dest = f"{_cfg.get('robot.user', 'rd')}@{_cfg.get('robot.ip')}:{_cfg.get('robot.data', '/mnt/data')}/outputs/train"
+    target = f"{dest.rstrip('/')}/{name}/checkpoints/{step_name}/pretrained_model/"
+    remote = ":" in dest and not dest.startswith("/")
+    mk = f"{dest.split(':', 1)[1].rstrip('/')}/{name}/checkpoints/{step_name}/pretrained_model" if remote else target
+    if remote:
+        r = subprocess.run(["ssh", "-o", "ConnectTimeout=8", "-o", "BatchMode=yes", dest.split(":", 1)[0], f"mkdir -p {subprocess.list2cmdline([mk])}"],
+                           capture_output=True, text=True, timeout=30)
+        if r.returncode != 0:
+            raise RuntimeError(f"the robot is not reachable: {r.stderr.strip()[:200]}")
+    else:
+        os.makedirs(mk, exist_ok=True)
+    r = subprocess.run(["rsync", "-a", "--info=stats1", "-e", "ssh -o ConnectTimeout=8 -o BatchMode=yes",
+                        os.path.realpath(src) + "/", target], capture_output=True, text=True, timeout=3600)
+    if r.returncode != 0:
+        raise RuntimeError(f"rsync failed: {r.stderr.strip()[:300]}")
+    capture = os.path.join(_train_dir(repo_root), name, "capture.json")
+    if os.path.isfile(capture):
+        subprocess.run(["rsync", "-a", "-e", "ssh -o ConnectTimeout=8 -o BatchMode=yes", capture, f"{dest.rstrip('/')}/{name}/"],
+                       capture_output=True, text=True, timeout=60)
+    return {"ok": True, "run": name, "step": step_name, "pushed_to": target, "spec": f"{name}@{step_name}"}

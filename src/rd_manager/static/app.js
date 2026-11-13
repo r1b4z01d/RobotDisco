@@ -880,11 +880,22 @@ function modelCard(m) {
   } else {
     foot.append(
       el("a", { class: "btn tiny", href: `/api/models/${encodeURIComponent(m.name)}/download` }, "⬇ download"),
+      el("button", { class: "btn tiny", title: "copy the newest checkpoint to the robot and make it the one it serves", onclick: () => doPushModel(m) }, "→ robot"),
       el("button", { class: "btn tiny", onclick: () => doRenameModel(m.name) }, "rename"),
       el("button", { class: "btn tiny danger", onclick: () => doDeleteModel(m.name) }, "delete"));
   }
   card.append(foot);
   return card;
+}
+async function doPushModel(m) {
+  const steps = m.checkpoints || [];
+  const v = await modal({ title: `Send "${m.name}" to the robot`, submit: "Send",
+    fields: [{ name: "step", label: `checkpoint (${steps.join(", ") || "none"}); empty = the newest`, type: "text", value: "" }] });
+  if (!v) return;
+  try {
+    const r = await post(`/api/models/${encodeURIComponent(m.name)}/push`, { step: v.step || null });
+    ok(`${r.spec} copied to the robot` + (r.served ? " and served" : r.serve_error ? ` (not served: ${r.serve_error})` : ""));
+  } catch (e) { err(e); }
 }
 async function doRenameModel(name) {
   const v = await modal({ title: `Rename model "${name}"`, submit: "Rename",

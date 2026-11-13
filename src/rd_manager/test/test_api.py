@@ -230,3 +230,12 @@ def test_teleop_page_and_its_config(client):
     assert client.get("/api/teleop").json()["running"] is False                   # no ROS in this test
     assert client.post("/api/teleop/cmd", json={"name": "rec"}).status_code == 503
     assert client.get("/api/robot").json()["url"].endswith("/teleop/")
+
+
+def test_dataset_import_passes_the_pages_fields(client, tmp_path):
+    src = tmp_path / "elsewhere" / "ds_a"
+    (src / "meta").mkdir(parents=True)
+    (src / "meta" / "info.json").write_text("{}")
+    r = client.post("/api/datasets/add", json={"remote": None, "source": str(src), "as_name": "ds_copy"})
+    assert r.status_code == 200 and r.json()["name"] == "ds_copy"       # was a TypeError: the server passed name=
+    assert client.post("/api/datasets/add", json={"remote": None, "source": None, "as_name": None}).status_code == 400

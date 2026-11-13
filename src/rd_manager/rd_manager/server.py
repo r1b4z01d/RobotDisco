@@ -1134,7 +1134,10 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
 
     @app.post("/api/datasets/add")
     def api_add(payload: dict = Body(...)):
-        return _run(ops_mod.add_dataset, str(datasets_dir), source=payload.get("source"), name=payload.get("name"))
+        # the page sends {remote, source, as_name}; this passed `name=`, a keyword add_dataset does not have, so every
+        # import from the robot failed with a TypeError (found by the first end-to-end check, 2026-11-12)
+        return _run(ops_mod.add_dataset, str(datasets_dir), source=payload.get("source") or None,
+                    remote=payload.get("remote") or None, as_name=payload.get("as_name") or payload.get("name") or None)
 
     @app.post("/api/datasets/{name}/train")
     def api_train(name: str, payload: dict = Body(default={})):
@@ -1153,6 +1156,19 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
     @app.post("/api/models/{name}/delete")
     def api_model_delete(name: str, payload: dict = Body(default={})):
         return _run(models_mod.delete_model, str(Path(data_dir)), _guard(name))
+
+    @app.post("/api/models/{name}/push")
+    def api_model_push(name: str, payload: dict = Body(default={})):
+        """GPU box: copy a run's checkpoint to the robot and, unless {serve: false}, make it the one the robot serves."""
+        out = _run(models_mod.push_checkpoint, str(Path(data_dir)), _guard(name), payload.get("step") or None, payload.get("dest") or None)
+        if payload.get("serve", True) and not payload.get("dest") and robot_url:
+            try:
+                import urllib.request
+                req = urllib.request.Request(f"{robot_url}/api/models/{name}/serve", json.dumps({"step": out["step"]}).encode(), {"Content-Type": "application/json"})
+                out["served"] = json.loads(urllib.request.urlopen(req, timeout=10).read()).get("served")
+            except Exception as e:  # noqa: BLE001  copied, but the robot's manager did not answer
+                out["serve_error"] = str(e)
+        return out
 
     @app.post("/api/models/{name}/serve")
     def api_model_serve(name: str, payload: dict = Body(default={})):

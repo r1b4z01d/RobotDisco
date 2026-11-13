@@ -19,9 +19,10 @@ ros2 launch rd_manager manager.launch.py sim_mode:=true                # the rig
 | `supervisor.py` | supervisord over XML-RPC, the ordered base restart, the activity log; a fake supervisord for the rig | `webui/server.py` |
 | `grids.py`, `capture.py` | map / costmap PNGs, the stitched landmark photo | `route_editor.py` |
 | `panels.py` | the Panels tab's server side: `/api/panels` (the WLED's matrix, segments and effects from its JSON API) and `/ws/panels`, one shared connection to the WLED's live pixel stream relayed to every open tab (the WLED serves a single live client); the address is robot.yaml `panels`, `--panels-url` overrides | `webui/server.py` (2026-11-09, v1's last change) |
-| `datasets.py`, `models.py`, `ops.py`, `annotations.py` | LeRobot datasets, training runs, episode ops | `webui/` unchanged |
+| `datasets.py`, `models.py`, `ops.py`, `annotations.py` | LeRobot datasets, training runs, episode ops. Training runs under the LeRobot venv's python (`/opt/vla/bin/python` or `$RD_VLA_PYTHON`), not the manager's own; `models.push_checkpoint` (the Models tab's "→ robot") copies a checkpoint's `pretrained_model` to the robot and has it served | `webui/` |
+| `trainers/` | `train_regrasp.py` (v1's wrapper that oversamples flagged re-grasp stretches) and `hf_cache.py`, launched by file path. In their own folder because a script's folder is first on sys.path and `rd_manager/datasets.py` would shadow Hugging Face's `datasets` | `scripts/train_regrasp.py`, `ur5e_lerobot/hf_cache.py` |
 | `exposure.py` | the policy cameras' exposure and white balance through v4l2-ctl: v1's auto / − / + / lock keys, all cameras or one | `sensors/cameras.py` |
-| `static/pages/robot/` | the VLA Teleop tab: v1's teleop page ported (REC / SAVE / DISCARD / HOME / +GRASP, hold-to-open and close, the three cameras, dataset and task, exposure, the last episode's stars and notes, the log). It talks to `/api/teleop/config`, `/api/teleop/cmd` and the `/api/teleop/events` stream, which the server composes from rd_vla's teleop node (`/teleop/state`, `/teleop/log`), the arm's status and the cameras. New: a TELEOP ON / OFF button (nothing moves while off). FREEDRIVE, the hand's power-cycle, the crop sliders (free until the dataset has an episode, kept in `<data>/outputs/camera_squares.json`) and the brightness medians are there too. Not ported: holding a camera tile to see the uncropped frame | `webui/static/robot`, `ur5e_lerobot/ui/webpanel.py` |
+| `static/pages/robot/` | the VLA Teleop tab: v1's teleop page ported (REC / SAVE / DISCARD / HOME / +GRASP, hold-to-open and close, the three cameras, dataset and task, exposure, the last episode's stars and notes, the log). It talks to `/api/teleop/config`, `/api/teleop/cmd` and the `/api/teleop/events` stream, which the server composes from rd_vla's teleop node (`/teleop/state`, `/teleop/log`), the arm's status and the cameras. New: a TELEOP ON / OFF button (nothing moves while off). FREEDRIVE, the hand's power-cycle, the crop sliders (free until the dataset has an episode, kept in `<data>/outputs/camera_squares.json`) and the brightness medians are there too. Holding the scene or side tile shows the whole upright frame with the crop drawn in (`/cam/<cam>.raw.jpg`) | `webui/static/robot`, `ur5e_lerobot/ui/webpanel.py` |
 | `static/` | `index.html` + `app.js` (the manager), `pages/live.html` (2D), `pages/map3d.html` (3D, vendored three.js), `pages/arm.html`, `pages/folks.html` | the v1 pages; the Robot / Routes / Folks tabs now embed this server's own pages |
 
 Not ported: the route tools (centre / densify from `record_path.py`), the Hand tab's firmware gestures and
@@ -37,3 +38,10 @@ the last tab leaves). Checked read-only against the real WLED on 2026-11-09: 64x
 thinned preview at 19 frames a second. The Live tab's text box sends typed text to the voice
 assistant exactly as if Whisper had heard it (`POST /api/voice/text` -> `/voice/text_in`, so the wake phrase applies:
 "Robot Disco, what time is it") and shows what it heard and answered (`/api/voice`, timestamped).
+
+Training path checked on the GPU box (2026-11-12, RTX 4090, the console on a spare port, `tigger_1_merged`): the Train
+button's request started a 30-step SmolVLA fine-tune at batch 4 (5 to 7 steps a second), checkpoints 000015 and
+000030 appeared and the Models list showed them, the checkpoint was pushed to a stand-in folder (865 MB) and
+`rd_vla`'s backend resolved it there and served an action. Three faults found on the way and fixed: the launcher used
+the manager's own python (no lerobot), `scripts/train_regrasp.py` did not exist in 5.0, and the dataset import passed
+a keyword `add_dataset` does not have. Not yet tried: the import from the real robot and the push to it (it was off).

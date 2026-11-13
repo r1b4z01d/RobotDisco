@@ -168,3 +168,58 @@ def test_exposure_keys_of_the_teleop_page():
     assert up > s["cameras"]["side"]["exposure"]
     assert exposure.adjust(cfg, "auto", None, run)["locked"] is False
     assert exposure.adjust(cfg, "lock", None, run)["locked"] is True
+
+
+def test_training_runs_under_the_lerobot_python_and_its_own_script(tmp_path, monkeypatch):
+    import json as _json
+    from rd_manager import models
+    ds = tmp_path / "outputs" / "datasets" / "demo"
+    (ds / "meta").mkdir(parents=True)
+    (ds / "meta" / "info.json").write_text(_json.dumps({"total_episodes": 2, "total_frames": 100, "features": {
+        "observation.images.scene": {}, "observation.images.wrist": {}, "observation.images.side": {}}}))
+    monkeypatch.setenv("RD_VLA_PYTHON", "/somewhere/vla/bin/python")
+    monkeypatch.setattr(models, "_running_runs", lambda: set())
+    r = models.start_training(str(tmp_path), str(tmp_path / "outputs" / "datasets"), "demo", "smolvla", 30, 4, 15, dry_run=True)
+    cmd = r["command"].split()
+    assert cmd[0] == "/somewhere/vla/bin/python"                      # not the manager's own interpreter, which has no lerobot
+    script = Path(cmd[1])
+    assert script.name == "train_regrasp.py" and script.is_file() and script.is_absolute()
+    # the script's folder is first on sys.path when it runs: nothing in it may shadow a library lerobot imports
+    assert {p.name for p in script.parent.glob("*.py")} == {"__init__.py", "train_regrasp.py", "hf_cache.py"}
+    assert "--policy.path=lerobot/smolvla_base" in cmd and "--steps=30" in cmd and r["run"] == "demo_smolvla"
+
+
+def test_push_checkpoint_copies_only_the_served_part(tmp_path):
+    from rd_manager import models
+    run = tmp_path / "outputs" / "train" / "run_a"
+    for step in ("000010", "000020"):
+        pm = run / "checkpoints" / step / "pretrained_model"
+        pm.mkdir(parents=True)
+        (pm / "config.json").write_text('{"type": "smolvla"}')
+        (pm / "model.safetensors").write_bytes(step.encode())
+        (run / "checkpoints" / step / "training_state").mkdir()
+        (run / "checkpoints" / step / "training_state" / "optimizer.bin").write_bytes(b"x" * 10)
+    (run / "capture.json").write_text("{}")
+    dest = tmp_path / "robot" / "outputs" / "train"
+    r = models.push_checkpoint(str(tmp_path), "run_a", None, str(dest))
+    assert r["step"] == "000020" and r["spec"] == "run_a@000020"
+    got = dest / "run_a" / "checkpoints" / "000020" / "pretrained_model"
+    assert (got / "model.safetensors").read_bytes() == b"000020" and (dest / "run_a" / "capture.json").is_file()
+    assert not (dest / "run_a" / "checkpoints" / "000020" / "training_state").exists()
+    assert not (dest / "run_a" / "checkpoints" / "000010").exists()
+    assert models.push_checkpoint(str(tmp_path), "run_a", "000010", str(dest))["step"] == "000010"
+    from rd_vla import checkpoints
+    assert checkpoints.resolve("run_a", dest).parent.name == "000020"       # what the robot's server would load
+
+
+def test_uncropped_view_draws_the_square_on_the_upright_frame():
+    from rd_manager.ros_bridge import upright_with_square
+    frame = np.full((720, 1280, 3), 100, np.uint8)                       # as the camera gives it: landscape
+    out = upright_with_square(frame, "scene", squares={"scene": 0.4}, rotate=270)
+    assert out.shape == (640, 360, 3)                                    # turned upright, half size
+    off = int(round((640 - 360) * 0.4))
+    assert tuple(out[off + 180, 180]) == (100, 100, 100)                 # inside the square: as it is
+    assert tuple(out[off + 1, 180]) == (255, 200, 0)                     # its edge
+    assert tuple(out[5, 180]) == (50, 50, 50) and tuple(out[635, 180]) == (50, 50, 50)     # outside it: dimmed
+    whole = upright_with_square(frame, "wrist", squares={"wrist": None}, rotate=0)
+    assert whole.shape == (360, 640, 3) and (whole == 100).all()         # an uncropped camera: nothing drawn

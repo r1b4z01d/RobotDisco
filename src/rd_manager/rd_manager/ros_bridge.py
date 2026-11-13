@@ -28,6 +28,8 @@ NAV_TOPICS = {"plan": "/plan", "local_plan": "/local_plan"}
 POLY_TOPICS = {"stop": "/polygon_stop", "slowdown": "/polygon_slowdown", "footprint": "/local_costmap/published_footprint"}
 CAMERA_TOPICS = {"scene": "/cameras/scene/image", "wrist": "/cameras/wrist/image", "side": "/cameras/side/image",
                  "realsense": "/camera/camera/color/image_raw", "face": "/face/image"}
+# the policy cameras before the cut: the teleop page shows these while a tile is held, with the square drawn in
+RAW_TOPICS = {"scene.raw": "/cameras/scene/image_raw", "side.raw": "/cameras/side/image_raw"}
 CAMERA_LABELS = {"scene": "Scene", "wrist": "Wrist", "side": "Side", "realsense": "RealSense", "face": "Face"}
 POLY_MAX_POINTS = {"stop": 3, "slowdown": 3}
 FRAME_FRESH_S, FRAME_HOLD_S = 2.0, 6.0
@@ -49,6 +51,29 @@ def with_wake_phrase(text: str) -> str:
     """The typed text as the voice assistant wants to hear it: the wake phrase first, once."""
     text = text.strip()
     return text if text.lower().startswith(WAKE_PHRASE) else f"{WAKE_PHRASE}, {text}"
+
+
+def upright_with_square(rgb: np.ndarray, cam: str, squares: dict | None = None, rotate: int | None = None) -> np.ndarray:
+    """A policy camera's whole frame as image_rotate turns it, at half size, with the square it cuts drawn in:
+    what the operator needs to see to place a crop (v1's camera service /<cam>.raw.jpg)."""
+    from rd_bringup import config
+    if rotate is None:
+        rotate = int((config.get(f"sensors.usb_cameras.{cam}", {}) or {}).get("rotate", 0))
+    at = (squares if squares is not None else config.camera_squares()).get(cam)
+    a = np.ascontiguousarray(np.rot90(rgb, {0: 0, 90: 3, 180: 2, 270: 1}[rotate % 360])[::2, ::2]).copy()
+    if at is not None:
+        h, w = a.shape[:2]
+        side = min(h, w)
+        off = int(round((max(h, w) - side) * min(max(float(at), 0.0), 1.0)))
+        y0, x0 = (off, 0) if h > w else (0, off)
+        t = 3
+        for sl in ((slice(y0, y0 + t), slice(x0, x0 + side)), (slice(y0 + side - t, y0 + side), slice(x0, x0 + side)),
+                   (slice(y0, y0 + side), slice(x0, x0 + t)), (slice(y0, y0 + side), slice(x0 + side - t, x0 + side))):
+            a[sl] = (255, 200, 0)
+        outside = np.ones((h, w), bool)
+        outside[y0:y0 + side, x0:x0 + side] = False
+        a[outside] = a[outside] // 2                 # what the policy does not see, dimmed
+    return a
 
 
 def encode_jpeg(rgb: np.ndarray, quality: int = 80) -> bytes:
@@ -286,7 +311,7 @@ class RosBridge:
 
     def want_cam(self, name: str) -> None:
         """A page is looking at this camera: subscribe now if it is not, and keep it for CAM_LINGER_S."""
-        if name not in CAMERA_TOPICS:
+        if name not in CAMERA_TOPICS and name not in RAW_TOPICS:
             return
         self.cam_want[name] = time.time()
         if self.node is None or self._cam_type is None:
@@ -294,7 +319,7 @@ class RosBridge:
         with self._cam_lock:
             if name not in self._cam_subs:
                 self._cam_subs[name] = self.node.create_subscription(
-                    self._cam_type, CAMERA_TOPICS[name], (lambda m, nm=name: self._on_image(nm, m)), self._cam_qos, callback_group=self.cb)
+                    self._cam_type, {**CAMERA_TOPICS, **RAW_TOPICS}[name], (lambda m, nm=name: self._on_image(nm, m)), self._cam_qos, callback_group=self.cb)
 
     def _cam_follow_demand(self):
         now = time.time()
@@ -335,6 +360,8 @@ class RosBridge:
                 rgb = a if m.encoding == "rgb8" else a[..., ::-1]
             else:
                 return
+            if name in RAW_TOPICS:
+                rgb = upright_with_square(rgb, name.split(".")[0])
             self.jpeg[name] = {"data": encode_jpeg(rgb), "t": now, "seen": now, "w": m.width, "h": m.height}
             if now - self.cam_median.get(name, (0, 0.0))[1] > 1.0:       # how bright the frame is, for the exposure keys (target ~120)
                 self.cam_median[name] = (int(np.median(rgb[::8, ::8].mean(axis=2))), now)
