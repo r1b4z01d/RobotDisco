@@ -1,7 +1,7 @@
 """The manager's HTTP side: FastAPI routes over the ROS bridge, the stores (maps, landmarks, routes, evals,
 checkpoints, datasets) and supervisor. v1 webui/server.py + Scripts/route_editor.py in one process.
 
-Pages:  /            the manager (tabs)        /live/        the 2D map + route editor      /live/3d   the 3D view
+Pages:  /            the manager (tabs)        /live/        the route editor               /live/3d   the 3D view
         /arm/        arm + hand + policy       /folks/       the people the robot knows
 The Panels tab (the WLED LED matrices) is a view of the manager page: /api/panels and the /ws/panels pixel relay.
 """

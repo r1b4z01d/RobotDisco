@@ -1308,11 +1308,11 @@ async function loadFolksView() {
 $("#folks-wink").addEventListener("click", async () => { try { await post("/api/people/any/wink", {}); } catch (e) { err(e); } });
 $("#folks-url").addEventListener("change", () => { const fr = $("#folks-frame"); fr.src = $("#folks-url").value; fr.dataset.src = fr.src; $("#folks-open").href = fr.src; });
 
-// ---- map view: the route editor's map mode (map + robot + lidar scans), embedded ----
+// ---- map view: the 3D map page (map + robot + lidar scans), embedded ----
 let mapTimer = null;
 async function loadMapView() {
   let r; try { r = await api("/api/route_editor?scope=map"); } catch (e) { return err(e); }
-  const url = r.url + "3d", fr = $("#map-frame"), s = $("#map-status");   // the 3D view by default; its "2D map" button switches
+  const url = r.url + "3d", fr = $("#map-frame"), s = $("#map-status");   // the 3D view
   document.querySelectorAll('input[name="map-source"]').forEach((x) => { x.checked = x.value === r.source; });
   $("#map-open").href = url;
   const show = (rr) => {

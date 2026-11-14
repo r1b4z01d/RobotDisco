@@ -22,7 +22,7 @@
     #cams figure.cam.dead figcaption { color: #c93c3c; }
   `;
   const H_DEFAULT = 150, H_BIG = 420, H_MIN = 40, H_MAX = 900;
-  window.initCams = function initCams({ view, panel, top = 8, enabled = null }) {   // enabled(): page-side switch (e.g. map mode only)
+  window.initCams = function initCams({ view, panel, top = 8, enabled = null }) {   // enabled(): page-side switch
     const st = document.createElement("style"); st.textContent = STYLE; document.head.appendChild(st);
     const strip = document.createElement("div"); strip.id = "cams"; strip.style.top = top + "px"; view.appendChild(strip);
     const figs = {}; let cams = [];

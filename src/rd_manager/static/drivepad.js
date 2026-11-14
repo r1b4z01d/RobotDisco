@@ -69,7 +69,7 @@
   const KEY_VX = { w: 1, W: 1, ArrowUp: 1, s: -1, S: -1, ArrowDown: -1 };
   const KEY_WZ = { a: -1, A: -1, ArrowLeft: -1, d: 1, D: 1, ArrowRight: 1 };   // ax: +1 = right, like the stick
 
-  // `enabled()` is the page-side switch (the 2D page only shows the pad in map mode, like the camera
+  // `enabled()` is the page-side switch (a page can hide the pad, like the camera
   // strip). Returns {refresh} so the page can re-apply it when its mode changes.
   window.initDrivePad = function initDrivePad({ view, panel, enabled = null }) {
     const st = document.createElement("style"); st.textContent = STYLE; document.head.appendChild(st);

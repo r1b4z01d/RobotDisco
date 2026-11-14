@@ -44,13 +44,6 @@
   label.cb:has(input[type=checkbox]:checked) { color: var(--fg); border-bottom-color: var(--ok); }
   label.cb:has(input[type=checkbox]):hover { color: var(--fg); }
   label.cb:has(input[type=checkbox]:focus-visible) { outline: 1px dashed var(--muted); outline-offset: 2px; }
-  .modes button { padding: 4px 10px; } .modes button + button { margin-left: 4px; }
-  body.map-mode .edit-only { display: none !important; }
-  body:not(.map-mode) .map-only { display: none !important; }
-  body:not(.map-mode) #cams { display: none !important; }   /* camera strip: map mode only */
-  body:not(.map-mode) .modes { display: none; }       /* the route editor has no Edit / Map / 3D switch: the manager's tabs do that */
-  #legend { position: absolute; left: 10px; bottom: 8px; background: rgba(0,0,0,.6); padding: 6px 10px; border-radius: 6px; font-size: 11px; display: none; }
-  body.map-mode #legend { display: block; } body.map-mode #help { display: none; }
   .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
 </style>
 </head>
@@ -63,7 +56,6 @@
       <button id="redo" title="redo (Ctrl/⌘+Shift+Z or Ctrl+Y)">↷ redo</button>
       <span class="muted" id="histinfo"></span>
     </span>
-    <span class="modes"><button id="mode-edit" class="accent edit-only" title="back to the route editor">Edit</button><button id="mode-map">Map</button><button onclick="location.href='/3d'" title="three.js scene: map, costmaps, Velodyne, URDF robot, plans">3D</button></span>
   </div>
   <div class="row edit-only">
     <select id="routes" title="route file in Scripts/"></select>
@@ -79,26 +71,11 @@
     <label class="cb"><input type="checkbox" id="clickadd" checked> click adds</label>
     <label class="cb"><input type="checkbox" id="showraw" checked> raw trace</label>
   </div>
-  <div class="row map-only" id="layers">
-    <label class="cb"><input type="checkbox" class="layer" data-layer="s1"><span class="sw" data-key="s1" style="background:#f5d033"></span>S1</label>
-    <label class="cb"><input type="checkbox" class="layer" data-layer="s2e"><span class="sw" data-key="s2e" style="background:#39d353"></span>S2E</label>
-    <label class="cb"><input type="checkbox" class="layer" data-layer="velodyne"><span class="sw" data-key="velodyne" style="background:#e85cff"></span>Velodyne</label>
-    <label class="cb"><input type="checkbox" id="showroute" checked> route</label>
-  </div>
-  <div class="row map-only" id="costmaps">
-    <label class="cb"><input type="checkbox" class="cmlayer" data-cm="global"><span class="sw" data-key="cm_global" style="background:#ff3caa"></span>global costmap</label>
-    <label class="cb"><input type="checkbox" class="cmlayer" data-cm="local"><span class="sw" data-key="cm_local" style="background:#8c32ff"></span>local costmap</label>
-    <label class="cb">opacity <input id="cmalpha" type="number" min="5" max="100" step="5" value="15" style="width:60px">%</label>
-    <label class="cb" title="draw the nav map with its colours inverted (dark free space, light walls)"><input type="checkbox" id="invertmap" checked> invert map</label>
-  </div>
-  <div class="muted map-only" id="scaninfo" style="font-size:11px"></div>
   <div class="row edit-only">
     <button id="center" title="record_path.py center: unmarked waypoints to the middle of their corridor (on the saved file)">centre</button>
     <button id="densify" title="record_path.py densify: intermediate waypoints on long legs (on the saved file)">densify</button>
     <input id="spacing" type="number" step="0.1" value="1.0" title="densify spacing, m">
   </div>
-  <div class="map-only"><h3>Cameras</h3><div class="row" id="cam-panel"></div></div>
-  <div class="map-only"><h3>Drive</h3><div class="row" id="drive-panel"></div></div>
   <div class="edit-only">
   <h3>Waypoints <span class="muted" id="count"></span></h3>
   <div id="list"></div>
@@ -126,13 +103,8 @@
 <div id="main">
   <canvas id="c"></canvas>
   <div id="status">loading…</div>
-  <div id="maptools" class="map-only"><button id="mt-pan" class="on" title="drag = pan · wheel = zoom">pan</button><button id="mt-goal" title="click the map, drag for the heading, release = publish /goal_pose (the robot drives there)">nav goal</button><button id="mt-init" title="click the map, drag for the heading, release = publish /initialpose">initial pose</button></div>
-  <div id="legend" class="map-only"><span class="sw" style="background:#2ea043"></span>robot &nbsp; <span class="sw" style="background:#f5d033"></span>RPLiDAR S1 (filtered) &nbsp; <span class="sw" style="background:#39d353"></span>RPLiDAR S2E (filtered) &nbsp; <span class="sw" style="background:#e85cff"></span>Velodyne (points 0.1–2 m) &nbsp; <span class="sw" style="background:#4f8cff"></span>route &nbsp; global costmap: <span class="sw" style="background:#ffc8e6"></span>inflated <span class="sw" style="background:#ff3caa"></span>inscribed <span class="sw" style="background:#be0078"></span>lethal &nbsp; local costmap: <span class="sw" style="background:#cdafff"></span>inflated <span class="sw" style="background:#8c32ff"></span>inscribed <span class="sw" style="background:#5500a0"></span>lethal</div>
   <div id="help">click = add after the selected waypoint · drag = move · shift-drag = heading · wheel = zoom · drag empty map = pan · Delete = remove · Ctrl/⌘+Z undo · marked (named, red) poses keep their heading; others face the next by default</div>
 </div>
-<script src="/static/cams.js"></script>
-<script src="/static/drivepad.js?v=3"></script>
-<script src="/static/swatches.js"></script>
 <script>
 const $ = s => document.querySelector(s);
 const canvas = $("#c"), ctx = canvas.getContext("2d");
@@ -148,40 +120,12 @@ function renderMapBmp(src) {
   const c = document.createElement("canvas");
   c.width = src.naturalWidth; c.height = src.naturalHeight;
   const g = c.getContext("2d");
-  if ($("#invertmap").checked) g.filter = "invert(1)";
+  g.filter = "invert(1)";                      // dark free space, light walls
   g.drawImage(src, 0, 0);
   mapBmp = c;
 }
-let sel = -1, pose = null, rosStatus = "", obstacles = [];          // obstacles: the simulator's cones
-let mapTool = "pan", poseDrag = null, toolMsg = "", toolMsgT = 0;     // map mode: nav goal / initial pose tools
-function setMapTool(t) {
-  mapTool = t; poseDrag = null;
-  for (const id of ["pan", "goal", "init"]) $(`#mt-${id}`).classList.toggle("on", id === t);
-  canvas.style.cursor = t === "pan" ? "" : "crosshair"; draw();
-}
-$("#mt-pan").onclick = () => setMapTool("pan"); $("#mt-goal").onclick = () => setMapTool("goal"); $("#mt-init").onclick = () => setMapTool("init");
-function toolSay(t) { toolMsg = t; toolMsgT = Date.now(); draw(); }
+let sel = -1, pose = null, rosStatus = "";
 let view = {scale: 1, tx: 0, ty: 0};          // canvas px = map px * scale + t
-let mode = new URLSearchParams(location.search).get("view") === "map" ? "map" : "edit";
-let scans = {};                                 // name -> {points: [[x,y],...], t}
-let costmaps = {};                              // name -> {meta, img}
-const cmOn = () => [...document.querySelectorAll("input.cmlayer")].filter(c => c.checked).map(c => c.dataset.cm);
-const SCAN_COLORS = {s1: "#f5d033", s2e: "#39d353", velodyne: "#e85cff"};
-const CM_COLORS = {global: "", local: ""};                                   // "" = the server's default palette
-const layersOn = () => [...document.querySelectorAll("input.layer")].filter(c => c.checked).map(c => c.dataset.layer);
-function setMode(m) {
-  mode = m; document.body.classList.toggle("map-mode", m === "map");
-  $("#mode-edit").classList.toggle("accent", m === "edit"); $("#mode-map").classList.toggle("accent", m === "map");
-  $("#title").textContent = m === "map" ? "Map" : "Route Editor";
-  document.querySelectorAll("input.layer").forEach(c => { c.checked = m === "map"; });
-  document.querySelectorAll("input.cmlayer").forEach(c => { c.checked = m === "map"; });     // map mode: both costmaps on
-  if (m === "map") { $("#showroute").checked = false; sel = -1; }
-  else { $("#showroute").checked = true; }
-  const u = new URL(location); if (m === "map") u.searchParams.set("view", "map"); else u.searchParams.delete("view"); window.history.replaceState(null, "", u);
-  renderList(); draw();
-  if (drivePad) drivePad.refresh();            // map mode only: leaving it closes the pad and stops the robot
-}
-let drivePad = null;
 let drag = null;                               // {kind: 'pan'|'move'|'yaw', ...}
 let dirty = false;
 // undo / redo: snapshots of the waypoints (+ initial pose) taken BEFORE each change; a drag is one step
@@ -215,19 +159,6 @@ function draw() {
   ctx.clearRect(0, 0, r.width, r.height);
   ctx.imageSmoothingEnabled = view.scale < 2;
   if (mapBmp) ctx.drawImage(mapBmp, view.tx, view.ty, MAP.width * view.scale, MAP.height * view.scale);
-  // costmap overlays (between the map and everything live), at the chosen opacity
-  const cmSel = new Set(cmOn());
-  for (const [name, cm] of Object.entries(costmaps)) {
-    if (!cmSel.has(name) || !cm.img || !cm.img.complete || !cm.meta) continue;
-    // origin = the grid's bottom-left corner in the map frame, yaw = its x axis (the local costmap lives in
-    // odom; the server folds map->odom into both), so: translate there, rotate, draw the image upwards
-    const M = cm.meta; const [a, b] = w2c(M.origin[0], M.origin[1]);
-    const Wpx = M.width * M.resolution / MAP.resolution * view.scale, Hpx = M.height * M.resolution / MAP.resolution * view.scale;
-    ctx.save(); ctx.translate(a, b); ctx.rotate(-(M.yaw || 0));
-    ctx.globalAlpha = Math.max(0.05, Math.min(1, (parseFloat($("#cmalpha").value) || 15) / 100));
-    ctx.drawImage(cm.img, 0, -Hpx, Wpx, Hpx);
-    ctx.restore();
-  }
   // 1 m grid
   const gx0 = Math.floor(MAP.origin[0]), gx1 = Math.ceil(MAP.origin[0] + MAP.width * MAP.resolution);
   const gy0 = Math.floor(MAP.origin[1]), gy1 = Math.ceil(MAP.origin[1] + MAP.height * MAP.resolution);
@@ -239,21 +170,8 @@ function draw() {
     ctx.strokeStyle = "rgba(200,200,200,.5)"; ctx.lineWidth = 2; ctx.beginPath();
     route.raw_trace.forEach((p, i) => { const [a, b] = w2c(p[0], p[1]); i ? ctx.lineTo(a, b) : ctx.moveTo(a, b); }); ctx.stroke();
   }
-  // sensor layers (map frame, from /api/scans), each behind its own checkbox
-  const on = new Set(layersOn());
-  for (const [name, sc] of Object.entries(scans)) {
-    if (!on.has(name)) continue;
-    ctx.fillStyle = SCAN_COLORS[name] || "#fff"; const r2 = Math.max(1.2, view.scale * (name === "velodyne" ? 0.45 : 0.6));
-    for (const p of sc.points) { const [a, b] = w2c(p[0], p[1]); ctx.fillRect(a - r2 / 2, b - r2 / 2, r2, r2); }
-  }
-  // simulated cones (orange discs, true radius)
-  for (const o of obstacles) {
-    const [a, b] = w2c(o.x, o.y); const R = Math.max(3, o.r / MAP.resolution * view.scale);
-    ctx.fillStyle = "rgba(255,106,0,.85)"; ctx.beginPath(); ctx.arc(a, b, R, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = "#fff"; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(a, b, R * 0.5, 0, Math.PI * 2); ctx.stroke();
-  }
   // route polyline
-  const W = $("#showroute").checked ? route.waypoints : [];
+  const W = route.waypoints;
   if (W.length > 1) { ctx.strokeStyle = "#4f8cff"; ctx.lineWidth = 2.5; ctx.beginPath(); W.forEach((w, i) => { const [a, b] = w2c(w.x, w.y); i ? ctx.lineTo(a, b) : ctx.moveTo(a, b); }); ctx.stroke(); }
   W.forEach((w, i) => {
     const [a, b] = w2c(w.x, w.y); const marked = isMarked(w); const col = marked ? "#e04848" : "#4f8cff";
@@ -262,25 +180,13 @@ function draw() {
     if (i === sel) { ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.stroke(); }
     ctx.fillStyle = "#fff"; ctx.font = "11px sans-serif"; ctx.fillText(w.name, a + 9, b - 9);
   });
-  // nav goal / initial pose being placed
-  if (poseDrag) {                                   // big white arrow with a dark outline, head included
-    const [a, b] = w2c(poseDrag.x, poseDrag.y); const L = Math.max(60, 1.8 / MAP.resolution * view.scale);
-    const tx = a + L * Math.cos(poseDrag.yaw), ty = b - L * Math.sin(poseDrag.yaw), hd = Math.max(16, L * 0.22), ang = Math.atan2(-(ty - b), tx - a);
-    for (const [col, w] of [["rgba(0,0,0,.7)", 9], ["#fff", 5]]) {
-      ctx.strokeStyle = col; ctx.lineWidth = w; ctx.lineCap = "round";
-      ctx.beginPath(); ctx.moveTo(a, b); ctx.lineTo(tx, ty); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(tx - hd * Math.cos(ang - 0.5), ty + hd * Math.sin(ang - 0.5)); ctx.moveTo(tx, ty); ctx.lineTo(tx - hd * Math.cos(ang + 0.5), ty + hd * Math.sin(ang + 0.5)); ctx.stroke();
-      ctx.beginPath(); ctx.arc(a, b, 11, 0, Math.PI * 2); ctx.stroke();
-    }
-  }
   // robot
   if (pose) {
     const [a, b] = w2c(pose.x, pose.y); const R = Math.max(6, 0.3 / MAP.resolution * view.scale);
     ctx.strokeStyle = "#2ea043"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(a, b, R, 0, Math.PI * 2); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(a, b); ctx.lineTo(a + R * 1.6 * Math.cos(pose.yaw), b - R * 1.6 * Math.sin(pose.yaw)); ctx.stroke();
   }
-  const tm = Date.now() - toolMsgT < 6000 ? ` · ${toolMsg}` : "";
-  $("#status").textContent = `${simBadge}${route.name || "(new)"}${dirty ? " *" : ""} · ${W.length} waypoints · map ${MAP.name} ${MAP.resolution} m/px · robot: ${pose ? `(${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}) ${(pose.yaw * 180 / Math.PI).toFixed(0)}°` : rosStatus}${tm}`;
+  $("#status").textContent = `${simBadge}${route.name || "(new)"}${dirty ? " *" : ""} · ${W.length} waypoints · map ${MAP.name} ${MAP.resolution} m/px · robot: ${pose ? `(${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}) ${(pose.yaw * 180 / Math.PI).toFixed(0)}°` : rosStatus}`;
 }
 
 function hit(cx, cy) {
@@ -337,35 +243,26 @@ canvas.addEventListener("wheel", e => {
   const f = e.deltaY < 0 ? 1.15 : 1 / 1.15; view.tx = cx - (cx - view.tx) * f; view.ty = cy - (cy - view.ty) * f; view.scale *= f; draw();
 }, {passive: false});
 canvas.addEventListener("mousedown", e => {
-  const r = canvas.getBoundingClientRect(); const cx = e.clientX - r.left, cy = e.clientY - r.top; const i = mode === "edit" ? hit(cx, cy) : -1;
-  if (mode === "map" && mapTool !== "pan" && e.button === 0) { const [x, y] = c2w(cx, cy); poseDrag = {x, y, yaw: 0}; draw(); return; }
+  const r = canvas.getBoundingClientRect(); const cx = e.clientX - r.left, cy = e.clientY - r.top; const i = hit(cx, cy);
   if (i >= 0) { select(i); pushHistory(); drag = {kind: e.shiftKey ? "yaw" : "move", i, moved: false}; }
   else drag = {kind: "pan", x0: cx, y0: cy, tx: view.tx, ty: view.ty, moved: false};
 });
 window.addEventListener("mousemove", e => {
-  if (poseDrag) { const r = canvas.getBoundingClientRect(); const [x, y] = c2w(e.clientX - r.left, e.clientY - r.top); if (Math.hypot(x - poseDrag.x, y - poseDrag.y) > 0.05) poseDrag.yaw = Math.atan2(y - poseDrag.y, x - poseDrag.x); draw(); return; }
   if (!drag) return; const r = canvas.getBoundingClientRect(); const cx = e.clientX - r.left, cy = e.clientY - r.top;
   if (drag.kind === "pan") { if (Math.hypot(cx - drag.x0, cy - drag.y0) > 3) drag.moved = true; view.tx = drag.tx + cx - drag.x0; view.ty = drag.ty + cy - drag.y0; draw(); }
   else if (drag.kind === "move") { const [x, y] = c2w(cx, cy); drag.moved = true; setWaypoint(drag.i, {x, y}, true); select(drag.i); }
   else if (drag.kind === "yaw") { const w = route.waypoints[drag.i]; const [a, b] = w2c(w.x, w.y); drag.moved = true; setWaypoint(drag.i, {yaw: Math.atan2(-(cy - b), cx - a)}, true); select(drag.i); }
 });
 window.addEventListener("mouseup", async e => {
-  if (poseDrag) {
-    const body = {type: mapTool === "goal" ? "goal" : "initialpose", x: +poseDrag.x.toFixed(3), y: +poseDrag.y.toFixed(3), yaw: +poseDrag.yaw.toFixed(4)};
-    const deg = (poseDrag.yaw * 180 / Math.PI).toFixed(0); setMapTool("pan");
-    try { const rr = await fetch("/api/publish", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)}).then(r => r.json());
-      toolSay(rr.error ? `publish failed: ${rr.error}` : `published ${body.type}: (${body.x}, ${body.y}) ${deg}°`); } catch (err) { toolSay(`publish failed: ${err}`); }
-    return;
-  }
   if (!drag) return; const r = canvas.getBoundingClientRect(); const cx = e.clientX - r.left, cy = e.clientY - r.top;
-  if (mode === "edit" && drag.kind === "pan" && !drag.moved && $("#clickadd").checked && e.target === canvas) { const [x, y] = c2w(cx, cy); addAt(x, y, sel >= 0 ? sel : null); }
+  if (drag.kind === "pan" && !drag.moved && $("#clickadd").checked && e.target === canvas) { const [x, y] = c2w(cx, cy); addAt(x, y, sel >= 0 ? sel : null); }
   if ((drag.kind === "move" || drag.kind === "yaw") && !drag.moved) { undoStack.pop(); histInfo(); }
   drag = null;
 });
 window.addEventListener("keydown", e => {
   if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
   if (e.key === "Delete" || e.key === "Backspace") $("#del").click();
-  if (e.key === "Escape") { select(-1); if (mode === "map") setMapTool("pan"); }
+  if (e.key === "Escape") select(-1);
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") { e.preventDefault(); redo(); }
 });
@@ -426,52 +323,12 @@ async function reloadMap() {
 }
 async function poll() { if (!onScreen()) { setTimeout(poll, 1000); return; } try { const d = await fetch("/api/pose").then(r => r.json()); pose = d.pose; rosStatus = d.ros; simBadge = (d.sim ? "SIM · " : "") + (d.mapping ? "MAPPING · " : ""); halted = !!d.halted; const hb = $("#halt"); hb.textContent = halted ? "RESUME" : "HALT"; hb.classList.toggle("halted", halted); if (MAP && d.map_rev && d.map_rev !== MAP.rev && !poll.reloading) { poll.reloading = true; reloadMap().finally(() => { poll.reloading = false; }); } } catch (e) { pose = null; } draw(); setTimeout(poll, 500); }
 $("#halt").onclick = async () => { const resume = halted; try { const r = await fetch("/api/halt", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ resume }) }).then(r => r.json()); out(r.error ? `halt failed: ${r.error}` : (resume ? "resumed" : "HALTED: ") + (r.did || []).join(" · ")); } catch (e) { out(`halt failed: ${e}`); } };
-async function pollScans() {
-  if (!onScreen()) { setTimeout(pollScans, 1000); return; }
-  const want = layersOn();
-  if (want.length) {
-    try {
-      const d = await fetch("/api/scans?layers=" + want.join(",")).then(r => r.json()); scans = d.scans || {}; obstacles = d.obstacles || [];
-      $("#scaninfo").textContent = want.map(n => `${n}: ${scans[n] ? scans[n].points.length + " pts" : "no data"}`).join(" · ");
-    } catch (e) { scans = {}; }
-    draw();
-  } else if (Object.keys(scans).length) { scans = {}; $("#scaninfo").textContent = ""; draw(); }
-  setTimeout(pollScans, 200);
-}
-document.querySelectorAll("input.layer").forEach(c => c.onchange = draw);
-async function pollCostmaps() {
-  if (!onScreen()) { setTimeout(pollCostmaps, 1000); return; }
-  for (const name of cmOn()) {
-    try {
-      const meta = await fetch(`/api/costmap?name=${name}${CM_COLORS[name] ? "&color=" + CM_COLORS[name].replace("#", "") : ""}`).then(r => r.json());
-      if (meta.error) { costmaps[name] = {meta: null, err: meta.error}; continue; }
-      const cur = costmaps[name];
-      if (!cur || !cur.meta || cur.meta.stamp !== meta.stamp) {
-        const img = new Image(); img.onload = draw; img.src = meta.image; costmaps[name] = {meta, img};
-      }
-    } catch (e) { /* keep the last one */ }
-  }
-  for (const name of Object.keys(costmaps)) if (!cmOn().includes(name)) delete costmaps[name];
-  draw();
-  setTimeout(pollCostmaps, 1000);
-}
-document.querySelectorAll("input.cmlayer").forEach(c => c.onchange = draw); $("#cmalpha").onchange = draw; $("#invertmap").onchange = () => { renderMapBmp(img); draw(); };
-$("#showroute").onchange = draw;
-$("#mode-edit").onclick = () => setMode("edit"); $("#mode-map").onclick = () => setMode("map");
 (async () => {
   MAP = await fetch("/api/map").then(r => r.json());
   img.onload = () => { renderMapBmp(img); resize(); fit(); draw(); }; img.src = MAP.image;
   await loadRoutes();
   const pre = ["tigger_test", "tigger"].find(n => [...$("#routes").options].some(o => o.value === n)); if (pre) { $("#routes").value = pre; await loadRoute(pre); }
-  setMode(mode);
-  poll(); pollScans(); pollCostmaps();
-  if (window.initCams) initCams({ view: canvas.parentElement, panel: $("#cam-panel"), top: 44, enabled: () => mode === "map" });   // map mode only, below the map tools
-  if (window.initDrivePad) drivePad = initDrivePad({ view: canvas.parentElement, panel: $("#drive-panel"), enabled: () => mode === "map" });
-  if (window.initSwatches) initSwatches({ page: "map", apply: (k, hex) => {
-    if (k in SCAN_COLORS) SCAN_COLORS[k] = hex;
-    else if (k === "cm_global" || k === "cm_local") { const n = k.slice(3); CM_COLORS[n] = hex; if (costmaps[n]) costmaps[n].stamp = null; }
-    draw();
-  } });
+  renderList(); draw(); poll();
 })();
 window.addEventListener("beforeunload", e => { if (dirty) { e.preventDefault(); e.returnValue = ""; } });
 </script>
