@@ -73,6 +73,7 @@ class PolicyRunner(Node):
         self.hand_pub = self.create_publisher(Float32MultiArray, "/hand/curls", 10)
         self.stream = self.create_client(SetBool, "/arm/stream", callback_group=self.cb)
         self.go_home = self.create_client(Trigger, "/arm/go_home", callback_group=self.cb)
+        self.resend = self.create_client(Trigger, "/ur5e/io_and_status_controller/resend_robot_program", callback_group=self.cb)
         self._lock = threading.Lock()
         self._active = None
         self._program_running = None       # the UR driver's robot_program_running; None where nothing publishes it (the rig's mock arm)
@@ -165,6 +166,22 @@ class PolicyRunner(Node):
         r = self.stream.call(SetBool.Request(data=on))
         return bool(r.success), r.message
 
+    def _arm_program(self) -> tuple[bool, str]:
+        """The UR's control program running before a run: without it every target goes nowhere. A run on 2026-11-14
+        played all 96 steps and closed the hand with the arm standing at home, and was scored a success. Resent once
+        when it is known to be stopped; True where nothing reports it (the rig's mock arm)."""
+        if self._program_running is not False:
+            return True, ""
+        if self.resend.wait_for_service(timeout_sec=2.0):
+            self.resend.call(Trigger.Request())
+            end = time.monotonic() + 6.0
+            while time.monotonic() < end and not self._program_running:
+                time.sleep(0.1)
+        if self._program_running:
+            self.get_logger().warn("the UR's control program was stopped: resent")
+            return True, "resent"
+        return False, "the UR's control program is not running (pendant: protective stop, e-stop, or not in remote control)"
+
     def _home(self) -> tuple[bool, str]:
         if not self.go_home.wait_for_service(timeout_sec=3.0):
             return False, "no /arm/go_home service"
@@ -237,6 +254,9 @@ class PolicyRunner(Node):
             # its training distribution (tigger_1_merged was recorded at 0.5 / 0.5; the robot's default is 0.40 / 0.30)
             restore_squares = self._set_squares((checkpoints.capture(info.get("resolved") or "") or {}).get("squares") or {})
             # 2. home, observations
+            ok, msg = self._arm_program()
+            if not ok:
+                return False, msg
             opened_at = None
             if (goal.done_when or "").strip().lower() == "closed":
                 # A grasping task starts with an open hand: left closed by the run before, the policy was fed "already
