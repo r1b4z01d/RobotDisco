@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Align to a landmark's reference view</title>
+<style>
+  body { margin: 0; background: #0d1117; color: #e6edf3; font: 14px system-ui, sans-serif; }
+  header { padding: 10px 14px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  .stage { position: relative; width: min(96vw, 86vh); aspect-ratio: 1; margin: 0 auto; background: #000; }
+  .stage img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; }
+  #ref { opacity: .5; }
+  button, select { background: #21262d; color: inherit; border: 1px solid #30363d; border-radius: 6px; padding: 6px 10px; }
+  .muted { color: #8b949e; max-width: 900px; margin: 8px auto; padding: 0 14px; }
+</style></head>
+<body>
+<header>
+  <b>Align</b>
+  <label>landmark <select id="lm"></select></label>
+  <label>reference <input id="op" type="range" min="0" max="100" value="50"></label>
+  <button id="blink">blink</button>
+  <span id="msg" class="muted"></span>
+</header>
+<div class="stage"><img id="live" alt="live scene camera"><img id="ref" alt="reference view"></div>
+<p class="muted">The live scene camera with the landmark's reference view laid over it (the frame a successful run started from:
+<code>&lt;landmark&gt;_reference.jpg</code> beside the landmark photos). Nudge the robot until fixed things line up: the shelf's
+upright, the gap between the cabinet doors, the picture frame. Then press Update pose on the Landmarks page.</p>
+<script>
+const $ = (s) => document.querySelector(s);
+const q = new URLSearchParams(location.search);
+async function init() {
+  const d = await fetch("/api/landmarks").then((r) => r.json());
+  for (const l of d.landmarks || []) { const o = document.createElement("option"); o.value = l.id; o.textContent = l.name; $("#lm").append(o); }
+  $("#lm").value = q.get("lm") || ((d.landmarks || [])[0] || {}).id || "";
+  show();
+}
+function show() {
+  $("#live").src = "/cam/scene.mjpg?fps=10";
+  const r = $("#ref"); r.onerror = () => { $("#msg").textContent = "no reference view for this landmark"; r.style.display = "none"; };
+  r.onload = () => { $("#msg").textContent = ""; r.style.display = ""; };
+  r.src = `/api/landmarks/img/${$("#lm").value}_reference.jpg?t=${Date.now()}`;
+}
+$("#lm").onchange = show;
+$("#op").oninput = () => { $("#ref").style.opacity = $("#op").value / 100; };
+let t = null;
+$("#blink").onclick = () => { if (t) { clearInterval(t); t = null; $("#ref").style.opacity = $("#op").value / 100; return; }
+  let on = true; t = setInterval(() => { on = !on; $("#ref").style.opacity = on ? 1 : 0; }, 500); };
+init();
+</script>
+</body></html>

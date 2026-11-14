@@ -502,3 +502,25 @@ def test_images_reach_the_policy_in_rgb():
     b.torch = torch
     t = b._observation([0.0] * 16, {"scene": back}, "t")["observation.images.scene"]
     assert t.shape == (1, 3, 48, 64) and float(t[0, 0].mean()) > 0.94 and float(t[0, 2].mean()) < 0.06   # channel 0 is red
+
+
+def test_auto_expose_finds_the_exposure_for_the_target_median():
+    """The ladder search of rd_vla.exposure against a fake camera whose brightness follows its exposure."""
+    import time
+    import numpy as np
+    from rd_vla import exposure
+    state = {"scene": 625.0, "wrist": 625.0}
+    gain = {"scene": 1.5, "wrist": 0.4}                                  # median per exposure unit: a bright and a dim view
+
+    def frame(cam):
+        v = min(255.0, state[cam] * gain[cam])
+        return time.monotonic(), np.full((8, 8, 3), v, np.uint8)
+
+    def set_exposure(cam, value):
+        state[cam] = float(value)
+    exposure.SETTLE_S = 0.0
+    out = exposure.auto_expose(["scene", "wrist"], frame, set_exposure, target=120.0)
+    assert abs(out["scene"]["median"] - 120) < 20 and abs(out["wrist"]["median"] - 120) < 20
+    assert out["scene"]["exposure"] < out["wrist"]["exposure"]            # the bright view gets the shorter exposure
+    assert state["scene"] == out["scene"]["exposure"]                     # and is left set there
+    assert exposure.devices({"by_path": "/nonexistent/{port}", "scene": {"port": "1"}}, ["scene"]) == {}   # no device: skipped

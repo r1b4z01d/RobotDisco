@@ -29,7 +29,7 @@ from std_srvs.srv import SetBool, Trigger
 from rd_bringup import config, units
 from rd_interfaces.action import RunPolicy
 
-from . import checkpoints, evals, wire
+from . import checkpoints, evals, exposure, wire
 from .geometry import clamp_box, clamp_step, keep_out, rotvec_to_quat, workspace_limits
 from .observer import Observer
 from .recorder import EpisodeWriter
@@ -62,6 +62,7 @@ class PolicyRunner(Node):
         dp("operator", "")
         # the supervisor unit that serves the policy: started for a run (or by ~/prepare_server, when a landmark task
         # sets off) and stopped once nothing has used it for a while. "" or "none" = whatever is serving stays as it is
+        dp("auto_expose", True)                      # meter and lock the cameras before each run (v1 eval_hw's launch-time exposure)
         dp("server_unit", "")
         dp("server_start_timeout_s", 180.0)          # unit start + model load (14 s on the Orin once the weights are cached)
         dp("server_idle_stop_s", 300.0)              # after a run, and three times as long after a prepare nobody used
@@ -276,6 +277,13 @@ class PolicyRunner(Node):
                     return False, f"homing failed: {msg}"
             if opened_at is not None:
                 time.sleep(max(0.0, OPEN_SETTLE_S - (time.monotonic() - opened_at)))
+            if p("auto_expose"):
+                devs = exposure.devices(config.get("sensors.usb_cameras", {}) or {}, self.observer.cameras)
+                if devs:
+                    self._feedback(handle, 0, t0, "exposing", 0)
+                    self.observer.wait_ready(float(p("obs_max_age_s")) + 1.0, cancelled=cancelled)
+                    out["exposure"] = exposure.auto_expose(list(devs), self.observer.latest_frame, exposure.v4l2_setter(devs))
+                    self.get_logger().info(f"exposure locked: {out['exposure']}")
             ready, why = self.observer.wait_ready(float(p("obs_max_age_s")) + 1.0, cancelled=cancelled)
             if not ready:
                 self._set_squares(restore_squares)
@@ -406,7 +414,7 @@ class PolicyRunner(Node):
         reg.create(run_name, {"task": goal.task, "dataset": out.get("dataset", ""), "model": goal.checkpoint or info.get("checkpoint") or "", "checkpoint": str(info.get("resolved") or ""),
                               "backend": info.get("backend", ""), "steps": step, "duration_s": round(time.monotonic() - t0, 1),
                               "fps": fps, "ended": ended, "landmark": goal.landmark, "operator": p("operator"), "episodes": 1,
-                              "successes": 1 if ended == "done" else 0, "remote": f"{p('infer_host')}:{p('infer_port')}"})
+                              "successes": 1 if ended == "done" else 0, "exposure": out.get("exposure", {}), "remote": f"{p('infer_host')}:{p('infer_port')}"})
         ok = ended in ("done", "timeout", "max_steps")
         return ok, ended
 

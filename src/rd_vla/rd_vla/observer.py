@@ -108,6 +108,11 @@ class Observer:
             with self._lock:
                 self._curls = [float(v) for v in m.data[:4]]
 
+    def latest_frame(self, cam):
+        """(monotonic time, RGB array) of a camera's newest frame, or None (rd_vla.exposure meters on it)."""
+        with self._lock:
+            return self._images.get(cam)
+
     def ee_pose(self):
         """[x, y, z, rx, ry, rz] of the tool in the base frame, or None."""
         try:
