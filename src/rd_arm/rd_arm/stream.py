@@ -57,7 +57,7 @@ class Stream(Node):
         self.declare_parameter("rate_hz", 125.0)        # what the servoj loop is fed; 50 Hz steps were a staircase to it
         self.declare_parameter("max_velocity", 1.0)     # rad/s per joint
         self.declare_parameter("max_accel", 5.0)        # rad/s^2 per joint: the bound whose absence tripped the UR's collision check
-        self.declare_parameter("stiffness", 60.0)       # rad/s, the follower's natural frequency: a moving target is trailed by 2/stiffness s.
+        self.declare_parameter("stiffness", 25.0)       # rad/s, the follower's natural frequency: a moving target is trailed by 2/stiffness s.
         # 12 (0.17 s) on top of the servoj loop's own 0.12 s left the arm seven policy steps behind; v1 and its datasets ran two
         self.declare_parameter("max_jump", 0.5)         # rad: an IK solution further than this from the sent joints is a branch flip
         self.declare_parameter("controller_manager", "/ur5e/controller_manager")
