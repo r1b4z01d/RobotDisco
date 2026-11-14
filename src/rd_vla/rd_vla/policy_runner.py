@@ -29,7 +29,7 @@ from std_srvs.srv import SetBool, Trigger
 from rd_bringup import config, units
 from rd_interfaces.action import RunPolicy
 
-from . import evals, wire
+from . import checkpoints, evals, wire
 from .geometry import clamp_box, clamp_step, keep_out, rotvec_to_quat, workspace_limits
 from .observer import Observer
 from .recorder import EpisodeWriter
@@ -130,6 +130,32 @@ class PolicyRunner(Node):
             self.get_logger().info(f"unit '{self.server_unit}' idle: {why if ok else 'stop failed: ' + why}")
 
     # ---- helpers
+    def _set_squares(self, squares: dict) -> dict:
+        """Move the policy cameras' square cuts (rd_perception image_rotate's `square`) to {camera: fraction}.
+        Returns what to pass back here to undo it ({} when nothing changed)."""
+        from rcl_interfaces.msg import Parameter, ParameterType, ParameterValue
+        from rcl_interfaces.srv import SetParameters
+        now = config.camera_squares()
+        undo = {}
+        for cam, at in (squares or {}).items():
+            if at is None or now.get(cam) is None or abs(float(at) - float(now[cam])) < 1e-3:
+                continue
+            cl = self.create_client(SetParameters, f"/cameras/{cam}/{cam}_rotate/set_parameters", callback_group=self.cb)
+            try:
+                if not cl.wait_for_service(timeout_sec=1.0):
+                    self.get_logger().warn(f"camera {cam}: no rotate node to set its crop on; the policy sees {now[cam]:.2f}, was trained at {float(at):.2f}")
+                    continue
+                r = cl.call(SetParameters.Request(parameters=[Parameter(name="square", value=ParameterValue(
+                    type=ParameterType.PARAMETER_DOUBLE, double_value=float(at)))]))
+                if r.results and r.results[0].successful:
+                    undo[cam] = float(now[cam])
+                    self.get_logger().info(f"camera {cam}: crop {now[cam]:.2f} -> {float(at):.2f}")
+            finally:
+                self.destroy_client(cl)
+        if undo:
+            time.sleep(0.6)                # a few frames at the new cut before anything observes
+        return undo
+
     def _stream(self, on: bool) -> tuple[bool, str]:
         if not self.stream.wait_for_service(timeout_sec=3.0):
             return False, "no /arm/stream service (rd_arm not running)"
@@ -196,6 +222,7 @@ class PolicyRunner(Node):
         step = 0
         ended = ""
         info: dict = {}
+        restore_squares: dict = {}
         try:
             if goal.checkpoint:
                 rep = client.select(goal.checkpoint)
@@ -203,14 +230,23 @@ class PolicyRunner(Node):
                     return False, f"checkpoint: {rep.get('error', 'select failed')}"
             info = client.info()
             client.reset()
+            # the cameras as this checkpoint's dataset saw them: a policy fed another cut of the frame is out of
+            # its training distribution (tigger_1_merged was recorded at 0.5 / 0.5; the robot's default is 0.40 / 0.30)
+            restore_squares = self._set_squares((checkpoints.capture(info.get("resolved") or "") or {}).get("squares") or {})
             # 2. home, observations
             if goal.home_first:
                 self._feedback(handle, 0, t0, "homing", 0)
                 ok, msg = self._home()
                 if not ok:
                     return False, f"homing failed: {msg}"
+            if (goal.done_when or "").strip().lower() == "closed":
+                # a grasping task starts with an open hand: left closed by the run before, the policy was fed "already
+                # holding" and the end condition (closed for still_seconds) ended the next run after four seconds
+                self.hand_pub.publish(Float32MultiArray(data=[0.0, 0.0, 0.0, 0.0]))
+                time.sleep(1.5)
             ready, why = self.observer.wait_ready(float(p("obs_max_age_s")) + 1.0, cancelled=cancelled)
             if not ready:
+                self._set_squares(restore_squares)
                 return False, f"no observation: {why}"
             # 3. the eval record, the recording, streaming on. From here every exit, an exception included, goes
             # through step 5: the arm must not be left streaming and the run must leave its eval.json
@@ -321,6 +357,7 @@ class PolicyRunner(Node):
         finally:
             client.close()
         # 5. after
+        self._set_squares(restore_squares)
         if log is not None:
             log.close()
         self._feedback(handle, step, t0, "returning", 0)

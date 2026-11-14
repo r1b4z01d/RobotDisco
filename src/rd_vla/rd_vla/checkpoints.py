@@ -107,3 +107,21 @@ def set_served(outputs_dir: Path | str, checkpoint: Path | str) -> Path:
     tmp.symlink_to(Path(checkpoint).resolve())
     os.replace(tmp, link)
     return link
+
+
+def capture(path: Path | str) -> dict:
+    """The camera geometry a checkpoint's dataset was recorded with: the run's capture.json (v1 wrote it beside the
+    run and its eval set the cameras to it before the first observation), {} when the run carries none.
+    `squares` is {camera: fraction or None}: where the square is cut along the upright frame's long axis."""
+    p = Path(path).resolve()
+    for d in (p, *p.parents):
+        f = d / "capture.json"
+        if f.is_file():
+            try:
+                data = json.loads(f.read_text())
+                return data if isinstance(data, dict) else {}
+            except (OSError, ValueError):
+                return {}
+        if (d / "checkpoints").is_dir():       # the run's own folder: nothing above it belongs to this checkpoint
+            break
+    return {}

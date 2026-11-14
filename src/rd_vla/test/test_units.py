@@ -469,3 +469,17 @@ def test_camera_squares_follow_the_pages_file(tmp_path, monkeypatch):
     assert config.camera_squares() == {"scene": 0.75, "wrist": None, "side": 1.0}     # the wrist is never cropped; clamped to 0..1
     f.write_text("not json")
     assert config.camera_squares()["scene"] == 0.4
+
+
+def test_checkpoint_capture_is_the_runs_own(tmp_path):
+    from rd_vla import checkpoints
+    run = tmp_path / "train" / "run_a"
+    pm = run / "checkpoints" / "020000" / "pretrained_model"
+    pm.mkdir(parents=True)
+    assert checkpoints.capture(pm) == {}
+    (tmp_path / "train" / "capture.json").write_text('{"squares": {"scene": 0.9}}')      # another run's, or a stray file: not ours
+    assert checkpoints.capture(pm) == {}
+    (run / "capture.json").write_text(json.dumps({"squares": {"scene": 0.5, "side": 0.5, "wrist": None}}))
+    assert checkpoints.capture(pm)["squares"] == {"scene": 0.5, "side": 0.5, "wrist": None}
+    (run / "capture.json").write_text("not json")
+    assert checkpoints.capture(pm) == {}
