@@ -470,6 +470,25 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
             "deck": bool(t.get("deck")), "last": _teleop_last(t), "status": t.get("message", ""),
         }
 
+    def meter_exposure(cams_cfg: dict, cam: str | None = None) -> dict:
+        import cv2
+        import numpy as np
+        from rd_vla import exposure as meter
+        names = [c for c in ("scene", "wrist", "side") if cam in (None, c)]
+        devs = meter.devices(cams_cfg, names)
+
+        def frame(c):
+            B.want_cam(c)
+            e = B.jpeg.get(c)
+            if not e or not e.get("data"):
+                return None
+            img = cv2.imdecode(np.frombuffer(e["data"], np.uint8), cv2.IMREAD_COLOR)
+            return (time.monotonic() - (time.time() - e["t"]), img) if img is not None else None
+        for c in devs:
+            B.want_cam(c)
+        time.sleep(0.5)
+        return meter.auto_expose(list(devs), frame, meter.v4l2_setter(devs))
+
     @app.post("/api/teleop/cmd")
     def api_teleop_cmd(body: dict = Body(...)):
         """A command from the teleop page: most go to the teleop node's own loop (/teleop/cmd); the cameras' exposure,
@@ -479,7 +498,16 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
         name, a = str(body.get("name", "")), body.get("args") or {}
         if name == "expo":
             try:
-                teleop_page["exposure"] = exposure_mod.adjust(rd_config.get("sensors.usb_cameras", {}) or {}, str(a.get("action", "")), a.get("cam"))
+                cams_cfg = rd_config.get("sensors.usb_cameras", {}) or {}
+                if str(a.get("action", "")) == "auto":
+                    # Auto = meter and lock (v1's launch-time exposure, rd_vla.exposure): the search for the exposure
+                    # whose frame median is nearest 120. The driver's own auto cannot be locked: its value does not read back.
+                    metered = meter_exposure(cams_cfg, a.get("cam"))
+                    B.teleop_note(time.strftime("%H:%M:%S ") + "exposure metered: "
+                                  + (", ".join(f"{n} {v['exposure']} (median {v['median']:.0f})" for n, v in metered.items()) or "no camera answered"))
+                    teleop_page["exposure"] = exposure_mod.state(cams_cfg)
+                else:
+                    teleop_page["exposure"] = exposure_mod.adjust(cams_cfg, str(a.get("action", "")), a.get("cam"))
                 teleop_page["exposure_t"] = time.time()
                 B.teleop_note(time.strftime("%H:%M:%S ") + f"exposure {a.get('action')}{' ' + a['cam'] if a.get('cam') else ''}: "
                               + ", ".join(f"{n} {c['exposure']}" for n, c in teleop_page["exposure"].get("cameras", {}).items()))
@@ -527,7 +555,7 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
             seq = getattr(B, "_teleop_seq", 0) - min(len(getattr(B, "teleop_log", ())), 50) if B else 0        # the page starts with the recent lines
             while not await request.is_disconnected():
                 if B:
-                    for n, line in list(B.teleop_log):
+                    for n, line in list(getattr(B, "teleop_log", ())):
                         if n > seq:
                             seq = n
                             yield f"event: log\ndata: {json.dumps(line)}\n\n"

@@ -162,7 +162,7 @@ class Teleop(Node):
         dp("max_curls", [1.0, 1.0, 1.0, 1.0])  # index, middle, ring, thumb at a full grasp
         dp("axis_map", json.dumps(AXIS_MAP))
         dp("deadband", 0.12); dp("scale", 350.0)
-        dp("max_step_m", 0.03)
+        dp("max_step_m", 0.05)     # as the policy runner and v1: recording and playing back go through the same limits
         dp("workspace_min", [-1.0, -1.0, -0.2]); dp("workspace_max", [1.0, 1.0, 1.0])
         dp("base_frame", "ur_base"); dp("tool_frame", "ur_tool0")
         dp("cameras", list(CAMERA_KEYS)); dp("camera_topic", "/cameras/{name}/image")
