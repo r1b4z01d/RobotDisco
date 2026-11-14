@@ -5,7 +5,7 @@ from __future__ import annotations
 import io
 from pathlib import Path
 
-LANDMARK_CAMS = ("scene", "side", "realsense")
+LANDMARK_CAMS = ("scene", "side", "wrist", "realsense")
 
 
 def _label_font(size: int):
@@ -55,14 +55,15 @@ def capture_landmark(lid: str, img_dir: Path, pose: dict | None, jpegs: dict, fr
         now = time.time()
         frames = {n: (jpegs.get(n) or {}).get("data") if now - (jpegs.get(n) or {}).get("t", 0) < fresh_s else None for n in LANDMARK_CAMS}
         img_dir.mkdir(parents=True, exist_ok=True)
-        images = {"stitched": None, "realsense": None}
+        images = {"stitched": None, "wrist": None, "realsense": None}
         stitched = stitch_jpegs([("scene", frames["scene"]), ("side", frames["side"])])
         if stitched:
             (img_dir / f"{lid}_stitched.jpg").write_bytes(stitched)
             images["stitched"] = f"{lid}_stitched.jpg"
-        if frames["realsense"]:
-            (img_dir / f"{lid}_realsense.jpg").write_bytes(frames["realsense"])
-            images["realsense"] = f"{lid}_realsense.jpg"
+        for cam in ("wrist", "realsense"):                 # each its own photo
+            if frames[cam]:
+                (img_dir / f"{lid}_{cam}.jpg").write_bytes(frames[cam])
+                images[cam] = f"{lid}_{cam}.jpg"
         out["images"] = images
         out["cameras"] = [n for n in LANDMARK_CAMS if frames[n]]
         out["missing"] = [n for n in LANDMARK_CAMS if not frames[n]]

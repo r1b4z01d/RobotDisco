@@ -677,7 +677,7 @@ function lmCard(lm, d) {
       el("span", { class: "card-name" }, lm.name),
       el("span", { class: "tag" + (here ? "" : " warn"), title: here ? "the map the robot runs now" : `the robot runs map ${d.map}` }, lm.map || "?"),
       el("span", { class: "mono muted lm-pose", title: "x, y (m) and yaw in the map frame" }, lmPoseText(lm))),
-    el("div", { class: "lm-imgs" }, lmMapThumb(lm), photo(lm.images && lm.images.stitched, "side + scene"), photo(lm.images && lm.images.realsense, "RealSense")),
+    el("div", { class: "lm-imgs" }, lmMapThumb(lm), photo(lm.images && lm.images.stitched, "side + scene"), photo(lm.images && lm.images.wrist, "wrist"), photo(lm.images && lm.images.realsense, "RealSense")),
     lmTasks(lm, d),
     el("div", { class: "card-foot" },
       el("button", { class: "btn primary", disabled: !here || !d.ros_up, title: here ? "send the robot there (nav2 goal)" : "not on the map the robot runs", onclick: () => lmGoto(lm) }, "Go"),
