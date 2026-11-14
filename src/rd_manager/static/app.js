@@ -245,21 +245,58 @@ async function annotate(episode, fields, silent = false) {
 
 // ---- player ----
 async function play(episode) {
-  const label = $("#player-label");
-  label.textContent = `rendering ep ${episode}…`;
-  $("#player-frame").replaceChildren(el("div", { class: "placeholder" },
-    `Rendering episode ${episode} to rerun… the first play of an episode takes ~30s (cached afterwards).`));
-  try {
-    const r = await api(`/api/datasets/${encodeURIComponent(state.selected)}/episodes/${episode}/viewer`);
-    $("#player-frame").replaceChildren(el("iframe", { src: r.url }));
-    label.textContent = `${state.selected} · ep ${episode}  (rerun)`;
-    $("#btn-player-close").hidden = false;
-    state.playing = episode; renderEpisodes();
-  } catch (e) { err(e); label.textContent = "Player"; $("#player-frame").replaceChildren(el("div", { class: "placeholder" }, "Player")); }
+  // The browser plays the dataset's own video files: one <video> per camera, all held to the episode's stretch
+  // of its file (LeRobot v3 keeps many episodes in one mp4). v1 rendered the episode to a rerun viewer instead.
+  const label = $("#player-label"), frame = $("#player-frame");
+  let d;
+  try { d = await api(`/api/datasets/${encodeURIComponent(state.selected)}/episodes/${episode}/videos`); }
+  catch (e) { err(e); return; }
+  if (!d.videos.length) {
+    frame.replaceChildren(el("div", { class: "placeholder" }, "This dataset stores no video (frames only): nothing to replay here."));
+    return;
+  }
+  const vids = d.videos.map((v) => {
+    const video = el("video", { muted: true, playsinline: true, preload: "auto", src: `${v.url}#t=${v.from.toFixed(3)},${v.to.toFixed(3)}` });
+    video.muted = true;
+    return { ...v, video };
+  });
+  const master = vids[0], len = master.to - master.from;
+  const bar = el("input", { type: "range", min: 0, max: 1000, value: 0, class: "replay-bar" });
+  const clock = el("span", { class: "mono muted replay-clock" }, "0.0 s");
+  const btn = el("button", { class: "btn tiny primary" }, "❚❚");
+  const speed = el("select", { class: "replay-speed" }, ...[0.25, 0.5, 1, 2].map((r) => el("option", { value: r, selected: r === 1 }, `${r}×`)));
+  const seek = (t) => vids.forEach((v) => { v.video.currentTime = v.from + Math.max(0, Math.min(len, t)); });
+  const playAll = () => vids.forEach((v) => v.video.play().catch(() => {}));
+  const pauseAll = () => vids.forEach((v) => v.video.pause());
+  let dragging = false;
+  btn.onclick = () => { if (master.video.paused) { if (master.video.currentTime >= master.to - 0.05) seek(0); playAll(); } else pauseAll(); };
+  speed.onchange = () => vids.forEach((v) => { v.video.playbackRate = Number(speed.value); });
+  bar.oninput = () => { dragging = true; pauseAll(); seek(len * bar.value / 1000); };
+  bar.onchange = () => { dragging = false; };
+  master.video.addEventListener("play", () => { btn.textContent = "❚❚"; });
+  master.video.addEventListener("pause", () => { btn.textContent = "▶"; });
+  master.video.addEventListener("timeupdate", () => {
+    const t = master.video.currentTime - master.from;
+    if (!dragging) bar.value = Math.round(1000 * Math.max(0, Math.min(1, t / len)));
+    clock.textContent = `${Math.max(0, t).toFixed(1)} / ${len.toFixed(1)} s`;
+    if (master.video.currentTime >= master.to - 0.02) { pauseAll(); return; }     // the file goes on into the next episode
+    vids.slice(1).forEach((v) => { const want = v.from + t; if (Math.abs(v.video.currentTime - want) > 0.2) v.video.currentTime = want; });
+  });
+  master.video.addEventListener("error", () => {
+    frame.replaceChildren(el("div", { class: "placeholder" }, "This browser could not play the dataset's video (it is AV1). Try a current Chrome, Edge or Firefox."));
+  });
+  frame.replaceChildren(el("div", { class: "replay" },
+    el("div", { class: "replay-videos" }, ...vids.map((v) => el("figure", { class: "replay-cam" }, v.video, el("figcaption", {}, v.camera)))),
+    el("div", { class: "replay-controls" }, btn, bar, clock, speed)));
+  label.textContent = `${state.selected} · ep ${episode}`;
+  $("#btn-player-close").hidden = false;
+  state.playing = episode; renderEpisodes();
+  let ready = 0;
+  vids.forEach((v) => v.video.addEventListener("loadedmetadata", () => { v.video.currentTime = v.from; if (++ready === vids.length) playAll(); }, { once: true }));
 }
 async function stopPlayer() {
   try { await post("/api/viewer/stop"); } catch (e) { /* ignore */ }
-  $("#player-frame").replaceChildren(el("div", { class: "placeholder" }, "Press ▶ on an episode to play it in the rerun viewer."));
+  $("#player-frame").replaceChildren(el("div", { class: "placeholder" }, "Press ▶ on an episode to replay its camera videos."));
   $("#player-label").textContent = "Player";
   $("#btn-player-close").hidden = true;
   state.playing = null; renderEpisodes();

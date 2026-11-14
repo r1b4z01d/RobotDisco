@@ -147,3 +147,41 @@ def list_episodes(datasets_dir: str, name: str) -> list[dict[str, Any]]:
             "exposure": a.get("exposure") or None,
         })
     return rows
+
+
+def episode_videos(datasets_dir: str, name: str, episode: int) -> dict[str, Any]:
+    """Where one episode sits in the dataset's video files. LeRobot v3 keeps many episodes in one mp4 per camera, so
+    each camera gets {key, camera, chunk, file, from, to}: the file and the seconds of it that are this episode."""
+    root = os.path.join(datasets_dir, name)
+    if not is_dataset(root):
+        raise FileNotFoundError(f"{name}: not a dataset")
+    info = _read_info(root)
+    df = _episodes_df(root)
+    rows = df[df["episode_index"] == int(episode)]
+    if not len(rows):
+        raise FileNotFoundError(f"{name}: no episode {episode}")
+    r = rows.iloc[0]
+    template = info.get("video_path") or "videos/{video_key}/chunk-{chunk_index:03d}/file-{file_index:03d}.mp4"
+    videos = []
+    for key, feat in (info.get("features") or {}).items():
+        if (feat or {}).get("dtype") != "video" or f"videos/{key}/file_index" not in r:
+            continue
+        chunk, file = int(r[f"videos/{key}/chunk_index"]), int(r[f"videos/{key}/file_index"])
+        rel = template.format(video_key=key, chunk_index=chunk, file_index=file)
+        if os.path.isfile(os.path.join(root, rel)):
+            videos.append({"key": key, "camera": key.split(".")[-1], "chunk": chunk, "file": file,
+                           "from": float(r[f"videos/{key}/from_timestamp"]), "to": float(r[f"videos/{key}/to_timestamp"])})
+    return {"episode": int(episode), "fps": info.get("fps") or 1, "length": int(r["length"]), "videos": videos}
+
+
+def video_file(datasets_dir: str, name: str, key: str, chunk: int, file: int) -> str:
+    """The path of one of a dataset's video files, refused unless the key is one of its video features."""
+    root = os.path.join(datasets_dir, name)
+    info = _read_info(root)
+    if (info.get("features") or {}).get(key, {}).get("dtype") != "video":
+        raise FileNotFoundError(f"{name}: no video feature {key}")
+    template = info.get("video_path") or "videos/{video_key}/chunk-{chunk_index:03d}/file-{file_index:03d}.mp4"
+    path = os.path.join(root, template.format(video_key=key, chunk_index=int(chunk), file_index=int(file)))
+    if not os.path.isfile(path):
+        raise FileNotFoundError(f"{name}: no such video file")
+    return path

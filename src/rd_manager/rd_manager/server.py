@@ -1088,8 +1088,50 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
     def api_episodes(name: str):
         return {"episodes": _run(ds_mod.list_episodes, str(datasets_dir), _guard(name))}
 
-    for op, fn, key in (("rename_task", "rename_task", "task"), ("delete_episodes", "delete_episodes", "episodes"), ("merge", None, None)):
-        pass
+    @app.get("/api/datasets/{name}/episodes/{episode}/videos")
+    def api_episode_videos(name: str, episode: int):
+        """The replay player's data: each camera's video file and the seconds of it that are this episode."""
+        d = _run(ds_mod.episode_videos, str(datasets_dir), _guard(name), episode)
+        for v in d["videos"]:
+            v["url"] = f"/api/datasets/{name}/videofile/{v['key']}/{v['chunk']}/{v['file']}"
+        return d
+
+    @app.get("/api/datasets/{name}/videofile/{key}/{chunk}/{file}")
+    def api_video_file(name: str, key: str, chunk: int, file: int, request: Request):
+        """One video file, with byte ranges: a browser cannot seek to an episode in the middle of a file without them
+        (and this Starlette's FileResponse has none)."""
+        path = _run(ds_mod.video_file, str(datasets_dir), _guard(name), key, chunk, file)
+        size = os.path.getsize(path)
+        start, end = 0, size - 1
+        rng = request.headers.get("range", "")
+        m = re.match(r"bytes=(\d*)-(\d*)$", rng.strip())
+        if m and (m.group(1) or m.group(2)):
+            if m.group(1):
+                start = int(m.group(1))
+                end = min(int(m.group(2)), size - 1) if m.group(2) else size - 1
+            else:
+                start = max(0, size - int(m.group(2)))
+            if start > end or start >= size:
+                return Response(status_code=416, headers={"Content-Range": f"bytes */{size}"})
+
+        def body(pos=start, left=end - start + 1):
+            with open(path, "rb") as f:
+                f.seek(pos)
+                while left > 0:
+                    chunk_ = f.read(min(1 << 18, left))
+                    if not chunk_:
+                        return
+                    left -= len(chunk_)
+                    yield chunk_
+        headers = {"Accept-Ranges": "bytes", "Content-Length": str(end - start + 1), "Cache-Control": "private, max-age=3600"}
+        if m and (m.group(1) or m.group(2)):
+            headers["Content-Range"] = f"bytes {start}-{end}/{size}"
+            return StreamingResponse(body(), status_code=206, media_type="video/mp4", headers=headers)
+        return StreamingResponse(body(), media_type="video/mp4", headers=headers)
+
+    @app.post("/api/viewer/stop")
+    def api_viewer_stop():
+        return {"ok": True}        # v1 stopped its rerun viewer here; the replay is the browser's own video now
 
     @app.post("/api/datasets/{name}/annotate")
     def api_annotate(name: str, payload: dict = Body(...)):

@@ -32,8 +32,12 @@ def generate_launch_description():
     sim = IfCondition(sim_mode)
     real = UnlessCondition(sim_mode)
 
+    # not a bare xacro: the driver's macro hard-codes the stiffest servo settings the UR has (rd_arm/robot_urdf.py)
+    servoj = config.get('arm.servoj', None) or {}
     robot_description = ParameterValue(Command([
-        'xacro ', os.path.join(desc, 'urdf', 'robot.urdf.xacro'),
+        'python3 -m rd_arm.robot_urdf --servoj-gain ', str(float(servoj.get('gain', 300))),
+        ' --servoj-lookahead ', str(float(servoj.get('lookahead_time', 0.1))), ' ',
+        os.path.join(desc, 'urdf', 'robot.urdf.xacro'),
         ' base_control:=false ur_control:=true sim_mode:=', sim_mode, ' robot_ip:=', robot_ip,
         ' tool_voltage:=', str(config.get('arm.tool_voltage', 12)),
         ' initial_positions_file:=', os.path.join(share, 'config', 'initial_positions.yaml'), config.ur_kinematics_arg()]), value_type=str)

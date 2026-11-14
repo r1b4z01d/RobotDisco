@@ -147,3 +147,12 @@ def test_stream_follower_starts_from_rest_and_respects_its_limits():
         x, v = smooth_step(x, v, [0.03], dt, omega, vmax, amax)
         top = max(top, x[0])
     assert top <= 0.03 + 1e-4
+
+
+def test_robot_urdf_sets_the_servo_parameters():
+    from rd_arm.robot_urdf import main, with_servoj
+    urdf = '<hardware><param name="servoj_gain">2000</param>\n<param name="servoj_lookahead_time">0.03</param></hardware>'
+    out, n = with_servoj(urdf, 300, 0.1)
+    assert n == 2 and '<param name="servoj_gain">300</param>' in out and '<param name="servoj_lookahead_time">0.1</param>' in out
+    assert with_servoj("<robot/>", 300, 0.1) == ("<robot/>", 0)
+    assert main(["--servoj-gain", "5000", "x.xacro"]) == 2 and main(["--servoj-lookahead", "0.5", "x.xacro"]) == 2     # outside the UR's limits

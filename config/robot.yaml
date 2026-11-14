@@ -46,6 +46,9 @@ arm:                              # Universal Robots UR5e, PolyScope 5.21
                                   # UR5e, and the driver warns that it does not match). Extract once, arm powered:
                                   #   ros2 launch ur_calibration calibration_correction.launch.py robot_ip:=<arm.ip> target_filename:=/mnt/data/ur5e_calibration.yaml
                                   # then restart rd_base, rd_arm (robot_state_publisher, the driver and MoveIt all read it)
+  servoj:                         # how the UR chases a streamed joint target (policies, teleop). v1's values; the driver's own
+    gain: 300                     # are 2000 and 0.03 s, the stiffest and shortest the UR accepts, and the arm was loud with them
+    lookahead_time: 0.1           # s: 0.03..0.2, longer = smoother and later
   workspace:                      # where a streamed tool target may not go (policies and teleop), in the UR's base frame;
                                   # v1's calibrate_workspace.py values from the robot (outputs/workspace_calib.json)
     z_floor: -0.2257              # targets below this are lifted to it
