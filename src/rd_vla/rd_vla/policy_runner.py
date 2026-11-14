@@ -35,6 +35,8 @@ from .observer import Observer
 from .recorder import EpisodeWriter
 from .schema import CAMERA_KEYS, split_action
 
+OPEN_SETTLE_S = 4.0     # from the open command to the first observation of a grasping run
+
 
 class PolicyRunner(Node):
     def __init__(self):
@@ -235,16 +237,25 @@ class PolicyRunner(Node):
             # its training distribution (tigger_1_merged was recorded at 0.5 / 0.5; the robot's default is 0.40 / 0.30)
             restore_squares = self._set_squares((checkpoints.capture(info.get("resolved") or "") or {}).get("squares") or {})
             # 2. home, observations
+            opened_at = None
+            if (goal.done_when or "").strip().lower() == "closed":
+                # A grasping task starts with an open hand: left closed by the run before, the policy was fed "already
+                # holding" and the end condition (closed for still_seconds) ended the next run after four seconds.
+                # Opened BEFORE the arm goes home and given OPEN_SETTLE_S in all: the state says "open" the moment the
+                # command is sent, but the wrist camera shows the fingers wherever they physically are. Opened 1.5 s
+                # before the first observation, every run after a grasp began with the fingers already commanded to
+                # 0.15 at step 0 and closed 20 steps early (2026-11-14; the first run after a start, hand long open, did not).
+                for _ in range(2):                               # twice: the hand's link is UDP
+                    self.hand_pub.publish(Float32MultiArray(data=[0.0, 0.0, 0.0, 0.0]))
+                    time.sleep(0.1)
+                opened_at = time.monotonic()
             if goal.home_first:
                 self._feedback(handle, 0, t0, "homing", 0)
                 ok, msg = self._home()
                 if not ok:
                     return False, f"homing failed: {msg}"
-            if (goal.done_when or "").strip().lower() == "closed":
-                # a grasping task starts with an open hand: left closed by the run before, the policy was fed "already
-                # holding" and the end condition (closed for still_seconds) ended the next run after four seconds
-                self.hand_pub.publish(Float32MultiArray(data=[0.0, 0.0, 0.0, 0.0]))
-                time.sleep(1.5)
+            if opened_at is not None:
+                time.sleep(max(0.0, OPEN_SETTLE_S - (time.monotonic() - opened_at)))
             ready, why = self.observer.wait_ready(float(p("obs_max_age_s")) + 1.0, cancelled=cancelled)
             if not ready:
                 self._set_squares(restore_squares)
