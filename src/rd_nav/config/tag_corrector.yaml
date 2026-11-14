@@ -17,4 +17,4 @@ tag_corrector:
     min_interval: 5.0         # s between automatic corrections
     initial_pose_std_xy: 0.10
     initial_pose_std_yaw: 0.10
-    tilt_warn: 0.25
+    max_tilt: 0.17                 # rad (10 deg): a tag estimate that puts the base further off level is dropped (the tag's mirrored pose solution)

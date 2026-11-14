@@ -128,6 +128,12 @@ class Consensus:
         return mx, my, myaw
 
 
+def base_tilt(T) -> tuple:
+    """(roll, pitch) in rad of the base in a 4x4 map-from-base transform. ROS-free."""
+    R = T[:3, :3]
+    return math.atan2(R[2, 1], R[2, 2]), -math.asin(max(-1.0, min(1.0, R[2, 0])))
+
+
 def load_tag_poses(path: str) -> dict:
     """tag id -> 4x4 T_map_tag from the YAML the teach service writes."""
     out = {}
@@ -182,7 +188,7 @@ class TagCorrector(Node):
         dp("min_interval", 5.0)
         dp("initial_pose_std_xy", 0.10)
         dp("initial_pose_std_yaw", 0.10)
-        dp("tilt_warn", 0.25)
+        dp("max_tilt", 0.17)       # rad (10 deg): a tag estimate that puts the base further off level than this is dropped
         p = lambda k: self.get_parameter(k).value  # noqa: E731
         self.tag_poses_file = p("tag_poses_file")
         self.map_frame, self.base_frame = p("map_frame"), p("base_frame")
@@ -191,7 +197,7 @@ class TagCorrector(Node):
         self.position_threshold, self.yaw_threshold = float(p("position_threshold")), float(p("yaw_threshold"))
         self.min_interval = float(p("min_interval"))
         self.std_xy, self.std_yaw = float(p("initial_pose_std_xy")), float(p("initial_pose_std_yaw"))
-        self.tilt_warn = float(p("tilt_warn"))
+        self.max_tilt = float(p("max_tilt"))
         self.consensus = Consensus(int(p("min_detections")), float(p("window_sec")), float(p("spread_xy")), float(p("spread_yaw")))
         self.tag_poses = load_tag_poses(self.tag_poses_file)
         self.tf = Buffer()
@@ -251,7 +257,8 @@ class TagCorrector(Node):
                 self.get_logger().info(f"tag {tag_id} seen but not taught", throttle_duration_sec=10.0)
                 continue
             T_map_base = T_map_tag @ np.linalg.inv(T_base_tag)
-            self.check_tilt(T_map_base, tag_id)
+            if not self.level(T_map_base, tag_id):
+                continue
             x, y, yaw = mat_to_xy_yaw(T_map_base)
             self.consensus.add(now, tag_id, x, y, yaw)
         est = self.consensus.estimate()
@@ -271,14 +278,19 @@ class TagCorrector(Node):
         if dpos > self.position_threshold or dyaw > self.yaw_threshold:
             self.correct(x, y, yaw, f"off by {dpos:.2f} m / {math.degrees(dyaw):.1f} deg")
 
-    def check_tilt(self, T, tag_id):
-        R = T[:3, :3]
-        pitch = -math.asin(max(-1.0, min(1.0, R[2, 0])))
-        roll = math.atan2(R[2, 1], R[2, 2])
-        if abs(roll) > self.tilt_warn or abs(pitch) > self.tilt_warn:
-            self.get_logger().warn(f"tag {tag_id}: estimated base roll/pitch {math.degrees(roll):.0f}/"
-                                   f"{math.degrees(pitch):.0f} deg; check the camera mount or re-teach",
-                                   throttle_duration_sec=10.0)
+    def level(self, T, tag_id) -> bool:
+        """Is this estimate of the base level, as a robot on the floor is? A flat tag seen from afar has two pose
+        solutions that fit its four corners almost equally (mirrored about the line of sight), and the detector
+        flips between them. The wrong one tips the tag, so the base it implies stands tilted by 15 to 50 deg and
+        turned by anything up to half a circle. Those corrections sent AMCL to a wrong heading every five seconds
+        while tag 1 was in view (the robot, 2026-11-13, logged then only as a warning): they are dropped here."""
+        roll, pitch = base_tilt(T)
+        if abs(roll) <= self.max_tilt and abs(pitch) <= self.max_tilt:
+            return True
+        self.get_logger().info(f"tag {tag_id}: estimate dropped, it puts the base at roll/pitch {math.degrees(roll):.0f}/"
+                               f"{math.degrees(pitch):.0f} deg (the tag's other pose solution, or the camera mount / a re-teach)",
+                               throttle_duration_sec=10.0)
+        return False
 
     # ---- publishing
     def pose_msg(self, x, y, yaw):
