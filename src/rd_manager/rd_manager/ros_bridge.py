@@ -158,7 +158,23 @@ class RosBridge:
         self._subscribe()
         ex = MultiThreadedExecutor(num_threads=4)
         ex.add_node(self.node)
-        threading.Thread(target=ex.spin, daemon=True, name="rd_manager-spin").start()
+
+        def spin():
+            # Subscriptions and clients come and go with the pages (touch, want_cam, set_camera_square), from other
+            # threads. rclpy raises InvalidHandle out of spin() when one is destroyed while the wait set is being
+            # built, and the thread used to end there: every topic froze, the pages kept their last frame
+            # (2026-11-13). The entity is gone by the next pass, so spinning again is the whole recovery.
+            from rclpy._rclpy_pybind11 import InvalidHandle
+            while rclpy.ok():
+                try:
+                    ex.spin()
+                except InvalidHandle:
+                    continue
+                except Exception as e:  # noqa: BLE001  a dead spin thread is a dead manager: log it and go on
+                    print(f"[rd_manager] spin: {type(e).__name__}: {e}", flush=True)
+                    time.sleep(0.1)
+
+        threading.Thread(target=spin, daemon=True, name="rd_manager-spin").start()
         threading.Thread(target=self._drive_loop, daemon=True, name="drive-pad").start()
         self.up = True
         self.status = "waiting for TF map->base_footprint"

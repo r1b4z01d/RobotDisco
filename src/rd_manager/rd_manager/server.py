@@ -524,7 +524,7 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
         import asyncio
 
         async def gen():
-            seq = B._teleop_seq - min(len(B.teleop_log), 50) if B else 0        # the page starts with the recent lines
+            seq = getattr(B, "_teleop_seq", 0) - min(len(getattr(B, "teleop_log", ())), 50) if B else 0        # the page starts with the recent lines
             while not await request.is_disconnected():
                 if B:
                     for n, line in list(B.teleop_log):
