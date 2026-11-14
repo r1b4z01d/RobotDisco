@@ -89,4 +89,7 @@ def generate_launch_description():
         DeclareLaunchArgument('sim', default_value='false'),
         DeclareLaunchArgument('use_sim_time', default_value='false'),
         *s1_nodes, *s2e_nodes, *velo_nodes,
+        # all three as one 360 degree scan in the base frame, for localisation (rd_perception/scan_merger.py)
+        Node(package='rd_perception', executable='scan_merger', name='scan_merger', output='screen',
+             respawn=True, respawn_delay=3.0, parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}]),
     ])

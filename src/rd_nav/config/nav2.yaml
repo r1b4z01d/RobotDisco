@@ -42,7 +42,8 @@ amcl:
     z_max: 0.05
     z_rand: 0.5
     z_short: 0.05
-    scan_topic: /rp_s2e_lidar/scan_filtered     # the back lidar, as v1 (/scan was a relay of it)
+    scan_topic: /scan_merged                    # front + back RPLidars and the Velodyne as one scan (rd_perception scan_merger);
+                                                # v1 used the back lidar alone, and localisation froze when it dropped out
     set_initial_pose: false                     # the grid localizer / tag corrector / manager set it
 
 bt_navigator:

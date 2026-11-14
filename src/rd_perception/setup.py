@@ -23,6 +23,7 @@ setup(
     license='CC-BY-NC-SA-4.0',
     entry_points={'console_scripts': [
         'scan_range_offset = rd_perception.scan_range_offset:main',
+        'scan_merger = rd_perception.scan_merger:main',
         'tag_adapter = rd_perception.tag_adapter:main',
         'fake_tags = rd_perception.fake_tags:main',
         'fake_tag_image = rd_perception.fake_tag_image:main',

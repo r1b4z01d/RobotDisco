@@ -12,6 +12,7 @@ ros2 launch rd_perception perception.launch.py sim_mode:=true       # rig: no dr
 |---|---|
 | `/rp_s1_lidar/scan_filtered` | S1 driver → `scan_range_offset` (the faulty unit's range error, measured on every scan against the wheel housings: robot.yaml `body_reference`) → body polygon + speckle filter. The filters need the robot's TF: started alone, `lidars.launch.py` publishes no `scan_filtered` until `robot_state_publisher` runs |
 | `/rp_s2e_lidar/scan_filtered` | S2E driver (UDP) → filter |
+| `/scan_merged` | `scan_merger`: the two filtered RPLidar scans and the Velodyne's scan as one 360 degree scan in the base frame, for AMCL. Each scan is carried to the output's moment through odometry, a silent lidar is left out, and returns inside the robot's own outline are dropped. About 17% of one Orin core in Python (2026-11-13) |
 | `/velodyne_points`, `/velodyne/scan` | velodyne driver + transform + laserscan |
 | `/camera/camera/color/image_raw`, `.../depth/color/points`, `.../infra*` | realsense2_camera (1280x720 @ 15 colour, 848x480 depth, IR only with `visual_slam`) |
 | `/cameras/{scene,wrist,side}/image_raw`, `/image` (rotated upright, scene and side cut to v1's 0.40 / 0.30 squares) | usb_cam by USB port path + `image_rotate` (robot.yaml `rotate`, `square`); replaces v1's multicast camera service, whose square crop the policies were trained on |

@@ -161,3 +161,26 @@ def test_tag_axes_turn_from_the_library_frame_to_z_up():
     # composing with a turned tag keeps the turn: 90 deg about the camera's y, then our axes
     turned = (0.0, math.sin(math.pi / 4), 0.0, math.cos(math.pi / 4))
     assert np.allclose(rot(quat_multiply(turned, LIBRARY_TO_Z_UP)), rot(turned) @ rot(LIBRARY_TO_Z_UP))
+
+
+def test_scan_merger_puts_three_lidars_into_one_scan():
+    from rd_perception.scan_merger import merge, scan_points, transform_matrix
+    # a lidar's valid returns as points in its own frame
+    pts = scan_points([1.0, float('inf'), 0.05, 2.0, float('nan'), 50.0], 0.0, math.pi / 2, 0.15, 40.0)
+    assert pts.shape == (2, 3) and np.allclose(pts[0], [1, 0, 0]) and np.allclose(pts[1], [0, -2, 0], atol=1e-6)   # 0 deg and 270 deg
+    # the back lidar is mounted 0.52 m behind the base: a wall 1 m behind it is 1.52 m behind the base
+    back = transform_matrix(NS(rotation=NS(x=0.0, y=0.0, z=0.0, w=1.0), translation=NS(x=-0.52, y=0.0, z=0.16)))
+    wall_behind = np.array([[-1.0, 0.0, 0.0]]) @ back[:3, :3].T + back[:3, 3]
+    # the front lidar faces backwards (yaw 180): what it sees at +1 m in its own x is 0.79 m behind its mount, in the base's -x
+    front = transform_matrix(NS(rotation=NS(x=0.0, y=0.0, z=1.0, w=0.0), translation=NS(x=0.21, y=0.0, z=0.30)))
+    ahead = np.array([[-2.0, 0.0, 0.0]]) @ front[:3, :3].T + front[:3, 3]
+    assert np.allclose(ahead[0, :2], [2.21, 0.0])
+    velodyne = np.array([[0.0, 3.0, 0.4], [0.2, 0.1, 0.4], [2.5, 0.0, 0.4]])        # a wall to the left, the arm, and something beyond the front lidar's wall
+    out = merge([wall_behind, ahead, velodyne], 360, 0.15, 30.0, body_box=(-0.7, 0.6, -0.45, 0.45))
+    deg = lambda a: int(math.floor((a + 180.0) % 360.0))          # noqa: E731  the bin of a base-frame bearing
+    assert abs(out[deg(180)] - 1.52) < 1e-6 or abs(out[deg(-180)] - 1.52) < 1e-6      # behind: the back lidar's wall
+    assert abs(out[deg(0)] - 2.21) < 1e-6                         # ahead: the nearer of the two returns in that bin
+    assert abs(out[deg(90)] - 3.0) < 1e-6                         # left: only the Velodyne saw it
+    assert np.isinf(out[deg(26)])                                 # the arm (inside the body box) left nothing
+    assert np.isfinite(out).sum() == 3
+    assert np.isinf(merge([], 360, 0.15, 30.0)).all() and np.isinf(merge([np.zeros((0, 3))], 360, 0.15, 30.0)).all()
