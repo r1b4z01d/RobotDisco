@@ -143,8 +143,11 @@ class PolicyRunner(Node):
         now = config.camera_squares()
         undo = {}
         for cam, at in (squares or {}).items():
-            if at is None or now.get(cam) is None or abs(float(at) - float(now[cam])) < 1e-3:
+            if at is None or now.get(cam) is None:
                 continue
+            # set even when it equals the configured cut: the node may sit somewhere else (a run that could not
+            # put it back; until 2026-11-14 the restore itself was skipped as "no change" and the cameras stayed
+            # at the last checkpoint's cut while a new dataset's capture.json would have recorded the configured one)
             cl = self.create_client(SetParameters, f"/cameras/{cam}/{cam}_rotate/set_parameters", callback_group=self.cb)
             try:
                 if not cl.wait_for_service(timeout_sec=1.0):
@@ -154,7 +157,8 @@ class PolicyRunner(Node):
                     type=ParameterType.PARAMETER_DOUBLE, double_value=float(at)))]))
                 if r.results and r.results[0].successful:
                     undo[cam] = float(now[cam])
-                    self.get_logger().info(f"camera {cam}: crop {now[cam]:.2f} -> {float(at):.2f}")
+                    if abs(float(at) - float(now[cam])) >= 1e-3:
+                        self.get_logger().info(f"camera {cam}: crop {now[cam]:.2f} -> {float(at):.2f}")
             finally:
                 self.destroy_client(cl)
         if undo:
