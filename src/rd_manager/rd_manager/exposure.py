@@ -1,8 +1,8 @@
-"""Lock or release the three policy cameras' exposure and white balance with v4l2-ctl (v1 sensors/cameras.py's
+"""Lock or release the three policy cameras' exposure with v4l2-ctl (v1 sensors/cameras.py's
 manual-exposure switch). Auto exposure meters the whole frame, so the same shelf looks different once the hand is in
 view or a lamp goes on; locked, every frame of a dataset is exposed alike.
 
-lock: each camera keeps the exposure and colour temperature its auto modes sit at right now. release: auto again.
+lock: each camera keeps the exposure its auto mode sits at right now (white balance stays automatic). release: auto again.
 The devices are robot.yaml sensors.usb_cameras (by USB port); `run` is injectable for the tests.
 """
 from __future__ import annotations
@@ -55,10 +55,11 @@ def set_locked(cfg: dict, locked: bool, run=_run) -> dict:
             if "exposure_time_absolute" in c:
                 sets.append(f"exposure_time_absolute={c['exposure_time_absolute']}")
             run(["v4l2-ctl", "-d", dev, "-c", ",".join(sets)])
+            # White balance stays automatic, as in v1, which only ever locked the exposure. Locking it here froze the
+            # colour at the control's default (4600 K: under auto the control does not report what the camera uses)
+            # and every frame went green against the datasets' neutral white (2026-11-14).
             if "white_balance_automatic" in c:
-                run(["v4l2-ctl", "-d", dev, "-c", "white_balance_automatic=0"])
-                if "white_balance_temperature" in c:
-                    run(["v4l2-ctl", "-d", dev, "-c", f"white_balance_temperature={c['white_balance_temperature']}"])
+                run(["v4l2-ctl", "-d", dev, "-c", "white_balance_automatic=1"])
         else:
             run(["v4l2-ctl", "-d", dev, "-c", f"auto_exposure={AUTO}"])
             if "white_balance_automatic" in c:

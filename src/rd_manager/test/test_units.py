@@ -141,7 +141,7 @@ def test_exposure_lock_freezes_each_camera_where_auto_left_it():
     assert exposure.state(cfg, run)["locked"] is False
     s = exposure.set_locked(cfg, True, run)
     assert s["locked"] and [c["exposure"] for c in s["cameras"].values()] == [150, 151, 152]     # what auto had chosen
-    assert all(c["auto_exposure"] == 1 and c["white_balance_automatic"] == 0 and c["white_balance_temperature"] == 4600 for c in ctrls.values())
+    assert all(c["auto_exposure"] == 1 and c["white_balance_automatic"] == 1 for c in ctrls.values())
     s = exposure.set_locked(cfg, False, run)
     assert not s["locked"] and all(c["auto_exposure"] == 3 and c["white_balance_automatic"] == 1 for c in ctrls.values())
     assert exposure.state({"by_path": "/dev/x-{port}", "scene": {"port": "1"}}, lambda a: "")["cameras"]["scene"]["found"] is False
