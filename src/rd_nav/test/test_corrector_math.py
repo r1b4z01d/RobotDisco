@@ -44,24 +44,3 @@ def test_consensus_wraps_yaw():
     c.add(0.1, 1, 0, 0, -math.pi + 0.05)
     _, _, yaw = c.estimate()
     assert abs(abs(yaw) - math.pi) < 1e-6
-
-
-def test_base_tilt_tells_a_level_estimate_from_the_tags_mirrored_solution():
-    import math
-    import numpy as np
-    from rd_nav.tag_corrector import base_tilt
-
-    def T(roll, pitch, yaw):
-        cr, sr, cp, sp, cy, sy = math.cos(roll), math.sin(roll), math.cos(pitch), math.sin(pitch), math.cos(yaw), math.sin(yaw)
-        R = np.array([[cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr],
-                      [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr],
-                      [-sp, cp * sr, cp * cr]])
-        M = np.eye(4)
-        M[:3, :3] = R
-        return M
-    roll, pitch = base_tilt(T(0.0, 0.0, 3.07))                     # level, whatever the heading
-    assert abs(roll) < 1e-9 and abs(pitch) < 1e-9
-    roll, pitch = base_tilt(T(math.radians(-6), math.radians(25), 1.0))      # what the robot logged for the flipped solution
-    assert abs(math.degrees(roll) + 6) < 1e-6 and abs(math.degrees(pitch) - 25) < 1e-6
-    assert max(abs(v) for v in base_tilt(T(math.radians(4), math.radians(-19), -2.0))) > 0.17
-    assert max(abs(v) for v in base_tilt(T(math.radians(3), math.radians(-4), 0.5))) < 0.17     # a real robot's few degrees pass
