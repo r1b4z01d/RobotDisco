@@ -1,4 +1,4 @@
-"""The WLED panels module without a WLED: the heart's geometry and beat, and against a fake WLED on loopback
+"""The WLED panels module without a WLED: the heart's geometry, and against a fake WLED on loopback
 (its JSON layout over HTTP, a UDP socket for the realtime frames) the layout it reads and the DNRGB packets it sends."""
 import json
 import socket
@@ -6,7 +6,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-from rd_face.wled_panels import DNRGB_MAX_LEDS, WledPanels, beat, heart_frame
+from rd_face.wled_panels import DNRGB_MAX_LEDS, WledPanels, heart_frame
 
 W, H = 32, 16
 WLED_JSON = {"info": {"leds": {"matrix": {"w": W, "h": H}}},
@@ -60,7 +60,7 @@ def lit(buf, w, x0, y0, x1, y1):
     return sum(1 for y in range(y0, y1) for x in range(x0, x1) if any(buf[(y * w + x) * 3:(y * w + x) * 3 + 3]))
 
 
-def test_heart_frame_and_beat():
+def test_heart_frame():
     boxes = [(0, 0, 16, 16), (16, 0, 32, 16)]
     f = heart_frame(W, H, boxes, 1.0)
     assert len(f) == W * H * 3
@@ -71,9 +71,6 @@ def test_heart_frame_and_beat():
     # the two lobes: the row near the top is lit left and right of the centre notch, the bottom row only at the tip
     small = heart_frame(W, H, boxes, 0.82)
     assert lit(small, W, 0, 0, 16, 16) < left                          # the resting size is smaller
-    vals = [beat(t / 100.0) for t in range(100)]
-    assert min(vals) >= 0.82 and max(vals) <= 1.0 and max(vals) > 0.99 and abs(beat(0.7) - 0.82) < 0.01
-    assert beat(0.12) == beat(1.12)                                    # periodic
 
 
 def test_layout_and_realtime_packets():
@@ -90,7 +87,8 @@ def test_layout_and_realtime_packets():
         assert pk[-1] == bytes([4, 0, 0, 0, 0, 0, 0])                    # realtime mode ended: the WLED resumes its effect
         frames = [x for x in pk[:-1] if x[2:4] == bytes([0, 0])]
         tails = [x for x in pk[:-1] if x[2:4] != bytes([0, 0])]
-        assert len(frames) >= 5 and len(frames) == len(tails)            # ~15 fps for 0.6 s, two packets per 512-LED frame
+        assert len(frames) >= 2 and len(frames) == len(tails)            # resent every 0.25 s for 0.6 s, two packets per 512-LED frame
+        assert len(set(frames)) == 1                                     # the same frame every time: the heart holds still
         assert all(x[0] == 4 and x[1] == 2 for x in pk[:-1])             # DNRGB, 2 s timeout
         assert len(frames[0]) == 4 + DNRGB_MAX_LEDS * 3
         start = (tails[0][2] << 8) | tails[0][3]

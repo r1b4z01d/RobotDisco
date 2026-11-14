@@ -1,6 +1,6 @@
 """The face: eyes that track whoever is in view, a mouth that moves with the speech, idle gestures, face
 recognition with a learned gallery, and the greeting (hello by name, a wave through rd_arm, a wink for someone
-back within the hour), with a beating heart on the WLED matrix panels for anyone it knows (wled_panels.py).
+back within the hour), with a heart on the WLED matrix panels for anyone it knows (wled_panels.py).
 v1's combined_face_hand_node without the TTS (rd_audio's Say), the wave (rd_arm's Wave) and the HTTP Folks page
 (rd_manager; the data is on topics here).
 
@@ -82,7 +82,7 @@ class FaceNode(Node):
         dp("greeting_late_text", "oh, hi {name}"); dp("greeting_wait", 2.0); dp("greeting_name_window", 10.0)
         dp("greeting_happy_seconds", 30.0); dp("greeting_cooldown", 3600.0)
         dp("wave_enabled", True); dp("wave_known_only", True); dp("wave_cooldown", 20.0)
-        # the WLED matrix panels: a beating heart when a known person is recognised, then back to their own effect
+        # the WLED matrix panels: a steady heart when a known person is recognised, then back to their own effect
         dp("wled_enabled", True); dp("wled_heart_seconds", 3.0)
         dp("wled_host", str(config.get("panels.ip", "")))
         dp("wled_http_port", int(config.get("panels.ports.http", 80))); dp("wled_udp_port", int(config.get("panels.ports.realtime_udp", 21324)))

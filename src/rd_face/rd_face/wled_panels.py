@@ -1,4 +1,4 @@
-"""The WLED matrix panels: a beating heart on each matrix when a known person is recognised.
+"""The WLED matrix panels: a steady heart on each matrix when a known person is recognised.
 
 The frames go out as WLED realtime UDP (DNRGB, port 21324). Realtime data only overrides what the
 panels show while it keeps arriving: once the stream stops, WLED goes back to the effect it was
@@ -9,7 +9,6 @@ v1's robot_face/wled_panels.py (2026-11-09) with the two ports as arguments, so 
 loopback. Standalone test (no ROS):  python3 wled_panels.py <panels.ip from robot.yaml> [seconds]
 """
 import json
-import math
 import socket
 import sys
 import threading
@@ -19,7 +18,6 @@ import urllib.request
 UDP_PORT = 21324          # WLED realtime UDP
 HTTP_PORT = 80            # WLED JSON API
 DNRGB_MAX_LEDS = 489      # LEDs per DNRGB packet
-FPS = 15.0
 
 
 def heart_coverage(u: float, v: float) -> bool:
@@ -51,13 +49,6 @@ def heart_frame(width: int, height: int, boxes, scale: float, color=(255, 0, 40)
                     i = (y * width + x) * 3
                     buf[i:i + 3] = bytes(int(c * k) for c in color)
     return bytes(buf)
-
-
-def beat(t: float, period: float = 1.0) -> float:
-    """Heartbeat size over time: two quick swells per period, resting at 0.82."""
-    p = (t % period) / period
-    swell = math.exp(-((p - 0.12) / 0.07) ** 2) + 0.6 * math.exp(-((p - 0.36) / 0.07) ** 2)
-    return 0.82 + 0.18 * min(swell, 1.0)
 
 
 class WledPanels:
@@ -102,21 +93,13 @@ class WledPanels:
 
     def play(self, seconds: float):
         w, h, boxes = self.layout()
-        frames = {}                   # the beat repeats: render each size once
+        frame = heart_frame(w, h, boxes, 1.0)         # one steady, full-size heart (it used to beat: Bryan, 2026-11-13)
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
             t0 = time.monotonic()
-            n = 0
-            while True:
-                t = time.monotonic() - t0
-                if t >= seconds:
-                    break
-                scale = round(beat(t), 2)
-                if scale not in frames:
-                    frames[scale] = heart_frame(w, h, boxes, scale)
-                self._send(sock, frames[scale], timeout_s=2)
-                n += 1
-                time.sleep(max(0.0, t0 + n / FPS - time.monotonic()))
+            while time.monotonic() - t0 < seconds:
+                self._send(sock, frame, timeout_s=2)      # resent well inside the WLED's realtime timeout
+                time.sleep(min(0.25, max(0.0, t0 + seconds - time.monotonic())))
             # a zero timeout ends realtime mode now: the WLED resumes its own effect
             sock.sendto(bytes([4, 0, 0, 0, 0, 0, 0]), (self.host, self.udp_port))
         finally:
