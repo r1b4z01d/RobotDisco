@@ -483,3 +483,22 @@ def test_checkpoint_capture_is_the_runs_own(tmp_path):
     assert checkpoints.capture(pm)["squares"] == {"scene": 0.5, "side": 0.5, "wrist": None}
     (run / "capture.json").write_text("not json")
     assert checkpoints.capture(pm) == {}
+
+
+def test_images_reach_the_policy_in_rgb():
+    """A camera frame keeps its channel order from the observer to the policy's tensor (v1: RGB all the way).
+    v2 reversed it in the smolvla backend until 2026-11-13, so the policy saw red and blue swapped."""
+    import numpy as np
+    import pytest
+    from rd_vla import wire
+    red = np.zeros((48, 64, 3), np.uint8)
+    red[..., 0] = 255                                                   # RGB red
+    _, images, _ = wire.decode_obs(wire.encode_obs([0.0] * 16, {"scene": red}, "t"))
+    back = images["scene"]
+    assert back[..., 0].mean() > 240 and back[..., 2].mean() < 15      # the wire hands the array back channel for channel
+    torch = pytest.importorskip("torch")
+    from rd_vla.backends.smolvla import SmolVLABackend
+    b = SmolVLABackend(None)
+    b.torch = torch
+    t = b._observation([0.0] * 16, {"scene": back}, "t")["observation.images.scene"]
+    assert t.shape == (1, 3, 48, 64) and float(t[0, 0].mean()) > 0.94 and float(t[0, 2].mean()) < 0.06   # channel 0 is red

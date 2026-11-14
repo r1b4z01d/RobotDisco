@@ -105,8 +105,10 @@ class SmolVLABackend:
         torch = self.torch
         obs = {"observation.state": torch.as_tensor(np.asarray(state, dtype=np.float32)).unsqueeze(0), "task": task}
         for name, img in images.items():
-            a = np.ascontiguousarray(img[..., ::-1]) if img.shape[-1] == 3 else img   # the wire JPEG decodes BGR
-            obs[f"observation.images.{name}"] = torch.as_tensor(a).permute(2, 0, 1).unsqueeze(0).float() / 255.0
+            # RGB in, RGB to the policy, as v1: the wire's JPEG is written and read by OpenCV, which hands the array
+            # back channel for channel. Until 2026-11-13 the channels were reversed here ("the wire JPEG decodes
+            # BGR"): every v2 run fed the policy red and blue swapped (on training frames: 7 x the curl error).
+            obs[f"observation.images.{name}"] = torch.as_tensor(np.ascontiguousarray(img)).permute(2, 0, 1).unsqueeze(0).float() / 255.0
         return obs
 
     def act(self, state, images, task):

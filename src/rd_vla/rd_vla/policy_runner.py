@@ -47,7 +47,8 @@ class PolicyRunner(Node):
         dp("camera_topic", "/cameras/{name}/image")
         dp("base_frame", "ur_base")      # the UR controller's base frame (v1's RTDE poses, the datasets): base_link turned 180 deg about Z
         dp("tool_frame", "ur_tool0")
-        dp("max_step_m", 0.03)                       # Cartesian step cap per tick (v1 rtde_arm max_step)
+        dp("max_step_m", 0.05)                       # how far a target may lead the measured pose (v1 rtde_arm max_step, 0.05). With
+        # the arm trailing its target by a lag this is a speed cap of max_step / lag: 0.03 held it under the policy's own pace
         dp("workspace_min", [-1.0, -1.0, -0.2])      # UR base frame box the target is clamped into
         dp("workspace_max", [1.0, 1.0, 1.0])
         dp("obs_max_age_s", 0.5)
