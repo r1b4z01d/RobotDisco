@@ -17,6 +17,7 @@ keys map a finger number to its channel.
 from __future__ import annotations
 
 import queue
+import threading
 import time
 
 FINGER_CHANNEL = {1: 3, 2: 2, 3: 0, 4: 1}
@@ -38,6 +39,8 @@ class StreamDeckPad:
         self.deck = None
         self.key_count = 0
         self.flip = flip
+        self._images: dict = {}                 # (text, bg, fg) -> the key image in the deck's own format, drawn once
+        self._io = threading.Lock()             # one image on the wire at a time: two interleaved arrive as garbage
 
     def _phys(self, key: int) -> int:
         return (self.key_count - 1 - key) if self.flip else key
@@ -57,6 +60,12 @@ class StreamDeckPad:
     def set_label(self, key: int, text: str, bg=DARK, fg=WHITE) -> None:
         if self.deck is None or not 0 <= key < self.key_count:
             return
+        cached = self._images.get((text, bg, fg))
+        if cached is not None:                    # a blinking key is the same two pictures over and over
+            with self._io:
+                self.deck.set_key_image(self._phys(key), cached)
+            return
+        self._drawing = (text, bg, fg)
         from PIL import Image, ImageDraw, ImageFont
         from StreamDeck.ImageHelpers import PILHelper
         img = PILHelper.create_image(self.deck, background=bg)
@@ -103,7 +112,12 @@ class StreamDeckPad:
         from StreamDeck.ImageHelpers import PILHelper
         if self.flip:
             img = img.transpose(Image.ROTATE_180)
-        self.deck.set_key_image(self._phys(key), PILHelper.to_native_format(self.deck, img))
+        native = PILHelper.to_native_format(self.deck, img)
+        what = getattr(self, "_drawing", None)
+        if what is not None:
+            self._images[what] = native
+        with self._io:
+            self.deck.set_key_image(self._phys(key), native)
 
     def on_key(self, callback) -> None:
         self.deck.set_key_callback(lambda _deck, key, state: callback(self._phys(key), bool(state)))
@@ -133,6 +147,7 @@ class Deck:
         self._tried = -1e9
         self._want_rating = False
         self._unavailable = False
+        self._polling = threading.Lock()
         if pad is not None:
             self._attach()
 
@@ -206,6 +221,17 @@ class Deck:
             t.command("quit")
 
     def poll(self) -> None:
+        # One poll at a time. The node's timer may fire again on another executor thread while this one is still at
+        # work (a key that starts a recording waits for the first frames): two at once drew over each other's key
+        # images, which arrived distorted, and started the same recording twice (2026-11-15).
+        if not self._polling.acquire(blocking=False):
+            return
+        try:
+            self._poll()
+        finally:
+            self._polling.release()
+
+    def _poll(self) -> None:
         if self.pad is None:
             self._open()
             if self.pad is None:

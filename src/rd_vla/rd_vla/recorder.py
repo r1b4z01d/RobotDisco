@@ -17,6 +17,15 @@ os.environ.setdefault("HF_DATASETS_OFFLINE", "1")
 from .schema import ACTION_DIM, CAMERA_KEYS, STATE_DIM, features
 
 
+def lerobot_warm() -> bool:
+    """Import LeRobot's dataset module ahead of the first recording (call it on a thread at start)."""
+    try:
+        import lerobot.datasets.lerobot_dataset  # noqa: F401
+        return True
+    except Exception:  # noqa: BLE001  not in this interpreter: the recorder falls back by itself
+        return False
+
+
 def lerobot_available() -> bool:
     try:
         import lerobot  # noqa: F401
