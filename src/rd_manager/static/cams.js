@@ -22,7 +22,9 @@
     #cams figure.cam.dead figcaption { color: #c93c3c; }
   `;
   const H_DEFAULT = 150, H_BIG = 420, H_MIN = 40, H_MAX = 900;
-  window.initCams = function initCams({ view, panel, top = 8, enabled = null }) {   // enabled(): page-side switch
+  // inScene: {camera name: (on, cam) => ...}: that feed is not a panel here; its checkbox tells the page, which shows
+  // it its own way (the 3D page draws the face on the robot's front)
+  window.initCams = function initCams({ view, panel, top = 8, enabled = null, inScene = {} }) {   // enabled(): page-side switch
     const st = document.createElement("style"); st.textContent = STYLE; document.head.appendChild(st);
     const strip = document.createElement("div"); strip.id = "cams"; strip.style.top = top + "px"; view.appendChild(strip);
     const figs = {}; let cams = [];
@@ -37,6 +39,7 @@
     const save = () => store("cams.on", Object.fromEntries(cams.map((c) => [c.name, figs[c.name].cb.checked])));
     function apply(name) {
       const f = figs[name], on = f.cb.checked, open = !f.fig.classList.contains("closed");
+      if (inScene[name]) { f.fig.hidden = true; inScene[name](on && f.cam.alive && shown, f.cam); return; }
       f.fig.hidden = !on;
       f.fig.classList.toggle("dead", !f.cam.alive);
       f.cap.textContent = f.cam.label + (f.cam.alive ? "" : " · no frames");

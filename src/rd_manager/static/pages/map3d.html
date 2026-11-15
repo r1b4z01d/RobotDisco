@@ -152,7 +152,7 @@
     <div id="hint">left drag = orbit · right drag = pan · wheel = zoom · tools top-right: click the floor and drag for the heading</div>
   </div>
 </div>
-<script src="/static/cams.js"></script>
+<script src="/static/cams.js?v=2"></script>
 <script src="/static/drivepad.js?v=3"></script>
 <script src="/static/swatches.js"></script>
 <script type="module">
@@ -287,6 +287,36 @@ async function fetchCloud(name) {
 const robotRing = new THREE.Mesh(new THREE.RingGeometry(0.28, 0.33, 40), new THREE.MeshBasicMaterial({ color: 0x2ea043, side: THREE.DoubleSide }));
 robotRing.position.z = 0.04; scene.add(robotRing);
 const robotHeading = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(), 0.5, 0x2ea043, 0.15, 0.1); scene.add(robotHeading);
+// ---- the robot's face, on its front panel: the Face toggle draws /face/image there, not in a side window
+const FACE_W = 0.38, FACE_TOP = 0.78, CHASSIS_FRONT = 0.41;      // metres, in the chassis link (its box: 0.41 long, 0.8 high)
+const face = { on: false, mesh: null, img: null, canvas: document.createElement("canvas"), tex: null, timer: null };
+function setFacePanel(on, cam) {
+  face.on = on; face.url = cam && cam.url;
+  if (on && !face.img) {
+    face.img = new Image(); face.img.crossOrigin = "anonymous";
+    face.tex = new THREE.CanvasTexture(face.canvas); face.tex.colorSpace = THREE.SRGBColorSpace;
+    face.mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: face.tex }));
+    face.mesh.rotation.set(Math.PI / 2, 0, Math.PI / 2, "ZXY");     // Rz(90) Rx(90): the picture upright, its front along the robot's +x, not mirrored
+    face.mesh.visible = false;
+  }
+  if (on && !face.img.getAttribute("src")) face.img.src = face.url + "?fps=8";
+  if (!on && face.img) face.img.removeAttribute("src");
+  if (on && !face.timer) face.timer = setInterval(drawFace, 125);
+  if (!on && face.timer) { clearInterval(face.timer); face.timer = null; if (face.mesh) face.mesh.visible = false; }
+}
+function drawFace() {
+  const im = face.img, w = im && im.naturalWidth, h = im && im.naturalHeight;
+  const host = robotModel && (robotModel.links.chassis || robotModel.links.base_link);
+  if (!w || !h || !host) return;
+  if (face.mesh.parent !== host) host.add(face.mesh);
+  if (face.canvas.width !== w || face.canvas.height !== h) {
+    face.canvas.width = w; face.canvas.height = h;
+    const ph = FACE_W * h / w;
+    face.mesh.scale.set(FACE_W, ph, 1);
+    face.mesh.position.set((robotModel.links.chassis ? CHASSIS_FRONT : CHASSIS_FRONT / 2) + 0.003, 0, FACE_TOP - ph / 2);
+  }
+  try { face.canvas.getContext("2d").drawImage(im, 0, 0); face.tex.needsUpdate = true; face.mesh.visible = true; } catch (e) { /* frame not ready */ }
+}
 const urdfLoader = new URDFLoader();
 urdfLoader.packages = (pkg) => "/mesh/" + pkg;            // package://X/… -> served from X's share directory
 urdfLoader.parseCollision = false;
@@ -622,7 +652,7 @@ $("#l-invert").onchange = setMapTexture;
 $("#ptsize").onchange = () => { for (const p of Object.values(clouds)) p.material.size = parseFloat($("#ptsize").value) || 2; };
 $("#cam-reset").onclick = () => setView(pose ? robotPos.clone() : new THREE.Vector3(MAP ? MAP.origin[0] + MAP.width * MAP.resolution / 2 : 0, MAP ? MAP.origin[1] + MAP.height * MAP.resolution / 2 : 0, 0));
 $("#cam-top").onclick = () => setView(controls.target.clone(), camera.position.distanceTo(controls.target), 0.01, 90);
-$("#cam-robot").onclick = () => { if (pose) setView(robotPos.clone(), 8, 35, pose.yaw * 180 / Math.PI + 180); };
+$("#cam-robot").onclick = () => { if (pose) setView(robotPos.clone(), 8, 35, pose.yaw * 180 / Math.PI); };   // from in front: its face, not its back
 function applyVisibility() {
   if (mapMesh) mapMesh.visible = on("#l-map");
   grid.visible = on("#l-grid"); axes.visible = on("#l-grid");
@@ -680,7 +710,7 @@ function animate() {
   loadRoutes().catch(() => {});
   loop(pollTf, 66); loop(pollClouds, () => 1000 / Math.max(1, parseFloat($("#cloudhz").value) || 1)); loop(pollNav, 500); loop(pollCostmaps, 1000); loop(pollTags, 1000);
   applyVisibility(); animate();
-  if (window.initCams) initCams({ view: $("#view"), panel: $("#cam-panel"), top: 44 });   // below the tool buttons
+  if (window.initCams) initCams({ view: $("#view"), panel: $("#cam-panel"), top: 44, inScene: { face: setFacePanel } });   // below the tool buttons
   if (window.initDrivePad) initDrivePad({ view: $("#view"), panel: $("#drive-panel") });
   if (window.initSwatches) initSwatches({ page: "3d", apply: applyColor });
 })();
