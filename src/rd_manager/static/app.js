@@ -747,7 +747,7 @@ $("#lm-name").addEventListener("keydown", (e) => { if (e.key === "Enter") lmAdd(
 // the Panels tab's state: declared here because showView() below runs at load, before the panels code further down
 const panelsS = { ws: null, timer: null, info: null, url: "", frames: 0, last: 0, retry: null, paused: true };
 // ---- view switching (Datasets / Models / Evals) ----
-const VIEWS = ["datasets", "models", "evals", "robot", "arm", "routes", "landmarks", "map", "maps", "services", "folks", "panels"];
+const VIEWS = ["datasets", "models", "evals", "robot", "routes", "landmarks", "map", "maps", "services", "folks", "panels"];
 function showView(v) {
   state.view = v;
   VIEWS.forEach((name) => { $("#view-" + name).hidden = name !== v; });
@@ -760,7 +760,6 @@ function showView(v) {
   if (v === "services") loadServicesView();
   if (v === "folks") loadFolksView();
   if (v === "panels") loadPanelsView(); else panelsStop();
-  if (v === "arm") { const f = $("#arm-frame"); if (!f.getAttribute("src")) f.src = "/arm/"; }
   if (v === "landmarks") loadLandmarksView();
   if (v === "maps") loadMapsView();
   // the header's right side belongs to the robot page while that view is up; the dataset
