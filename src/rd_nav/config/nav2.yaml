@@ -124,7 +124,10 @@ controller_server:
         enabled: true
         cost_power: 1
         cost_weight: 3.0
-        threshold_to_consider: 0.5
+        # how near the goal the final heading starts to count. At 0.5 a robot that arrived beside its goal, already
+        # facing the goal's way, would not turn towards it (a differential drive cannot move sideways): it shuffled a
+        # few centimetres back and forth until "Failed to make progress" (0.27 m to the side, 2026-11-15).
+        threshold_to_consider: 0.15
       PreferForwardCritic:
         enabled: true
         cost_power: 1
