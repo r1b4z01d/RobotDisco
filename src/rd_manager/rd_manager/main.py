@@ -19,6 +19,9 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--host", default="0.0.0.0")
     ap.add_argument("--port", type=int, default=int(config.get("robot.ports.manager", 8092)))
+    ap.add_argument("--also-port", type=int, action="append", default=[],
+                    help="serve on this port as well (80 on the robot, so its address alone opens the console); "
+                         "a port that cannot be bound is logged and left out")
     ap.add_argument("--no-ros", action="store_true", help="no ROS bridge (the GPU box)")
     ap.add_argument("--sim", default="false", help="true in the rig: no supervisor, the robot tabs point here")
     ap.add_argument("--robot-url", default=f"http://{config.get('robot.ip')}:{config.get('robot.ports.manager', 8092)}",
@@ -46,6 +49,18 @@ def main(argv=None) -> int:
     #  - with no page open it died of SIGABRT in the interpreter's teardown ("terminate called without an active
     #    exception": the ROS executor's threads are still running when their C++ side is torn down), leaving a crash
     #    report each time. Nothing here needs that teardown: the files are closed, so leave at once.
+    for extra in args.also_port:
+        # its own server on its own thread and loop (the handlers keep nothing per loop). Port 80 is below 1024: the
+        # robot allows it through net.ipv4.ip_unprivileged_port_start=80 (provision.sh services); where it is not
+        # allowed uvicorn logs the refusal and only that thread ends.
+        def serve(port=extra):
+            try:
+                uvicorn.Server(uvicorn.Config(app, host=args.host, port=port, log_level="warning", timeout_graceful_shutdown=2)).run()
+            except BaseException as e:  # noqa: BLE001  SystemExit from a failed bind included
+                print(f"rd_manager: port {port} not served ({type(e).__name__}: {e})", flush=True)
+        import threading
+        threading.Thread(target=serve, daemon=True, name=f"http-{extra}").start()
+        print(f"rd_manager: also http://{args.host}:{extra}", flush=True)
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning", timeout_graceful_shutdown=2)
     sys.stdout.flush()
     sys.stderr.flush()

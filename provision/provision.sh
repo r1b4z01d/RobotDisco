@@ -313,7 +313,8 @@ phase_udev() {
 phase_sysctl() {
   # v1 raised UDP receive buffers for the multicast camera stream; 5.0 cameras are ROS topics. Cyclone DDS still
   # wants a larger buffer for point clouds: net.core.rmem_max.
-  printf 'net.core.rmem_max=8388608\nnet.core.rmem_default=8388608\n' | sudo tee /etc/sysctl.d/60-robot-disco.conf >/dev/null
+  # the last line lets the manager (user rd) serve the console on port 80 beside 8092: http://<robot>/
+  printf 'net.core.rmem_max=8388608\nnet.core.rmem_default=8388608\nnet.ipv4.ip_unprivileged_port_start=80\n' | sudo tee /etc/sysctl.d/60-robot-disco.conf >/dev/null
   sudo sysctl --system >/dev/null
 }
 

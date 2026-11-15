@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Robot Disco V4</title>
+  <title>Robot Disco V5</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
   <header>
     <nav class="views" id="view-nav">
-      <button class="nav-btn" data-view="map">Live</button>
+      <button class="nav-btn active" data-view="map">Live</button>
       <button class="nav-btn" data-view="maps">Maps</button>
       <button class="nav-btn" data-view="landmarks">Landmarks</button>
       <button class="nav-btn" data-view="routes">Routes</button>
@@ -18,12 +18,12 @@
       <button class="nav-btn" data-view="panels">Panels</button>
       <button class="nav-btn" data-view="services">Services</button>
     </nav>
-    <div class="brand">Robot Disco <span>V4</span></div>
+    <div class="brand">Robot Disco <span>V5</span></div>
     <div class="hdr-right">
       <nav class="views views-right">
         <button class="nav-btn" data-view="robot">VLA Teleop</button>
-        <button class="nav-btn" data-view="hand">Hand</button>
-        <button class="nav-btn active" data-view="datasets">Datasets</button>
+        <button class="nav-btn" data-view="arm">Arm</button>
+        <button class="nav-btn" data-view="datasets">Datasets</button>
         <button class="nav-btn" data-view="models">Models</button>
         <button class="nav-btn" data-view="evals">Evals</button>
       </nav>
@@ -42,7 +42,7 @@
 
   <main>
     <!-- ===== Datasets view ===== -->
-    <div id="view-datasets" class="view">
+    <div id="view-datasets" class="view" hidden>
     <!-- Datasets explorer -->
     <section id="datasets-panel" class="panel">
       <div class="panel-head">
@@ -166,48 +166,12 @@
       </section>
     </div><!-- /view-robot -->
 
-    <!-- ===== Hand view: the AmazingHand, driven from here over UDP (presets, per-finger sliders, the firmware's gestures, raw lines) ===== -->
-    <div id="view-hand" class="view" hidden>
+    <!-- ===== Arm view: the arm, the hand and policy runs (pages/arm.html), embedded ===== -->
+    <div id="view-arm" class="view" hidden>
       <section class="panel grow">
-        <div class="panel-head">
-          <h2>Hand</h2>
-          <div class="row-actions">
-            <span id="hand-status" class="mono muted">—</span>
-            <input id="hand-host" class="robot-url mono hand-host" placeholder="192.168.11.117" title="the hand's IP (Enter to apply; blank = the manager's default)">
-            <button id="btn-hand-probe" class="btn" title="send Q and expect K:<uptime>">probe</button>
-            <a id="hand-console" class="muted" href="#" target="_blank" title="the hand's own WebSerial console">↗</a>
-          </div>
-        </div>
-        <div class="hand-wrap">
-          <div class="hand-block">
-            <div class="hand-title">Presets <span class="muted">— sent as one J: line at the speed below (curl 0 = open, 1 = closed)</span></div>
-            <div class="hand-btns">
-              <button class="btn" data-pose="open">open</button>
-              <button class="btn" data-pose="half">half</button>
-              <button class="btn" data-pose="close">close</button>
-              <button class="btn" data-pose="point">point</button>
-              <button class="btn" data-pose="pinch">pinch</button>
-              <button class="btn" data-pose="thumbs">thumb up</button>
-            </div>
-          </div>
-          <div class="hand-block">
-            <div class="hand-title">Fingers <span class="muted">— by physical finger; drag to stream (the last line wins); abduction is the sideways spread, ±20°</span></div>
-            <div class="hand-grid" id="hand-grid"></div>
-            <div class="hand-row"><label for="hand-speed">speed</label><input id="hand-speed" type="number" min="50" max="2000" step="10" value="200" class="ep-input hand-num"> <span class="muted">firmware units, 50–2000; applies to the J: lines (presets and sliders)</span></div>
-          </div>
-          <div class="hand-block">
-            <div class="hand-title">Gestures <span class="muted">— the firmware's own moves, one character each, at the hand's built-in speed</span></div>
-            <div class="hand-btns" id="hand-gestures"><span class="muted">loading…</span></div>
-          </div>
-          <div class="hand-block">
-            <div class="hand-title">Raw line <span class="muted">— exactly what the firmware reads: <code>J:a0,…,a7,speed</code> (servo offsets in degrees), a gesture character, or <code>Q</code></span></div>
-            <div class="hand-row"><input id="hand-raw" class="ep-input mono" placeholder="J:-35,35,-35,35,-35,35,-35,35,200" spellcheck="false"><button id="btn-hand-send" class="btn">send</button></div>
-            <pre id="hand-log" class="hand-log"></pre>
-          </div>
-          <div class="muted hand-hint">Every command is one UDP datagram to port 8766, sent by the manager; on the hand's lossy WiFi a line can be lost, so repeat it if nothing moved. A running teleop panel or eval streams its own setpoints to the hand and overrides anything sent here.</div>
-        </div>
+        <iframe id="arm-frame" class="robot-frame" title="arm and hand"></iframe>
       </section>
-    </div><!-- /view-hand -->
+    </div><!-- /view-arm -->
 
     <!-- ===== Routes view: the route editor served by the robot PC (map + live pose + waypoints), embedded ===== -->
     <div id="view-routes" class="view" hidden>
@@ -300,7 +264,7 @@
       </section>
     </div><!-- /view-landmarks -->
 
-    <div id="view-map" class="view" hidden>
+    <div id="view-map" class="view">
       <section class="panel grow robot-view">
         <div class="routes-bar">
           <span class="source-switch" title="which map this tab shows: the robot's, or a simulation — choosing sim starts route_editor.py --sim on the computer running this manager">
