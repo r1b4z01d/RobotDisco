@@ -1275,6 +1275,27 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
     def api_rename_dataset(name: str, payload: dict = Body(...)):
         return _run(ops_mod.rename_dataset, str(datasets_dir), _guard(name), _guard(str(payload.get("new_name", ""))))
 
+    @app.post("/api/datasets/sync")
+    def api_datasets_sync(payload: dict = Body(default={})):
+        """Sync datasets between the robot and the GPU box: the GPU box pulls the robot's copy ({name} for one, none
+        for all of them). Pressed on the robot's console, the request is handed to the GPU box's manager, which pulls."""
+        name = str(payload.get("name") or "").strip() or None
+        if name:
+            _guard(name)
+        if not ros:                                   # this is the GPU box (no ROS bridge): pull
+            return _run(ops_mod.sync_from_robot, str(datasets_dir), name)
+        import urllib.error
+        import urllib.request
+        url = f"http://{rd_config.get('gpu.ip')}:{int(rd_config.get('gpu.ports.manager', 8081))}/api/datasets/sync"
+        req = urllib.request.Request(url, data=json.dumps({"name": name}).encode(), headers={"Content-Type": "application/json"}, method="POST")
+        try:
+            with urllib.request.urlopen(req, timeout=3600) as r:
+                return {**json.loads(r.read()), "via": url}
+        except urllib.error.HTTPError as e:
+            raise HTTPException(502, f"the GPU box's manager refused: {e.read()[:200].decode(errors='ignore')}")
+        except OSError as e:
+            raise HTTPException(502, f"the GPU box's manager at {url} is not reachable: {e}")
+
     @app.post("/api/datasets/add")
     def api_add(payload: dict = Body(...)):
         # the page sends {remote, source, as_name}; this passed `name=`, a keyword add_dataset does not have, so every

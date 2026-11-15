@@ -463,6 +463,59 @@ def restore_backup(datasets_dir: str, name: str) -> dict[str, Any]:
     return {"ok": True, "restored": name}
 
 
+def _robot_datasets() -> str:
+    from rd_bringup import config as _cfg
+    return f"{_cfg.get('robot.user', 'rd')}@{_cfg.get('robot.ip')}:{_cfg.get('robot.data', '/mnt/data')}/outputs/datasets"
+
+
+def robot_datasets() -> dict[str, float]:
+    """The datasets the robot holds (the directories with a meta/info.json) and when each last changed, over ssh."""
+    import subprocess
+    host, _, path = _robot_datasets().partition(":")
+    r = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8", host,
+                        f"cd {path} && for d in */; do [ -f \"$d/meta/info.json\" ] && echo \"$(stat -c %Y \"$d/meta/info.json\") ${{d%/}}\"; done"],
+                       capture_output=True, text=True, timeout=30)
+    if r.returncode != 0:
+        raise RuntimeError(f"the robot did not answer: {r.stderr.strip()[:200] or 'ssh failed'}")
+    out = {}
+    for line in r.stdout.splitlines():
+        t, _, n = line.partition(" ")
+        if n and not n.endswith((".bak", ".tmp")):
+            out[n] = float(t)
+    return out
+
+
+def sync_from_robot(datasets_dir: str, name: str | None = None) -> dict[str, Any]:
+    """Bring the robot's copy of one dataset (or of every dataset it holds) here: new episodes, ratings and notes,
+    and anything deleted there deleted here. The robot is where recordings are made, so its copy wins, unless the
+    copy here changed after the robot's did (edited here: merged, trimmed, episodes deleted): that one is left alone
+    and reported. The frames of a take still being recorded (images/) are left behind."""
+    import subprocess
+    there = robot_datasets()
+    if name and name not in there:
+        raise FileNotFoundError(f"the robot has no dataset {name}")
+    done, failed, skipped = [], {}, {}
+    for n in ([name] if name else sorted(there)):
+        dest = os.path.join(datasets_dir, n)
+        info = os.path.join(dest, "meta", "info.json")
+        if os.path.isfile(info) and os.path.getmtime(info) > there[n] + 2:
+            skipped[n] = "the copy here is newer than the robot's"
+            continue
+        # -t keeps the robot's times, so "newer here" stays meaningful after a sync; annotations ride along
+        r = subprocess.run(["rsync", "-a", "--delete", "--exclude", "/images/", "--info=stats1", "-e", "ssh -o BatchMode=yes -o ConnectTimeout=8",
+                            f"{_robot_datasets()}/{n}/", dest + "/"], capture_output=True, text=True, timeout=3600)
+        if r.returncode != 0:
+            failed[n] = r.stderr.strip()[:200] or f"rsync exit {r.returncode}"
+            continue
+        try:
+            done.append({"name": n, "episodes": int(_read_info(dest).get("total_episodes", 0))})
+        except Exception:  # noqa: BLE001
+            done.append({"name": n, "episodes": None})
+    if name and failed:
+        raise RuntimeError(f"sync of {name} failed: {failed[name]}")
+    return {"ok": not failed, "synced": done, "failed": failed, "skipped": skipped}
+
+
 def add_dataset(datasets_dir: str, *, source: str | None = None,
                 remote: str | None = None, as_name: str | None = None) -> dict[str, Any]:
     """Register a new dataset. Either copy a local dataset dir (`source`) or rsync one from the

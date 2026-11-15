@@ -135,6 +135,7 @@ function renderDatasets() {
         d.capture ? captureStr(d.capture) : "crop: unknown (pre-capture.json)"),
       el("div", { class: "ds-foot" },
         el("button", { class: "btn tiny primary", onclick: (e) => { e.stopPropagation(); doTrain(d.name); } }, "Train"),
+        el("button", { class: "btn tiny", title: "sync this dataset: the GPU box takes the robot's copy", onclick: (e) => { e.stopPropagation(); doSync(d.name, e.target); } }, "sync"),
         el("button", { class: "btn tiny", onclick: (e) => { e.stopPropagation(); doRenameDataset(d.name); } }, "rename"),
         el("button", { class: "btn tiny", onclick: (e) => { e.stopPropagation(); doToVideo(d.name); } }, "Export video"),
         el("button", { class: "btn tiny", title: "copy the teleop launch line that appends to this dataset (same crop, storage and task)",
@@ -498,6 +499,22 @@ async function doAdd() {
 
 // ---- wire up ----
 $("#btn-add").addEventListener("click", doAdd);
+// ---- sync with the other machine: the GPU box pulls the robot's datasets (one, or all of them)
+async function doSync(name, btn) {
+  const b = btn || $("#btn-sync"), label = b.textContent;
+  b.disabled = true; b.textContent = "syncing…";
+  try {
+    const r = await post("/api/datasets/sync", name ? { name } : {});
+    const done = (r.synced || []).map((s) => `${s.name} (${s.episodes ?? "?"} eps)`).join(", ");
+    const bad = Object.keys(r.failed || {});
+    const kept = Object.keys(r.skipped || {});
+    if (bad.length) err(`sync failed for ${bad.join(", ")}: ${r.failed[bad[0]]}`);
+    else ok(`synced to the GPU box: ${done || "nothing new"}` + (kept.length ? ` · left alone (newer on the GPU box): ${kept.join(", ")}` : ""));
+  } catch (e) { err(e); }
+  b.disabled = false; b.textContent = label;
+  await loadDatasets(); if (state.selected) loadEpisodes(state.selected);
+}
+$("#btn-sync").addEventListener("click", () => doSync(null));
 $("#btn-merge").addEventListener("click", doMerge);
 $("#btn-rename-task").addEventListener("click", doRenameTask);
 $("#btn-to-video").addEventListener("click", () => state.selected && doToVideo(state.selected));
