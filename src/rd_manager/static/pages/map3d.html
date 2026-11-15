@@ -109,6 +109,10 @@
       <label class="cb"><input type="checkbox" id="l-robot" checked> robot model (URDF)</label>
       <label class="cb"><input type="checkbox" id="l-frames"> TF frames</label>
     </div>
+    <div class="row">
+      <label class="cb" title="the robot's face, drawn on its front"><input type="checkbox" id="l-face" checked> face</label>
+      <label class="cb" title="the LED matrix panels, drawn on the robot's sides from the WLED's live pixels"><input type="checkbox" id="l-panels" checked> panels</label>
+    </div>
     <section class="acc open" data-acc="navigation">
     <h3 class="acc-head" role="button" tabindex="0" aria-expanded="true">Navigation</h3>
     <div class="acc-body">
@@ -152,7 +156,7 @@
     <div id="hint">left drag = orbit · right drag = pan · wheel = zoom · tools top-right: click the floor and drag for the heading</div>
   </div>
 </div>
-<script src="/static/cams.js?v=2"></script>
+<script src="/static/cams.js?v=3"></script>
 <script src="/static/drivepad.js?v=3"></script>
 <script src="/static/swatches.js"></script>
 <script type="module">
@@ -316,6 +320,61 @@ function drawFace() {
     face.mesh.position.set((robotModel.links.chassis ? CHASSIS_FRONT : CHASSIS_FRONT / 2) + 0.003, 0, FACE_TOP - ph / 2);
   }
   try { face.canvas.getContext("2d").drawImage(im, 0, 0); face.tex.needsUpdate = true; face.mesh.visible = true; } catch (e) { /* frame not ready */ }
+}
+// ---- the LED matrix panels, on the robot's sides: the WLED's live pixels (the manager's /ws/panels relay)
+const PANEL_W = 0.30, PANEL_MID_Z = 0.45, CHASSIS_HALF_W = 0.201;     // metres; the panels' real size and place are a guess
+const ledPanels = { on: false, ws: null, info: null, sides: {}, retry: null };
+function panelSide(name) {            // one side's canvas, texture and mesh, made on first use
+  if (ledPanels.sides[name]) return ledPanels.sides[name];
+  const canvas = document.createElement("canvas"), tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace; tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter;   // LEDs, not a blur
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: tex }));
+  const left = /left/i.test(name);
+  if (left) mesh.rotation.set(Math.PI / 2, 0, Math.PI, "ZXY"); else mesh.rotation.set(Math.PI / 2, 0, 0);   // upright, facing out of its side
+  mesh.visible = false;
+  return (ledPanels.sides[name] = { canvas, tex, mesh, left });
+}
+function drawPanels(buf) {
+  const b = new Uint8Array(buf), info = ledPanels.info;
+  const host = robotModel && robotModel.links.chassis;
+  if (!info || !host || b.length < 4 || b[0] !== 76) return;                      // "L": a frame of the live view
+  const twoD = b[1] === 2, fw = twoD ? b[2] : info.w, fh = twoD ? b[3] : info.h, off = twoD ? 4 : 2;
+  if (b.length < off + fw * fh * 3) return;
+  const kx = info.w / fw, ky = info.h / fh;
+  for (const g of info.segments) {
+    const s = panelSide(g.name), w = g.x1 - g.x0, h = g.y1 - g.y0;
+    if (s.canvas.width !== w || s.canvas.height !== h) {
+      s.canvas.width = w; s.canvas.height = h;
+      s.mesh.scale.set(PANEL_W, PANEL_W * h / w, 1);
+      s.mesh.position.set(CHASSIS_FRONT / 2, (s.left ? 1 : -1) * (CHASSIS_HALF_W + 0.003), PANEL_MID_Z);
+    }
+    if (s.mesh.parent !== host) host.add(s.mesh);
+    const ctx = s.canvas.getContext("2d"), img = ctx.createImageData(w, h), d = img.data;
+    for (let y = 0; y < h; y++) {
+      const sy = Math.min(fh - 1, Math.floor((g.y0 + y) / ky));
+      for (let x = 0; x < w; x++) {
+        const sx = Math.min(fw - 1, Math.floor((g.x0 + x) / kx)), i = off + (sy * fw + sx) * 3, o = (y * w + x) * 4;
+        d[o] = b[i]; d[o + 1] = b[i + 1]; d[o + 2] = b[i + 2]; d[o + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0); s.tex.needsUpdate = true; s.mesh.visible = true;
+  }
+}
+async function setLedPanels(on) {
+  ledPanels.on = on;
+  clearTimeout(ledPanels.retry);
+  if (!on) {
+    const ws = ledPanels.ws; ledPanels.ws = null; if (ws) ws.close();
+    for (const s of Object.values(ledPanels.sides)) s.mesh.visible = false;
+    return;
+  }
+  if (ledPanels.ws) return;
+  try { const r = await fetch("/api/panels").then((x) => x.json()); if (r.info) ledPanels.info = r.info; } catch (e) { /* the frames may still come */ }
+  if (!ledPanels.on || ledPanels.ws) return;
+  const ws = new WebSocket(location.origin.replace(/^http/, "ws") + "/ws/panels");
+  ws.binaryType = "arraybuffer"; ledPanels.ws = ws;
+  ws.onmessage = (ev) => { if (ev.data instanceof ArrayBuffer) drawPanels(ev.data); };
+  ws.onclose = () => { if (ledPanels.ws === ws) ledPanels.ws = null; if (ledPanels.on) ledPanels.retry = setTimeout(() => setLedPanels(true), 3000); };
 }
 const urdfLoader = new URDFLoader();
 urdfLoader.packages = (pkg) => "/mesh/" + pkg;            // package://X/… -> served from X's share directory
@@ -710,7 +769,16 @@ function animate() {
   loadRoutes().catch(() => {});
   loop(pollTf, 66); loop(pollClouds, () => 1000 / Math.max(1, parseFloat($("#cloudhz").value) || 1)); loop(pollNav, 500); loop(pollCostmaps, 1000); loop(pollTags, 1000);
   applyVisibility(); animate();
-  if (window.initCams) initCams({ view: $("#view"), panel: $("#cam-panel"), top: 44, inScene: { face: setFacePanel } });   // below the tool buttons
+  // the face and the panels on the robot: remembered per browser, off while the page is not on screen
+  for (const [id, key, set] of [["#l-face", "map3d.face", (v) => setFacePanel(v, { url: "/cam/face.mjpg" })], ["#l-panels", "map3d.panels", setLedPanels]]) {
+    const cb = $(id);
+    try { const v = localStorage.getItem(key); if (v !== null) cb.checked = v === "1"; } catch (e) { /* no storage */ }
+    cb.onchange = () => { try { localStorage.setItem(key, cb.checked ? "1" : "0"); } catch (e) { /* ignore */ } set(cb.checked); };
+    let shown = null;
+    const sync = () => { const now = cb.checked && window.innerWidth > 0 && window.innerHeight > 0 && !document.hidden; if (now !== shown) { shown = now; set(now); } };
+    sync(); setInterval(sync, 1500);
+  }
+  if (window.initCams) initCams({ view: $("#view"), panel: $("#cam-panel"), top: 44, skip: ["face"] });   // below the tool buttons
   if (window.initDrivePad) initDrivePad({ view: $("#view"), panel: $("#drive-panel") });
   if (window.initSwatches) initSwatches({ page: "3d", apply: applyColor });
 })();
