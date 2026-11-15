@@ -577,13 +577,14 @@ class Teleop(Node):
                 self.regrasp_ranges.append([self._regrasp_open, frames])
                 self._regrasp_open = None
             ranges = [list(r) for r in self.regrasp_ranges]
+        after = str(self.p("after_save"))             # as chosen when SAVE was pressed
 
         def work():                           # the video encoding takes seconds: not on a service thread
             try:
                 saved = writer.save_episode()
                 writer.close()                # finalize, so the dataset is loadable after every episode
                 ep = int(saved["episode"])
-                write_annotation(saved["path"], ep, grasps=len(ranges) + 1, regrasp_ranges=ranges)
+                write_annotation(saved["path"], ep, grasps=len(ranges) + 1, regrasp_ranges=ranges, after_save=after)
                 write_capture(saved["path"])
                 self.episodes, self._episodes_of = ep + 1, str(self.p("dataset"))
                 self.last = {"ep": ep, "frames": frames, "grasps": len(ranges) + 1, "dataset": Path(saved["path"]).name}
@@ -604,7 +605,7 @@ class Teleop(Node):
         threading.Thread(target=work, daemon=True).start()
         res.success, res.message = True, f"saving {frames} frames"
         # the take is over: the grip and the arm as the operator chose for the end of a task
-        mode = str(self.p("after_save"))
+        mode = after
         if mode.endswith("_open"):
             self.curls = [0.0] * 4
             self.hand_pub.publish(Float32MultiArray(data=[0.0, 0.0, 0.0, 0.0]))     # also when the puck is not driving (freedrive)
