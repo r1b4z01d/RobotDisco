@@ -67,7 +67,7 @@ body.robot { display: flex; flex-direction: column; min-height: 100vh; }
 }
 .btn:hover { border-color: var(--accent-2); }
 .btn:active { transform: translateY(1px); }
-.btn.big { min-height: 52px; padding: 10px 18px; font-weight: 700; font-size: 15px; }
+.btn.big { min-height: 42px; padding: 7px 13px; font-weight: 700; font-size: 13px; }
 .btn.accent { background: var(--accent-2); }
 .btn.danger { background: var(--danger); }
 .btn.rec.on { background: var(--danger); animation: blink 1.2s infinite; }
