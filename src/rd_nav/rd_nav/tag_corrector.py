@@ -242,9 +242,27 @@ class TagCorrector(Node):
             yield det.id, T_base_cam @ pose_to_mat(det.pose.pose)
 
     # ---- detections
+    def reload_if_changed(self) -> None:
+        """Take up the taught tags again when their file changed under us (a tag deleted or edited by hand: until
+        2026-11-15 that needed a restart of all of navigation, and the pose with it)."""
+        if not self.tag_poses_file:
+            return
+        try:
+            m = os.path.getmtime(self.tag_poses_file)
+        except OSError:
+            return
+        if m != getattr(self, "_poses_mtime", None):
+            if getattr(self, "_poses_mtime", None) is not None:
+                self.tag_poses = load_tag_poses(self.tag_poses_file)
+                self.get_logger().info(f"taught tags reloaded: {sorted(self.tag_poses)}")
+            self._poses_mtime = m
+
     def on_detections(self, msg):
         self.last_detections = msg
         now = time.monotonic()
+        if now - getattr(self, "_reload_checked", 0.0) > 1.0:
+            self._reload_checked = now
+            self.reload_if_changed()
         for tag_id, T_base_tag in self.visible_tags(msg):
             T_map_tag = self.tag_poses.get(tag_id)
             if T_map_tag is None:
@@ -332,6 +350,7 @@ class TagCorrector(Node):
             return res
         try:
             save_tag_poses(self.tag_poses_file, self.tag_poses)
+            self._poses_mtime = os.path.getmtime(self.tag_poses_file)      # our own write is not a change to reload
         except OSError as e:
             res.message = f"taught {taught} but could not write {self.tag_poses_file}: {e}"
             return res
