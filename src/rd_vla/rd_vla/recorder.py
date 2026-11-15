@@ -88,6 +88,13 @@ class EpisodeWriter:
             self.dataset = LeRobotDataset.create(repo_id=self.repo_id, root=str(self.path), fps=self.fps,
                                                  features=self._features(), robot_type="ur5e_amazinghand", use_videos=self.use_videos)
         self.episodes = int(self.dataset.meta.total_episodes)
+        # Camera frames are written by LeRobot's image writer, off the control loop (v1 manual_panel: 2 processes of
+        # 4 threads). Without it add_frame() wrote three PNGs itself every tick and the recording stuttered (2026-11-15).
+        try:
+            if getattr(self.dataset, "image_writer", None) is None:
+                self.dataset.start_image_writer(num_processes=2, num_threads=4)
+        except Exception as e:  # noqa: BLE001  it still records, in step with the disk
+            print(f"[recorder] no background image writer ({type(e).__name__}: {e}): frames are written in the loop", flush=True)
 
     def _fit(self, cam: str, img):
         h, w = self.shapes.setdefault(cam, (int(img.shape[0]), int(img.shape[1])))     # the first frame fixes an unknown size
@@ -140,6 +147,11 @@ class EpisodeWriter:
     def close(self) -> None:
         """Finish writing (LeRobot's finalize closes the parquet writers; without it the dataset cannot be re-opened)."""
         if self.backend == "lerobot" and self.dataset is not None:
+            try:
+                if getattr(self.dataset, "image_writer", None) is not None:
+                    self.dataset.stop_image_writer()           # flush what is pending, join its workers
+            except Exception as e:  # noqa: BLE001
+                print(f"[recorder] image writer did not stop cleanly: {e}", flush=True)
             try:
                 self.dataset.finalize()
             except Exception as e:  # noqa: BLE001
