@@ -359,6 +359,8 @@ class Deck:
             return
         try:
             self._poll()
+        except Exception as e:  # noqa: BLE001  a key's handler failing must not end the node it runs in
+            self.t.log(f"deck: {type(e).__name__}: {e}")
         finally:
             self._polling.release()
 

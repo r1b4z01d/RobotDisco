@@ -672,6 +672,15 @@ class Teleop(Node):
             self.get_logger().warn("SpaceMouse lost; the arm holds its pose")
 
     def tick(self):
+        # Nothing in a tick may end the node. The executor stops at the first exception out of a callback, and one
+        # did: a go-home (the after-save choice) cleared the target on another thread in the middle of a tick, the
+        # node died and the take being written with it (2026-11-15).
+        try:
+            self._tick()
+        except Exception as e:  # noqa: BLE001
+            self.get_logger().error(f"teleop tick: {type(e).__name__}: {e}", throttle_duration_sec=2.0)
+
+    def _tick(self):
         self._read_device()
         if not self.enabled and not self.freedrive:
             return
@@ -684,17 +693,22 @@ class Teleop(Node):
         dt = 1.0 / float(p("fps"))
         axes = self.device.axes if self.device_ok else dict.fromkeys(AXES, 0.0)
         buttons = self.device.buttons if self.device_ok else []
+        # the tick's own copy of the target: the services (home, teleop off) clear self.target from other threads
+        target = self.target
         if self.freedrive:
-            self.target = list(pose)            # hand-guided: the action recorded is the pose the arm is actually at
+            target = list(pose)                 # hand-guided: the action recorded is the pose the arm is actually at
         else:
-            if self.target is None:
-                self.target = list(pose)
-            self.target = integrate(self.target, axes, self.axis_map, float(p("linear_speed")), float(p("angular_speed")), dt)
+            if target is None:
+                target = list(pose)
+            target = integrate(target, axes, self.axis_map, float(p("linear_speed")), float(p("angular_speed")), dt)
             # the target never runs more than a step ahead of the tool or out of the box, so letting go stops the arm
-            xyz = clamp_box(clamp_step(self.target[:3], pose[:3], float(p("max_step_m"))),
+            xyz = clamp_box(clamp_step(target[:3], pose[:3], float(p("max_step_m"))),
                             [float(v) for v in p("workspace_min")], [float(v) for v in p("workspace_max")])
             xyz, _ = keep_out(xyz, **self.limits)   # never over the robot's own body or under the floor (robot.yaml arm.workspace)
-            self.target[:3] = list(xyz)
+            target[:3] = list(xyz)
+        if not self.enabled and not self.freedrive:
+            return                              # switched off while this tick was at work: nothing more goes out
+        self.target = target
         close_rate, open_rate = float(p("grasp_close_rate")), float(p("grasp_open_rate"))
         # the puck's two buttons and the page's hold buttons move the whole hand; the deck's keys one finger each
         step = step_grasp(0.5, buttons, close_rate, open_rate, int(p("button_close")), int(p("button_open"))) - 0.5
@@ -708,8 +722,8 @@ class Teleop(Node):
             msg = PoseStamped()
             msg.header.frame_id = self.observer.base_frame
             msg.header.stamp = self.get_clock().now().to_msg()
-            msg.pose.position.x, msg.pose.position.y, msg.pose.position.z = [float(v) for v in self.target[:3]]
-            (msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w) = rotvec_to_quat(self.target[3:])
+            msg.pose.position.x, msg.pose.position.y, msg.pose.position.z = [float(v) for v in target[:3]]
+            (msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w) = rotvec_to_quat(target[3:])
             self.pose_pub.publish(msg)
         self.hand_pub.publish(Float32MultiArray(data=curls))
         if self.recording:
@@ -719,10 +733,16 @@ class Teleop(Node):
             state, images, _age = obs
             with self.lock:
                 if self.recording:
-                    self.take.append((images, state, [float(v) for v in self.target] + curls, str(p("task"))))
+                    self.take.append((images, state, [float(v) for v in target] + curls, str(p("task"))))
                     self.frames += 1
 
     def publish_state(self):
+        try:
+            self._publish_state()
+        except Exception as e:  # noqa: BLE001
+            self.get_logger().error(f"teleop state: {type(e).__name__}: {e}", throttle_duration_sec=5.0)
+
+    def _publish_state(self):
         dataset, fps = str(self.p("dataset")), float(self.p("fps"))
         if dataset != self._episodes_of and not self.saving:     # another dataset chosen: how much it already holds
             self.episodes, self._episodes_of = (episodes_on_disk(self._root() / dataset) if dataset else 0), dataset
