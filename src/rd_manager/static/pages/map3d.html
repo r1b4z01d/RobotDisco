@@ -322,7 +322,7 @@ function drawFace() {
   try { face.canvas.getContext("2d").drawImage(im, 0, 0); face.tex.needsUpdate = true; face.mesh.visible = true; } catch (e) { /* frame not ready */ }
 }
 // ---- the LED matrix panels, on the robot's sides: the WLED's live pixels (the manager's /ws/panels relay)
-const PANEL_W = 0.30, PANEL_MID_Z = 0.45, CHASSIS_HALF_W = 0.201;     // metres; the panels' real size and place are a guess
+const CHASSIS_HALF_W = 0.201;       // metres. The panels are drawn as wide as the face and from the same top edge down
 const ledPanels = { on: false, ws: null, info: null, sides: {}, retry: null };
 function panelSide(name) {            // one side's canvas, texture and mesh, made on first use
   if (ledPanels.sides[name]) return ledPanels.sides[name];
@@ -345,8 +345,9 @@ function drawPanels(buf) {
     const s = panelSide(g.name), w = g.x1 - g.x0, h = g.y1 - g.y0;
     if (s.canvas.width !== w || s.canvas.height !== h) {
       s.canvas.width = w; s.canvas.height = h;
-      s.mesh.scale.set(PANEL_W, PANEL_W * h / w, 1);
-      s.mesh.position.set(CHASSIS_FRONT / 2, (s.left ? 1 : -1) * (CHASSIS_HALF_W + 0.003), PANEL_MID_Z);
+      const ph = FACE_W * h / w;
+      s.mesh.scale.set(FACE_W, ph, 1);
+      s.mesh.position.set(CHASSIS_FRONT / 2, (s.left ? 1 : -1) * (CHASSIS_HALF_W + 0.003), FACE_TOP - ph / 2);
     }
     if (s.mesh.parent !== host) host.add(s.mesh);
     const ctx = s.canvas.getContext("2d"), img = ctx.createImageData(w, h), d = img.data;
