@@ -34,7 +34,9 @@ def generate_launch_description():
              '-p', ['use_sim_time:=', LaunchConfiguration('use_sim_time')], '-p', f'infer_port:={port}', '-p', ['server_unit:=', LaunchConfiguration('server_unit')]],
         output='screen')
     # the teleop under the same interpreter too: it records the demonstrations
+    # the teleop node finishes the episodes it is still writing before it goes: it is given the time for that
     teleop = ExecuteProcess(
+        sigterm_timeout='150', sigkill_timeout='30',
         cmd=[LaunchConfiguration('python'), '-m', 'rd_vla.teleop', '--ros-args', '-r', '__node:=vla_teleop',
              '-p', ['use_sim_time:=', LaunchConfiguration('use_sim_time')], '-p', ['debug_input:=', LaunchConfiguration('teleop_debug_input')]],
         output='screen', condition=IfCondition(LaunchConfiguration('teleop')))

@@ -28,6 +28,7 @@ from rd_bringup.process import exit_with_parent
 
 import json
 import os
+import queue
 import threading
 import time
 from pathlib import Path
@@ -237,7 +238,14 @@ class Teleop(Node):
         self.lock = threading.Lock()          # the writer: the tick adds frames, the services open / save / discard
         self.writer = None
         self.recording = False
-        self.saving = False
+        # A take is kept in memory while it is recorded and written by one worker thread once SAVE is pressed: the
+        # videos take 11 to 14 s to encode on the Orin, and REC was refused for as long (2026-11-15). The next take
+        # can start at once; the saves queue up and are written in order.
+        self.take: list = []                  # (images, state, action, task) per frame of the take being recorded
+        self._jobs: queue.Queue = queue.Queue()
+        self._unsaved = 0                     # takes handed over and not yet on disk
+        self._last_job = None                 # the newest saved-or-saving take: what the stars rate
+        threading.Thread(target=self._save_loop, daemon=True, name="episode-writer").start()
         self.frames = 0
         self.message = ""
         self.episodes = 0                     # in the current dataset
@@ -260,6 +268,10 @@ class Teleop(Node):
         self._restore_session()
         # LeRobot (and torch under it) takes many seconds to import on the Orin; the first REC paid for it
         threading.Thread(target=lambda: __import__("rd_vla.recorder", fromlist=["x"]).lerobot_warm(), daemon=True, name="lerobot-import").start()
+
+    @property
+    def saving(self) -> bool:
+        return self._unsaved > 0
 
     @property
     def grasp(self) -> float:
@@ -463,17 +475,19 @@ class Teleop(Node):
         self.log(f"arm: {r.message} ({r.robot_mode} / {r.safety_status})")
 
     def rate(self, stars: int) -> str:
-        """1..5 stars for the last saved episode, into the dataset's annotations sidecar."""
+        """1..5 stars for the newest take: written now when it is on disk, with it when it is still being written."""
         stars = max(1, min(5, int(stars)))
         with self.lock:
-            if self.saving:                   # the episode is still being written: kept, and written with it
-                self._pending_rating = stars
-                return f"rated {'★' * stars} (written once the episode is saved)"
-        if self.last.get("ep") is None:
-            return "no saved episode to rate yet"
-        write_annotation(self._root() / self.last["dataset"], self.last["ep"], rating=stars)
+            job = self._last_job
+            if job is None:
+                return "no saved episode to rate yet"
+            job["rating"] = stars
+            ep = job.get("ep")
+        if ep is None:
+            return f"rated {'★' * stars} (written once the episode is saved)"
+        write_annotation(self._root() / job["dataset"], ep, rating=stars)
         self.last["rating"] = stars
-        return f"episode {self.last['ep'] + 1}: {'★' * stars}"
+        return f"episode {ep + 1}: {'★' * stars}"
 
     def regrasp_mark(self) -> str:
         """Toggle a re-grasp range: the first press opens it at this frame, the second closes it."""
@@ -545,8 +559,8 @@ class Teleop(Node):
         dataset, task = str(self.p("dataset")).strip(), str(self.p("task")).strip()
         if not dataset or not task:
             res.success, res.message = False, "set the parameters `dataset` and `task` first"
-        elif self.recording or self.saving:
-            res.success, res.message = False, "an episode is already being recorded or saved"
+        elif self.recording:
+            res.success, res.message = False, "an episode is already being recorded"
         elif not self.enabled and not self.freedrive:
             res.success, res.message = False, "teleop is off (TELEOP ON, or freedrive)"
         else:
@@ -555,13 +569,10 @@ class Teleop(Node):
                 res.success, res.message = False, why
                 return res
             with self.lock:
-                if self.writer is None or self.writer.repo_id != dataset:
-                    if self.writer is not None:
-                        self.writer.close()
-                    self.writer = EpisodeWriter(self._root(), dataset, fps=int(round(float(self.p("fps")))), cameras=tuple(self.p("cameras")))
+                self.take = []
                 self.frames, self.recording = 0, True
                 self.regrasp_ranges, self._regrasp_open = [], None
-            res.success, res.message = True, f"REC into {self.writer.path} ({self.writer.backend})"
+            res.success, res.message = True, f"REC into {self._root() / dataset}" + (" (the take before is still being written)" if self.saving else "")
             self.log(res.message)
         self.message = res.message
         return res
@@ -572,58 +583,74 @@ class Teleop(Node):
                 self.recording = False
                 res.success, res.message = False, "nothing recorded"
                 return res
-            self.recording, self.saving = False, True
-            writer, frames = self.writer, self.frames
+            self.recording = False
+            frames = self.frames
             if self._regrasp_open is not None:               # a range left open ends with the episode
                 self.regrasp_ranges.append([self._regrasp_open, frames])
                 self._regrasp_open = None
-            ranges = [list(r) for r in self.regrasp_ranges]
-        after = str(self.p("after_save"))             # as chosen when SAVE was pressed
-
-        def work():                           # the video encoding takes seconds: not on a service thread
-            try:
-                saved = writer.save_episode()
-                writer.close()                # finalize, so the dataset is loadable after every episode
-                ep = int(saved["episode"])
-                write_annotation(saved["path"], ep, grasps=len(ranges) + 1, regrasp_ranges=ranges, after_save=after)
-                write_capture(saved["path"])
-                self.episodes, self._episodes_of = ep + 1, str(self.p("dataset"))
-                self.last = {"ep": ep, "frames": frames, "grasps": len(ranges) + 1, "dataset": Path(saved["path"]).name}
-                line = f"episode {ep + 1} saved: {frames} frames, {len(ranges) + 1} grasp(s), in {saved['path']}"
-            except Exception as e:  # noqa: BLE001
-                line, ep = f"SAVE FAILED: {type(e).__name__}: {e}", None
-            with self.lock:
-                self.writer = None            # re-opened (appending) by the next start
-                self.saving = False           # from here a rating goes to self.last, which is this episode
-                stars, self._pending_rating = self._pending_rating, None
-            if stars and ep is not None:      # rated while it was still being written: this episode's, written now.
-                # (Until 2026-11-15 this went back through rate(), which saw `saving` still set and shelved it again:
-                # the stars were lost or landed on a neighbour.)
-                write_annotation(self._root() / self.last["dataset"], ep, rating=stars)
-                self.last["rating"] = stars
-                line += f"; rated {'★' * stars}"
-            self.log(line)
-
-        self._pending_rating = None
+            after = str(self.p("after_save"))             # as chosen when SAVE was pressed
+            job = {"take": self.take, "frames": frames, "ranges": [list(r) for r in self.regrasp_ranges], "after_save": after,
+                   "dataset": str(self.p("dataset")).strip(), "fps": int(round(float(self.p("fps")))), "cameras": tuple(self.p("cameras")),
+                   "rating": None, "ep": None}
+            self.take, self._last_job = [], job
+            self._unsaved += 1
+        self._jobs.put(job)
         if self.deck is not None:
-            self.deck.enter_rating()          # the stars at once: the episode takes seconds to encode, the verdict is ready now
-        threading.Thread(target=work, daemon=True).start()
+            self.deck.enter_rating()          # the stars at once: the verdict is ready now, the videos are not
         res.success, res.message = True, f"saving {frames} frames"
         # the take is over: the grip and the arm as the operator chose for the end of a task
-        mode = after
-        if mode.endswith("_open"):
+        if after.endswith("_open"):
             self.curls = [0.0] * 4
             self.hand_pub.publish(Float32MultiArray(data=[0.0, 0.0, 0.0, 0.0]))     # also when the puck is not driving (freedrive)
-        if mode.startswith("home"):
+        if after.startswith("home"):
             r = self.on_home(Trigger.Request(), Trigger.Response())
             if not r.success:
                 self.log(f"after the save: no homing ({r.message})")
         return res
 
+    def _save_loop(self) -> None:
+        """The one writer: each saved take in turn becomes an episode of its dataset (frames, videos, annotations)."""
+        from .recorder import EpisodeWriter
+        while True:
+            job = self._jobs.get()
+            ep = None
+            try:
+                writer = EpisodeWriter(self._root(), job["dataset"], fps=job["fps"], cameras=job["cameras"])
+                for images, state, action, task in job["take"]:
+                    writer.add_frame(images, state, action, task)
+                saved = writer.save_episode()
+                writer.close()                # finalize, so the dataset is loadable after every episode
+                ep = int(saved["episode"])
+                ranges = job["ranges"]
+                write_annotation(saved["path"], ep, grasps=len(ranges) + 1, regrasp_ranges=ranges, after_save=job["after_save"])
+                write_capture(saved["path"])
+                line = f"episode {ep + 1} saved: {job['frames']} frames, {len(ranges) + 1} grasp(s), in {saved['path']}"
+            except Exception as e:  # noqa: BLE001
+                line = f"SAVE FAILED: {type(e).__name__}: {e}"
+            job["take"] = None                # the frames' memory back
+            with self.lock:
+                self._unsaved -= 1
+                job["ep"] = ep                # from here the stars are written straight to it
+                stars = job["rating"]
+                if ep is not None:
+                    self.episodes, self._episodes_of = ep + 1, job["dataset"]
+                    self.last = {"ep": ep, "frames": job["frames"], "grasps": len(job["ranges"]) + 1, "dataset": Path(saved["path"]).name}
+            if stars and ep is not None:      # rated while it was being written
+                write_annotation(saved["path"], ep, rating=stars)
+                self.last["rating"] = stars
+                line += f"; rated {'★' * stars}"
+            self.log(line)
+
+    def finish_saves(self, timeout: float = 180.0) -> bool:
+        """Wait for the takes still being written (the node is going down). False when it gave up."""
+        end = time.monotonic() + timeout
+        while self.saving and time.monotonic() < end:
+            time.sleep(0.2)
+        return not self.saving
+
     def on_discard(self, _req, res):
         with self.lock:
-            if self.recording and self.writer is not None:
-                self.writer.discard_episode()
+            self.take = []
             was, self.recording, self.frames = self.recording, False, 0
         res.success, res.message = True, "episode discarded" if was else "nothing to discard"
         self.message = res.message
@@ -691,12 +718,11 @@ class Teleop(Node):
                 return
             state, images, _age = obs
             with self.lock:
-                if self.recording and self.writer is not None:
-                    self.writer.add_frame(images, state, [float(v) for v in self.target] + curls, str(p("task")))
+                if self.recording:
+                    self.take.append((images, state, [float(v) for v in self.target] + curls, str(p("task"))))
                     self.frames += 1
 
     def publish_state(self):
-        w = self.writer
         dataset, fps = str(self.p("dataset")), float(self.p("fps"))
         if dataset != self._episodes_of and not self.saving:     # another dataset chosen: how much it already holds
             self.episodes, self._episodes_of = (episodes_on_disk(self._root() / dataset) if dataset else 0), dataset
@@ -709,7 +735,7 @@ class Teleop(Node):
             "freedrive": self.freedrive, "deck": bool(self.deck and self.deck.pad is not None),
             "pose": [round(float(v), 4) for v in self.pose] if (self.enabled or self.freedrive) and self.pose else [],
             "tick_hz": round(hz, 1), "last": self.last,
-            "backend": getattr(w, "backend", None), "message": self.message, "calib": self.calib, "after_save": str(self.p("after_save"))})))
+            "backend": "lerobot", "unsaved": self._unsaved, "message": self.message, "calib": self.calib, "after_save": str(self.p("after_save"))})))
 
 
 def main():
@@ -723,11 +749,9 @@ def main():
     except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
-        try:
-            if node.writer is not None:
-                node.writer.close()
-        except Exception:  # noqa: BLE001
-            pass
+        if node.saving:                        # takes still being written: they are finished before the node goes
+            print("[teleop] finishing the episodes still being written", flush=True)
+            node.finish_saves()
         node.device.close()
         if node.deck is not None:
             node.deck.close()
