@@ -257,6 +257,11 @@ class RosBridge:
         self.halt_pubs = [n.create_publisher(TwistStamped, "/cmd_vel_joy", 10), n.create_publisher(TwistStamped, "/diff_cont/cmd_vel", 10)]
         self.say_text_pub = n.create_publisher(String, "/say_text", 10)
         self.voice_text_pub = n.create_publisher(String, "/voice/text_in", 10)
+        from rclpy.qos import QoSDurabilityPolicy, QoSProfile
+        from std_msgs.msg import Bool as _Bool
+        self.mic_muted = False
+        n.create_subscription(_Bool, "/voice/muted", lambda m: setattr(self, "mic_muted", bool(m.data)),
+                              QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL), callback_group=self.cb)
         self.voice_task_pub = n.create_publisher(String, "/voice/run_task", 10)
         self.hand_curls_pub = n.create_publisher(Float32MultiArray, "/hand/curls", 10)
         self.hand_offsets_pub = n.create_publisher(Float32MultiArray, "/hand/offsets", 10)

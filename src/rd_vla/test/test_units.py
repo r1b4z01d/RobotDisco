@@ -524,3 +524,50 @@ def test_auto_expose_finds_the_exposure_for_the_target_median():
     assert out["scene"]["exposure"] < out["wrist"]["exposure"]            # the bright view gets the shorter exposure
     assert state["scene"] == out["scene"]["exposure"]                     # and is left set there
     assert exposure.devices({"by_path": "/nonexistent/{port}", "scene": {"port": "1"}}, ["scene"]) == {}   # no device: skipped
+
+
+def test_stream_deck_is_the_robots_remote_while_teleop_is_off():
+    """Teleop off: mute, volume, HALT, the microphone and the landmarks (two presses to go). Teleop on: the teleop keys."""
+    from rd_vla.deck import Deck, Remote
+    now, sent = [100.0], []
+
+    def fetch(path, body=None, timeout=4.0):
+        if body is not None:
+            sent.append((path, body))
+            return {}
+        return {"/api/volume": {"volume": 50, "muted": False}, "/api/voice": {"mic_muted": False},
+                "/api/landmarks": {"map": "home", "landmarks": [{"id": "left-bookshelf", "name": "Left Bookshelf", "map": "home"},
+                                                                {"id": "attic", "name": "Attic", "map": "other"}]}}[path]
+    r = Remote("http://x", log=lambda s: None, fetch=fetch)
+    r.start = lambda: None                              # no thread in the test
+    r.send = lambda what, path, body: sent.append((path, body))
+    r.refresh()
+    t, pad = _FakeTeleop(), _FakePad()
+    d = Deck(t, pad=pad, clock=lambda: now[0], remote=r)
+
+    def press(key):
+        pad.cb(key, True); pad.cb(key, False); d.poll()
+    d.poll()
+    assert pad.labels[0] == "TELEOP\nON" and pad.labels[4] == "HALT" and pad.labels[5] == "MIC\nON"
+    assert pad.labels[6] == "Left\nBookshelf" and pad.labels[7] == ""       # the other map's landmark is not offered
+    press(3); press(2); press(2)
+    assert [b["volume"] for p_, b in sent if "volume" in b] == [60, 50, 40]
+    press(1); press(5); press(4)
+    assert sent[-3:] == [("/api/volume", {"muted": True}), ("/api/voice/mic", {"muted": True}), ("/api/halt", {})]
+    assert pad.labels[5] == "MIC\nOFF"
+    n = len(sent)
+    press(6)                                             # once: armed, nothing sent
+    assert len(sent) == n and pad.labels[6].startswith("GO?")
+    now[0] += 5.0; d.poll()                              # too late: disarmed
+    press(6)
+    assert len(sent) == n
+    press(6)                                             # twice in time: goes
+    assert sent[-1] == ("/api/landmarks/left-bookshelf/goto", {})
+    press(10)                                            # a finger key does nothing here
+    assert t.nudges == []
+    press(0)
+    assert t.commands == ["enable"]
+    t.enabled = True; d.poll()                           # teleop on: its own keys
+    assert pad.labels[0] == "●" and pad.labels[5] == "🖐" and pad.labels[10] == "✊"
+    t.enabled = False; d.poll()
+    assert pad.labels[0] == "TELEOP\nON"

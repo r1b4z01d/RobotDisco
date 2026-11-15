@@ -25,7 +25,7 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 from rclpy.node import Node
 from std_msgs.msg import Bool, String
-from std_srvs.srv import Trigger
+from std_srvs.srv import SetBool, Trigger
 
 from rd_bringup import config
 from rd_interfaces.action import GoToLandmark, RunPolicy, Say
@@ -147,6 +147,13 @@ class VoiceNode(Node):
         self.pub_state = self.create_publisher(String, "/voice/state", 10)
         self.create_subscription(String, "/voice/text_in", self.on_text_in, 10, callback_group=self.cb)
         self.create_subscription(String, "/voice/run_task", self.on_run_task, 10, callback_group=self.cb)
+        # the microphone's mute (the Stream Deck's MIC key, the manager): what the ears hear is dropped while it is on;
+        # typed text and tasks started from the pages still go through
+        from rclpy.qos import QoSDurabilityPolicy, QoSProfile
+        self.mic_muted = False
+        self.pub_muted = self.create_publisher(Bool, "/voice/muted", QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL))
+        self.pub_muted.publish(Bool(data=False))
+        self.create_service(SetBool, "/voice/mute", self.on_mute, callback_group=self.cb)
         self.create_subscription(Bool, "/speaking", self.on_speaking, 10, callback_group=self.cb)
         from sensor_msgs.msg import BatteryState
         self._battery = None                                   # (message, monotonic) from rd_base's battery_monitor
@@ -234,13 +241,20 @@ class VoiceNode(Node):
             self.get_logger().info(f"ears ready: {ev.get('model')} on {ev.get('device')} from {ev.get('source')}")
         elif kind == "utterance":
             text = str(ev.get("text", "")).strip()
-            if text:
+            if text and not self.mic_muted:
                 self.pub_heard.publish(String(data=text))
                 self.handle_transcript(text)
         elif kind == "error":
             self.get_logger().warn(f"ears: {ev.get('error')}")
 
     # ---- inputs
+    def on_mute(self, req, res):
+        self.mic_muted = bool(req.data)
+        self.pub_muted.publish(Bool(data=self.mic_muted))
+        self.get_logger().info("microphone muted" if self.mic_muted else "microphone on")
+        res.success, res.message = True, "muted" if self.mic_muted else "listening"
+        return res
+
     def on_text_in(self, m: String):
         text = m.data.strip()
         if text:

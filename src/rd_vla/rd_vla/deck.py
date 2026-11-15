@@ -2,6 +2,15 @@
 manual_panel.py. Needs the `streamdeck` pip package and Pillow in the interpreter the teleop runs under, and the
 udev rule that opens the deck's hidraw node. Without a deck, or without the library, the teleop runs as before.
 
+While teleop is off (not enabled, not in freedrive, nothing being recorded or rated) the deck is the robot's remote:
+
+    row 1   0 TELEOP on     1 speaker mute     2 volume -     3 volume +     4 HALT
+    row 2   5 microphone mute                  6..9   landmarks 1..4: press, then press again within 3 s to go
+    row 3  10..14  landmarks 5..9
+
+Those keys go through the manager's HTTP API on this machine (halt, volume, landmarks, the microphone), so they do
+what the pages' buttons do. With teleop on:
+
     row 1   0 ● REC  (recording: + flag a re-grasp, END closes the flagged stretch)
             1 ⌂ HOME (recording: 💾 SAVE)      2 🆓 FREEDRIVE (recording: 🗑 DISCARD)
             3 ⟳ recover the arm                4 ✖ teleop off
@@ -16,9 +25,11 @@ keys map a finger number to its channel.
 """
 from __future__ import annotations
 
+import json
 import queue
 import threading
 import time
+import urllib.request
 
 FINGER_CHANNEL = {1: 3, 2: 2, 3: 0, 4: 1}
 # key -> (curl channel or -1 for the whole hand, +1 close / -1 open)
@@ -132,12 +143,72 @@ class StreamDeckPad:
             self.deck = None
 
 
+LANDMARK_KEYS = (6, 7, 8, 9, 10, 11, 12, 13, 14)
+ARM_SECONDS = 3.0             # a landmark key drives the robot: the second press must follow the first this soon
+VOLUME_STEP = 10
+
+
+class Remote:
+    """The idle keys' line to the manager (http://127.0.0.1:<port>): its state fetched every two seconds on a thread,
+    its commands sent on threads, so no key ever waits on the network. `fetch` is injectable for the tests."""
+
+    def __init__(self, base: str, log=print, fetch=None):
+        self.base, self.log = base.rstrip("/"), log
+        self.fetch = fetch or self._http
+        self.volume, self.muted, self.mic_muted, self.landmarks = None, False, False, []
+        self._stop = threading.Event()
+        self._thread = None
+
+    def _http(self, path: str, body: dict | None = None, timeout: float = 4.0) -> dict:
+        req = urllib.request.Request(self.base + path, data=json.dumps(body).encode() if body is not None else None,
+                                     headers={"Content-Type": "application/json"}, method="POST" if body is not None else "GET")
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.loads(r.read() or b"{}")
+
+    def start(self) -> None:
+        if self._thread is None:
+            self._thread = threading.Thread(target=self._loop, daemon=True, name="deck-remote")
+            self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+
+    def refresh(self) -> None:
+        try:
+            v = self.fetch("/api/volume")
+            self.volume, self.muted = v.get("volume"), bool(v.get("muted"))
+            self.mic_muted = bool(self.fetch("/api/voice").get("mic_muted"))
+            d = self.fetch("/api/landmarks")
+            here = d.get("map")
+            self.landmarks = [(lm["id"], lm.get("name") or lm["id"]) for lm in d.get("landmarks", []) if lm.get("map") == here]
+        except Exception:  # noqa: BLE001  the manager is away: keep what was known
+            pass
+
+    def _loop(self) -> None:
+        while not self._stop.is_set():
+            self.refresh()
+            self._stop.wait(2.0)
+
+    def send(self, what: str, path: str, body: dict) -> None:
+        def work():
+            try:
+                self.fetch(path, body)
+                self.log(f"deck: {what}")
+            except Exception as e:  # noqa: BLE001
+                self.log(f"deck: {what} failed ({e})")
+            self.refresh()
+        threading.Thread(target=work, daemon=True, name="deck-send").start()
+
+
 class Deck:
     """The keys' behaviour. `teleop` is the node (command(), nudge(), rate(), recording, freedrive, ...); `pad` may
     be handed in (the tests' fake), else the device is opened here and looked for again every few seconds."""
 
-    def __init__(self, teleop, flip: bool = True, pad=None, clock=time.monotonic):
+    def __init__(self, teleop, flip: bool = True, pad=None, clock=time.monotonic, remote=None):
         self.t, self.flip, self.clock = teleop, flip, clock
+        self.remote = remote                # the idle keys' line to the manager; None = teleop keys only (the old deck)
+        self._armed = (None, 0.0)           # (landmark key, until): pressed once, waiting for the second press
+        self._was_idle = None
         self.pad = pad
         self.events: queue.Queue = queue.Queue()
         self.held: dict = {}
@@ -154,11 +225,16 @@ class Deck:
     # ---- the device
     def _attach(self) -> None:
         self._shown.clear()
+        self._was_idle = None
         self.pad.on_key(lambda key, down: self.events.put((key, down)))
-        for key, label in FINGER_LABELS.items():
-            self._label(key, label)
-        self._label(3, "⟳")
-        self._label(4, "✖", fg=RED)
+        if self.remote is not None:
+            self.remote.start()
+
+    def idle(self) -> bool:
+        """Teleop off and nothing of it pending: the keys are the robot's remote."""
+        t = self.t
+        return self.remote is not None and not (t.enabled or t.freedrive or t.recording or getattr(t, "saving", False)
+                                                or self.rating_until or self._want_rating)
 
     def _open(self) -> None:
         now = self.clock()
@@ -193,8 +269,63 @@ class Deck:
         """Called by the node (its save thread) when an episode has been written: the stars come up on the next poll."""
         self._want_rating = True
 
+    def _press_idle(self, key: int, down: bool) -> None:
+        if not down:
+            return
+        r, now = self.remote, self.clock()
+        armed_key, until = self._armed
+        self._armed = (None, 0.0)                       # any other key disarms a landmark
+        if key == 0:
+            self.t.command("enable", {"on": True})
+        elif key == 1:
+            r.muted = not r.muted
+            r.send("speaker muted" if r.muted else "speaker on", "/api/volume", {"muted": r.muted})
+        elif key in (2, 3):
+            if r.volume is not None:
+                r.volume = max(0, min(100, int(r.volume) + (VOLUME_STEP if key == 3 else -VOLUME_STEP)))
+                r.send(f"volume {r.volume} %", "/api/volume", {"volume": r.volume})
+        elif key == 4:
+            r.send("HALT", "/api/halt", {})
+        elif key == 5:
+            r.mic_muted = not r.mic_muted
+            r.send("microphone muted" if r.mic_muted else "microphone on", "/api/voice/mic", {"muted": r.mic_muted})
+        elif key in LANDMARK_KEYS:
+            i = LANDMARK_KEYS.index(key)
+            if i < len(r.landmarks):
+                lid, name = r.landmarks[i]
+                if armed_key == key and now < until:
+                    r.send(f"going to {name}", f"/api/landmarks/{lid}/goto", {})
+                else:
+                    self._armed = (key, now + ARM_SECONDS)
+
+    def _render_idle(self) -> None:
+        r, now = self.remote, self.clock()
+        self._label(0, "TELEOP\nON", bg=(25, 90, 40))
+        self._label(1, "🔇" if r.muted else "🔊", bg=(120, 30, 30) if r.muted else DARK)
+        vol = "—" if r.volume is None else f"{int(r.volume)}"
+        self._label(2, f"VOL −\n{vol}")
+        self._label(3, f"VOL +\n{vol}")
+        self._label(4, "HALT", bg=(190, 25, 25))
+        self._label(5, "MIC\nOFF" if r.mic_muted else "MIC\nON", bg=(120, 30, 30) if r.mic_muted else DARK)
+        armed_key, until = self._armed
+        if armed_key is not None and now >= until:
+            self._armed, armed_key = (None, 0.0), None
+        for i, key in enumerate(LANDMARK_KEYS):
+            if i < len(r.landmarks):
+                name = r.landmarks[i][1]
+                if key == armed_key:
+                    self._label(key, "GO?\n" + name.split()[0][:8], bg=(200, 130, 0))
+                else:
+                    self._label(key, "\n".join(w[:9] for w in name.split()[:3]), bg=(30, 50, 90))
+            else:
+                self._label(key, "")
+
     def _press(self, key: int, down: bool) -> None:
         t = self.t
+        if self.idle():
+            self.held.clear()
+            self._press_idle(key, down)
+            return
         if self.rating_until and key in RATING_KEYS:
             if down:
                 t.log(t.rate(RATING_KEYS.index(key) + 1))
@@ -257,6 +388,16 @@ class Deck:
             self._want_rating, self.rating_until = False, now + RATING_SECONDS
         if self.rating_until and now > self.rating_until:
             self.rating_until = 0.0
+        idle = self.idle()
+        if idle != self._was_idle:                      # the other set of keys: nothing stays held or armed across it
+            self._was_idle, self._armed = idle, (None, 0.0)
+            self.held.clear()
+        if idle:
+            self._render_idle()
+            return
+        for key in (5, 6, 7, 8, 9):
+            self._label(key, FINGER_LABELS[key])
+        self._label(3, "⟳")
         blink = int(time.time() * 1.5) % 2 == 0
         rec = bool(t.recording)
         if rec:

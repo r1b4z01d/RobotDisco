@@ -218,8 +218,10 @@ class Teleop(Node):
         self.create_timer(0.2, self.publish_state, callback_group=self.cb)
         self.deck = None
         if bool(p("deck")) and not bool(p("debug_input")):
-            from .deck import Deck
-            self.deck = Deck(self, flip=bool(p("deck_flip")))
+            from .deck import Deck, Remote
+            # teleop off, the deck is the robot's remote (halt, volume, the microphone, landmarks) through the manager
+            remote = Remote(f"http://127.0.0.1:{int(config.get('robot.ports.manager', 8092))}", log=self.log)
+            self.deck = Deck(self, flip=bool(p("deck_flip")), remote=remote)
             self.create_timer(0.1, self.deck.poll, callback_group=self.cb)
         # LeRobot (and torch under it) takes many seconds to import on the Orin; the first REC paid for it
         threading.Thread(target=lambda: __import__("rd_vla.recorder", fromlist=["x"]).lerobot_warm(), daemon=True, name="lerobot-import").start()

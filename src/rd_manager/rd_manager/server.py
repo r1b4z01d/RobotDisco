@@ -370,7 +370,23 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
     def api_voice():
         """What the voice assistant last heard / took as the command / answered (each with a server timestamp
         <key>_t), its state, and listeners = whether it is subscribed to the text box's topic."""
-        return {**B.voice, "listeners": B.voice_text_pub.get_subscription_count()} if B else {}
+        return {**B.voice, "listeners": B.voice_text_pub.get_subscription_count(), "mic_muted": bool(getattr(B, "mic_muted", False))} if B else {}
+
+    @app.post("/api/voice/mic")
+    def api_voice_mic(body: dict = Body(...)):
+        """Mute or unmute the voice assistant's microphone ({muted: bool}; rd_voice's /voice/mute)."""
+        if not B:
+            raise HTTPException(503, "no ROS")
+        from std_srvs.srv import SetBool
+        cl = B.node.create_client(SetBool, "/voice/mute", callback_group=B.cb)
+        try:
+            if not cl.wait_for_service(timeout_sec=2.0):
+                raise HTTPException(503, "the voice assistant is not running")
+            cl.call(SetBool.Request(data=bool(body.get("muted"))))
+            B.mic_muted = bool(body.get("muted"))
+        finally:
+            B.node.destroy_client(cl)
+        return {"ok": True, "mic_muted": B.mic_muted}
 
     # ------------------------------------------------------------------ the arm, the hand, policies
     @app.get("/api/arm")
