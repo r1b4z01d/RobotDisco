@@ -571,3 +571,11 @@ def test_stream_deck_is_the_robots_remote_while_teleop_is_off():
     assert pad.labels[0] == "●" and pad.labels[5] == "🖐" and pad.labels[10] == "✊"
     t.enabled = False; d.poll()
     assert pad.labels[0] == "TELEOP\nON"
+
+
+def test_puck_calibration_picks_the_axis_that_moved():
+    from rd_vla.teleop import AXES, CALIBRATION, dominant
+    assert [a for a, _ in CALIBRATION] == list(AXES)
+    samples = [{"x": 0.02, "y": -0.7, "z": 0.1, "roll": 0.0, "pitch": 0.05, "yaw": 0.0}] * 20
+    assert dominant(samples) == ("y", -0.7)
+    assert dominant([]) == ("x", 0.0)

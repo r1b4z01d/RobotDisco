@@ -122,6 +122,10 @@
     fault.classList.toggle("hidden", !ur.fault);
     if (ur.fault) $("#fault-text").textContent = ur.fault;
 
+    // the puck's calibration: its prompt, large, while it runs
+    const cb = $("#calib-banner"); cb.textContent = st.calib || ""; cb.classList.toggle("hidden", !st.calib);
+    $("#btn-calib").textContent = st.calib ? "✖ cancel calibration" : "🎯 calibrate puck";
+
     // exposure
     const ex = st.exposure || {};
     const lock = $("#expo-lock"); lock.textContent = ex.locked ? "LOCKED" : (ex.phase ? "metering" : "auto"); lock.classList.toggle("on", !!ex.locked);

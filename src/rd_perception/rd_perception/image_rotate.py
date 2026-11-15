@@ -8,6 +8,7 @@ see the same cut, not the whole frame letterboxed into its 512x512. `square` is 
 Every camera gets this node, also one with nothing to rotate or cut: /cameras/<name>/image is the topic the
 recorder, the policies and the manager read, and the wrist camera had none on the first run on the robot.
 """
+import time
 import numpy as np
 from rd_bringup.process import exit_with_parent
 import rclpy
@@ -54,6 +55,12 @@ class ImageRotate(Node):
         self.declare_parameter("degrees", 90)
         self.declare_parameter("square", -1.0)     # fraction along the upright frame's long axis; < 0 = no crop
         self.declare_parameter("height", 0)        # rows of the published image; 0 = as it comes
+        # frames a second passed on; the camera's others are dropped unturned. The policies and the recorder look 12
+        # times a second: at the cameras' 30 the three of these nodes took two of the Orin's cores, and every reader
+        # after them (the teleop, the runner, the manager's tiles) paid for the same surplus (2026-11-15).
+        self.declare_parameter("rate_hz", 15.0)
+        self._period = 1.0 / max(1.0, float(self.get_parameter("rate_hz").value))
+        self._last = 0.0
         self.degrees = int(self.get_parameter("degrees").value)
         self.square = float(self.get_parameter("square").value)
         self.height = int(self.get_parameter("height").value)
@@ -87,6 +94,10 @@ class ImageRotate(Node):
             self.sub = None
 
     def cb(self, m: Image):
+        now = time.monotonic()
+        if now - self._last < self._period * 0.8:      # 0.8: a camera at 30 gives every other frame, not every third
+            return
+        self._last = now
         ch = max(1, m.step // max(1, m.width))
         data, h, w = rotate(bytes(m.data), m.height, m.width, ch, self.degrees)
         if self.square >= 0.0:

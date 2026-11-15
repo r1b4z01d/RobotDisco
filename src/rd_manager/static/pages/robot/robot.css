@@ -132,3 +132,4 @@ body.mode-eval .only-teleop { display: none !important; }
   .cam, .cam.wide { aspect-ratio: 4 / 3; max-height: none; }
   .btn.big { flex: 1 1 45%; }
 }
+.calib-banner { margin: 10px 0 0; padding: 14px 18px; border: 2px solid #f0c66a; border-radius: 8px; background: #2b2410; color: #ffe9a8; font-size: 20px; font-weight: 600; }

@@ -50,6 +50,22 @@ from .spacemouse import SpaceMouse
 # robot axis -> (puck axis, sign): v1's calibration for this robot seen from the operator's place (sm_calib.json)
 AXIS_MAP = {"x": ("x", -1), "y": ("y", 1), "z": ("z", -1), "roll": ("yaw", -1), "pitch": ("roll", 1), "yaw": ("pitch", -1)}
 AXES = ("x", "y", "z", "roll", "pitch", "yaw")
+# the calibration's six steps (v1 teleop/sm_calibrate.py): the gesture you want to mean each motion of the gripper
+CALIBRATION = (("x", "SLIDE the puck the way the gripper should move RIGHT"),
+               ("y", "SLIDE the puck the way the gripper should move AWAY from you"),
+               ("z", "LIFT the puck the way the gripper should move UP"),
+               ("roll", "TILT the puck the way the gripper should ROLL"),
+               ("pitch", "TILT the puck the way the gripper should PITCH (nose up)"),
+               ("yaw", "TWIST the puck the way the gripper should YAW (spin)"))
+
+
+def dominant(samples: list) -> tuple:
+    """(puck axis, mean deflection) of the axis that moved most over a list of {axis: value} readings."""
+    if not samples:
+        return AXES[0], 0.0
+    mean = {k: sum(s.get(k, 0.0) for s in samples) / len(samples) for k in AXES}
+    k = max(AXES, key=lambda a: abs(mean[a]))
+    return k, mean[k]
 
 
 def quat_multiply(a, b):
@@ -173,6 +189,14 @@ class Teleop(Node):
         p = self.p = lambda name: self.get_parameter(name).value
         self.cb = ReentrantCallbackGroup()
         self.axis_map = {k: (str(v[0]), int(v[1])) for k, v in json.loads(p("axis_map")).items()}
+        try:                                    # the operator's own calibration, when one was made here (the page's button)
+            saved = json.loads(self._calib_file().read_text())
+            if set(saved) == set(AXES):
+                self.axis_map = {k: (str(v[0]), int(v[1])) for k, v in saved.items()}
+        except (OSError, ValueError, TypeError, IndexError):
+            pass
+        self.calib = ""                         # the calibration's current prompt, "" when none is running
+        self._calib_stop = threading.Event()
         if device is None:
             device = TopicDevice(self) if bool(p("debug_input")) else SpaceMouse(float(p("scale")), float(p("deadband")))
         self.device = device
@@ -257,6 +281,53 @@ class Teleop(Node):
             except (OSError, ValueError):
                 pass
 
+    def _calib_file(self) -> Path:
+        return config.data_dir() / "outputs" / "sm_calib.json"
+
+    def calibrate(self) -> None:
+        """The puck's axis calibration, six gestures prompted on the page (v1 sm_calibrate.py). Run on a thread."""
+        new: dict = {}
+        try:
+            for i, (axis, prompt) in enumerate(CALIBRATION, 1):
+                head = f"puck calibration {i}/6: {prompt}"
+                while True:
+                    self.calib = head + ", and HOLD it"
+                    end = time.monotonic() + 30.0          # wait for a firm push
+                    while max(abs(v) for v in self.device.axes.values()) < 0.35:
+                        if self._calib_stop.is_set() or time.monotonic() > end or not self.device_ok:
+                            self.log("puck calibration stopped: " + ("cancelled" if self._calib_stop.is_set() else "no push seen" if self.device_ok else "the puck is not connected"))
+                            return
+                        time.sleep(0.02)
+                    samples, end = [], time.monotonic() + 1.0
+                    while time.monotonic() < end:
+                        samples.append(dict(self.device.axes))
+                        time.sleep(0.02)
+                    src, val = dominant(samples)
+                    self.calib = head + ": got it, let go"
+                    end = time.monotonic() + 10.0
+                    while max(abs(v) for v in self.device.axes.values()) > 0.08 and time.monotonic() < end and not self._calib_stop.is_set():
+                        time.sleep(0.02)
+                    time.sleep(0.4)
+                    if abs(val) < 0.2:
+                        self.log(f"puck calibration {i}/6: too weak ({src} {val:+.2f}), again")
+                        continue
+                    if src in [m[0] for m in new.values()]:
+                        self.log(f"puck calibration {i}/6: that was the puck's {src} axis, already used for another motion; again, a cleaner gesture")
+                        continue
+                    new[axis] = (src, 1 if val > 0 else -1)
+                    self.log(f"puck calibration {i}/6: {axis} = puck {src} {'+' if val > 0 else '-'}")
+                    break
+            self.axis_map = new
+            try:
+                f = self._calib_file()
+                f.parent.mkdir(parents=True, exist_ok=True)
+                f.write_text(json.dumps({k: list(v) for k, v in new.items()}, indent=1))
+                self.log("puck calibration saved: " + ", ".join(f"{k}={v[0]}{'+' if v[1] > 0 else '-'}" for k, v in new.items()))
+            except OSError as e:
+                self.log(f"puck calibration in use but not saved: {e}")
+        finally:
+            self.calib = ""
+
     def _session_file(self) -> Path:
         return config.data_dir() / "outputs" / "teleop_session.json"
 
@@ -288,6 +359,17 @@ class Teleop(Node):
                     self.log(r.message)
             elif name == "quit":
                 self.on_enable(SetBool.Request(data=False), SetBool.Response())
+            elif name == "calibrate":
+                if self.calib:
+                    self._calib_stop.set()                  # pressed again: cancel
+                elif self.enabled or self.freedrive or self.recording:
+                    self.log("puck calibration: turn teleop off first (the arm must not follow the gestures)")
+                elif not self.device_ok:
+                    self.log("puck calibration: the puck is not connected")
+                else:
+                    self._calib_stop.clear()
+                    self.calib = "puck calibration starting"
+                    threading.Thread(target=self.calibrate, daemon=True, name="puck-calibration").start()
             elif name in ("rec", "save", "discard", "home"):
                 handler = {"rec": self.on_start, "save": self.on_save, "discard": self.on_discard, "home": self.on_home}[name]
                 r = handler(tr, Trigger.Response())
@@ -589,7 +671,7 @@ class Teleop(Node):
             "freedrive": self.freedrive, "deck": bool(self.deck and self.deck.pad is not None),
             "pose": [round(float(v), 4) for v in self.pose] if (self.enabled or self.freedrive) and self.pose else [],
             "tick_hz": round(hz, 1), "last": self.last,
-            "backend": getattr(w, "backend", None), "message": self.message})))
+            "backend": getattr(w, "backend", None), "message": self.message, "calib": self.calib})))
 
 
 def main():

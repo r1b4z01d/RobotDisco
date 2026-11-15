@@ -6,7 +6,7 @@
   <title>Teleop</title>
   <link rel="icon" href="/static/favicon.svg">
   <link rel="stylesheet" href="/static/style.css">
-  <link rel="stylesheet" href="/static/pages/robot/robot.css?v=2">
+  <link rel="stylesheet" href="/static/pages/robot/robot.css?v=3">
 </head>
 <body class="robot">
 
@@ -39,8 +39,10 @@
         <button class="btn hold" data-hold="1" title="hold: c">✊ close</button>
         <button class="btn" data-cmd="reconnect" title="reconnect the UR (clears a protective stop, reloads the control script)">🦾🔄</button>
         <button class="btn" data-cmd="recover_hand" data-confirm="Power-cycle the hand? Its supply on the tool connector goes off for two seconds." title="recover the hand (power-cycle the tool connector)">🖐🔄</button>
+        <button class="btn" id="btn-calib" data-cmd="calibrate" title="calibrate the SpaceMouse: six gestures, prompted here, with teleop off. Press again to cancel">🎯 calibrate puck</button>
         <a class="btn" href="/arm/" target="_blank" title="arm power, joints, hand sliders, policy runs">arm ↗</a>
       </div>
+      <div id="calib-banner" class="calib-banner hidden"></div>
 
       <!-- eval action bar -->
       <div class="actions only-eval">
@@ -134,6 +136,6 @@
 
   </main>
 
-  <script src="/static/pages/robot/robot.js?v=2"></script>
+  <script src="/static/pages/robot/robot.js?v=3"></script>
 </body>
 </html>

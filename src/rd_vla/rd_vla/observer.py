@@ -89,13 +89,26 @@ class Observer:
 
     def _on_image(self, cam):
         def cb(m):
-            try:
-                img = image_to_rgb(m)
-            except ValueError:
-                return
+            # kept as it came: the array is made when somebody looks (12 times a second), not for every frame
             with self._lock:
-                self._images[cam] = (time.monotonic(), img)
+                self._images[cam] = (time.monotonic(), m)
         return cb
+
+    def _frame(self, cam):
+        """(time, RGB array) of a camera's newest frame, converted once; None when there is none or it cannot be read.
+        The caller holds the lock."""
+        got = self._images.get(cam)
+        if got is None:
+            return None
+        t, m = got
+        if not isinstance(m, np.ndarray):
+            try:
+                m = image_to_rgb(m)
+            except ValueError:
+                del self._images[cam]
+                return None
+            self._images[cam] = (t, m)
+        return t, m
 
     def _on_joints(self, m: JointState):
         pos = dict(zip(m.name, m.position))
@@ -111,7 +124,7 @@ class Observer:
     def latest_frame(self, cam):
         """(monotonic time, RGB array) of a camera's newest frame, or None (rd_vla.exposure meters on it)."""
         with self._lock:
-            return self._images.get(cam)
+            return self._frame(cam)
 
     def ee_pose(self):
         """[x, y, z, rx, ry, rz] of the tool in the base frame, or None."""
@@ -143,9 +156,10 @@ class Observer:
         """(state[16], images{cam: rgb}, age_s) or None."""
         pose = self.ee_pose()
         with self._lock:
-            if pose is None or self._joints is None or any(c not in self._images for c in self.cameras):
+            frames = {c: self._frame(c) for c in self.cameras}
+            if pose is None or self._joints is None or any(f is None for f in frames.values()):
                 return None
-            images = {c: self._images[c][1] for c in self.cameras}
-            age = max(time.monotonic() - self._images[c][0] for c in self.cameras)
+            images = {c: f[1] for c, f in frames.items()}
+            age = max(time.monotonic() - f[0] for f in frames.values())
             state = make_state(pose, self._joints, self._curls)
         return state, images, age
