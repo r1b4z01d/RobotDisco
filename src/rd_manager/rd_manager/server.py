@@ -279,23 +279,28 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
     def api_apriltags():
         """The AprilTag anchors: each taught tag's place in the map, which way its face points, and whether a camera
         sees it now. `seen` also lists tags in view that are not taught."""
-        from rd_nav.tag_corrector import load_tag_poses, mat_to_xy_yaw
+        from rd_nav.tag_corrector import load_tag_poses, mat_to_quat, mat_to_xy_yaw
         try:
             path = tag_file()
         except Exception:  # noqa: BLE001
-            return {"tags": {}, "seen": {}}
+            return {"tags": {}, "taught": {}, "in_view": {}}
         now = time.time()
         seen = {str(k): {"age_s": round(now - v["t"], 1), "range_m": v["range_m"]} for k, v in (getattr(B, "tags_seen", {}) if B else {}).items() if now - v["t"] < 3.0}
-        tags = {}
+        tags, taught = {}, {}
         for tid, M in load_tag_poses(str(path)).items():
             x, y, yaw = mat_to_xy_yaw(M)
-            nz = float(M[2, 2])                                        # the face's normal, its part along the map's up
-            tilt = math.degrees(math.acos(min(1.0, abs(nz))))          # off a level surface (a ceiling or the floor)
-            lean = 90.0 - tilt                                         # off an upright one (a wall)
+            # the 3D page's form: [x, y, z, qx, qy, qz, qw] in the map. (It asked for `taught` from the start and this
+            # endpoint only ever gave `tags`: no tag was ever drawn on the map.)
+            taught[str(tid)] = [round(float(M[i, 3]), 4) for i in range(3)] + [round(float(q), 5) for q in mat_to_quat(M[:3, :3])]
+            # The tag's axes (rd_perception tag_adapter): x out of its face, y to its right, z up the paper. Square on a
+            # wall: x level and z straight up. Flat on a ceiling or the floor: x straight up or down.
+            n_up, z_up = float(M[2, 0]), float(M[2, 2])
+            wall = max(math.degrees(math.asin(min(1.0, abs(n_up)))), math.degrees(math.acos(max(-1.0, min(1.0, z_up)))))
+            flat = math.degrees(math.acos(min(1.0, abs(n_up))))
             tags[str(tid)] = {"x": round(x, 3), "y": round(y, 3), "z": round(float(M[2, 3]), 3), "yaw": round(yaw, 3),
-                              "on": "ceiling or floor" if tilt < lean else "wall", "off_square_deg": round(min(tilt, lean), 1),
-                              "seen": str(tid) in seen}
-        return {"tags": tags, "seen": seen, "file": str(path)}
+                              "on": "wall" if wall <= flat else ("ceiling" if n_up < 0 else "floor or a table top"),
+                              "off_square_deg": round(min(wall, flat), 1), "seen": str(tid) in seen}
+        return {"tags": tags, "taught": taught, "in_view": seen, "file": str(path)}
 
     @app.post("/api/apriltags/teach")
     def api_apriltags_teach():

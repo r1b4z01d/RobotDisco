@@ -704,7 +704,7 @@ async function lmRefresh() {
 async function tagRefresh() {
   let d;
   try { d = await api("/api/apriltags"); } catch (e) { $("#tag-status").textContent = "○ " + e.message; return; }
-  const taught = Object.entries(d.tags || {}).sort((a, b) => a[0] - b[0]), seen = d.seen || {};
+  const taught = Object.entries(d.tags || {}).sort((a, b) => a[0] - b[0]), seen = d.in_view || {};
   const untaught = Object.keys(seen).filter((id) => !(id in (d.tags || {}))).sort((a, b) => a - b);
   $("#tag-status").textContent = `${taught.length} taught` + (Object.keys(seen).length ? ` · in view: ${Object.keys(seen).sort((a, b) => a - b).join(", ")}` : " · none in view");
   const card = (id, t) => el("div", { class: "card tag-card" },
