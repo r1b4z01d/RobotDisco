@@ -465,9 +465,10 @@ class Teleop(Node):
     def rate(self, stars: int) -> str:
         """1..5 stars for the last saved episode, into the dataset's annotations sidecar."""
         stars = max(1, min(5, int(stars)))
-        if self.saving:                       # the episode is still being written: kept, and written with it
-            self._pending_rating = stars
-            return f"rated {'★' * stars} (written once the episode is saved)"
+        with self.lock:
+            if self.saving:                   # the episode is still being written: kept, and written with it
+                self._pending_rating = stars
+                return f"rated {'★' * stars} (written once the episode is saved)"
         if self.last.get("ep") is None:
             return "no saved episode to rate yet"
         write_annotation(self._root() / self.last["dataset"], self.last["ep"], rating=stars)
@@ -589,14 +590,18 @@ class Teleop(Node):
                 self.episodes, self._episodes_of = ep + 1, str(self.p("dataset"))
                 self.last = {"ep": ep, "frames": frames, "grasps": len(ranges) + 1, "dataset": Path(saved["path"]).name}
                 line = f"episode {ep + 1} saved: {frames} frames, {len(ranges) + 1} grasp(s), in {saved['path']}"
-                stars, self._pending_rating = self._pending_rating, None
-                if stars:                     # rated while it was still being written
-                    line += "; " + self.rate(stars)
             except Exception as e:  # noqa: BLE001
-                line = f"SAVE FAILED: {type(e).__name__}: {e}"
+                line, ep = f"SAVE FAILED: {type(e).__name__}: {e}", None
             with self.lock:
                 self.writer = None            # re-opened (appending) by the next start
-                self.saving = False
+                self.saving = False           # from here a rating goes to self.last, which is this episode
+                stars, self._pending_rating = self._pending_rating, None
+            if stars and ep is not None:      # rated while it was still being written: this episode's, written now.
+                # (Until 2026-11-15 this went back through rate(), which saw `saving` still set and shelved it again:
+                # the stars were lost or landed on a neighbour.)
+                write_annotation(self._root() / self.last["dataset"], ep, rating=stars)
+                self.last["rating"] = stars
+                line += f"; rated {'★' * stars}"
             self.log(line)
 
         self._pending_rating = None
