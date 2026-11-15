@@ -397,6 +397,9 @@ urdfLoader.loadMeshCb = (path, manager, done) => {
 function loadUrdf() {
   urdfLoader.load("/api/urdf", (robot) => {
     robot.traverse((c) => { if (c.isMesh) { c.castShadow = false; if (c.material && c.material.color && c.material.color.r > 0.95 && c.material.color.g > 0.95 && c.material.color.b > 0.95) c.material.color.setHex(0xb8bcc8); } });
+    // the body is white (the model said orange until 2026-11-15; a running base still publishes that one)
+    const ownLink = (o) => { for (let p = o.parent; p; p = p.parent) if (p.isURDFLink) return p; return null; };     // not the links hung on it
+    if (robot.links.chassis) robot.links.chassis.traverse((o) => { if (o.isMesh && o.material && o.material.color && ownLink(o) === robot.links.chassis) { o.material = o.material.clone(); o.material.color.set(0xf4f4f4); } });
     robotModel = robot; scene.add(robot); urdfState = `URDF: ${Object.keys(robot.links).length} links, ${Object.keys(robot.joints).length} joints`;
   }, undefined, (e) => { urdfState = "URDF not available yet (retrying)"; setTimeout(loadUrdf, 5000); });
 }
