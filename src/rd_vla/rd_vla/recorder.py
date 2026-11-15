@@ -64,12 +64,26 @@ class EpisodeWriter:
                 n += 1
             print(f"[recorder] {self.path} exists and is not a LeRobot dataset: recording to {self.repo_id}_{n}", flush=True)
             self.repo_id = f"{self.repo_id}_{n}"
+        if self.backend == "lerobot" and (self.path / "meta").is_dir() and self._saved_episodes() == 0:
+            # A dataset that was created and never got an episode (the first take discarded, or the node stopped during
+            # it) is only a shell: LeRobot cannot open it (no data files: it goes looking for it on the hub) and frames
+            # of the unsaved take may still lie in it. Nothing in it is a recording: start it again.
+            import shutil
+            print(f"[recorder] {self.path} holds no saved episode: starting it afresh", flush=True)
+            shutil.rmtree(self.path, ignore_errors=True)
         if self.backend == "lerobot" and ((self.path / "meta").is_dir() or len(self.shapes) == len(self.cameras)):
             self._open_lerobot()       # else created at the first frame, once every camera's size is known
 
     @property
     def path(self) -> Path:
         return self.root / self.repo_id
+
+    def _saved_episodes(self) -> int:
+        """Episodes the dataset on disk says it holds (-1 when its info cannot be read: left alone then)."""
+        try:
+            return int(json.loads((self.path / "meta" / "info.json").read_text()).get("total_episodes", -1))
+        except (OSError, ValueError, TypeError):
+            return -1
 
     # ---- lerobot
     def _features(self) -> dict:
@@ -88,6 +102,7 @@ class EpisodeWriter:
             self.dataset = LeRobotDataset.create(repo_id=self.repo_id, root=str(self.path), fps=self.fps,
                                                  features=self._features(), robot_type="ur5e_amazinghand", use_videos=self.use_videos)
         self.episodes = int(self.dataset.meta.total_episodes)
+        self._drop_orphan_frames()
         # Camera frames are written by LeRobot's image writer, off the control loop (v1 manual_panel: 2 processes of
         # 4 threads). Without it add_frame() wrote three PNGs itself every tick and the recording stuttered (2026-11-15).
         try:
@@ -95,6 +110,23 @@ class EpisodeWriter:
                 self.dataset.start_image_writer(num_processes=2, num_threads=4)
         except Exception as e:  # noqa: BLE001  it still records, in step with the disk
             print(f"[recorder] no background image writer ({type(e).__name__}: {e}): frames are written in the loop", flush=True)
+
+    def _drop_orphan_frames(self) -> None:
+        """Frames of an episode that was never saved (the node was stopped mid-recording) still sit under images/ with
+        the index the next episode will get; LeRobot encodes every file it finds there, so a shorter take would end
+        with the old one's tail. Found on the robot 2026-11-15: 315 frames of an episode 0 that did not exist."""
+        import shutil
+        root = self.path / "images"
+        if not root.is_dir():
+            return
+        for d in root.glob("*/episode-*"):
+            try:
+                n = int(d.name.rsplit("-", 1)[1])
+            except ValueError:
+                continue
+            if n >= self.episodes and d.is_dir() and any(d.iterdir()):
+                print(f"[recorder] dropping {sum(1 for _ in d.iterdir())} frames of an unsaved episode {n} ({d.parent.name})", flush=True)
+                shutil.rmtree(d, ignore_errors=True)
 
     def _fit(self, cam: str, img):
         h, w = self.shapes.setdefault(cam, (int(img.shape[0]), int(img.shape[1])))     # the first frame fixes an unknown size
