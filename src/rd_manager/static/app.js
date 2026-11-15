@@ -784,7 +784,7 @@ function lmRender(d) {
 }
 async function lmLoadMap(source) {
   if (lmS.mapSrc === source && lmS.map) return;
-  try { lmS.map = await api("/api/landmarks/map"); } catch (e) { lmS.map = null; return; }
+  try { const r = await api("/api/landmarks/map"); lmS.map = r.meta || r; } catch (e) { lmS.map = null; return; }   // {map, meta: {resolution, origin, width, height}}
   lmS.mapSrc = source;
   const im = new Image();
   im.addEventListener("load", () => { lmS.sig = ""; if (lmS.last) lmRender(lmS.last); });
