@@ -257,6 +257,19 @@ class RosBridge:
         self.halt_pubs = [n.create_publisher(TwistStamped, "/cmd_vel_joy", 10), n.create_publisher(TwistStamped, "/diff_cont/cmd_vel", 10)]
         self.say_text_pub = n.create_publisher(String, "/say_text", 10)
         self.voice_text_pub = n.create_publisher(String, "/voice/text_in", 10)
+        # AprilTags in view right now (the Landmarks page's anchors, the 3D page): id -> {t, range_m}
+        self.tags_seen: dict = {}
+        try:
+            from rd_interfaces.msg import TagDetectionArray
+
+            def on_tags(m):
+                now = time.time()
+                for d in m.detections:
+                    p_ = d.pose.pose.position
+                    self.tags_seen[int(d.id)] = {"t": now, "range_m": round(math.sqrt(p_.x ** 2 + p_.y ** 2 + p_.z ** 2), 2)}
+            n.create_subscription(TagDetectionArray, "/tags/detections", on_tags, 5, callback_group=self.cb)
+        except ImportError:
+            pass
         from rclpy.qos import QoSDurabilityPolicy, QoSProfile
         from std_msgs.msg import Bool as _Bool
         self.mic_muted = False

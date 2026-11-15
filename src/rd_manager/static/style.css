@@ -315,3 +315,8 @@ table.svc pre.svc-log { margin: 0; padding: 8px 12px; max-height: 320px; overflo
 /* the canvas's aspect-ratio is set per panel; the height drives the width */
 .panels-stage canvas { height: min(calc(100vh - 170px), 60vw); width: auto; image-rendering: pixelated; background: #000; border: 1px solid var(--line); border-radius: 4px; }
 .panels-stage figcaption { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.tag-head { border-top: 1px solid var(--line); }
+.tag-list { padding: 12px; display: flex; flex-wrap: wrap; gap: 8px; }
+.tag-card { margin: 0; display: flex; align-items: center; gap: 10px; padding: 8px 12px; }
+.tag-card .tag-id { font-weight: 700; }
+.tag-card .tag-id.seen { color: #39d353; }

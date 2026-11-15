@@ -700,10 +700,36 @@ async function lmRefresh() {
   await lmLoadMap(d.source);
   lmStatus(d); lmRender(d);
 }
+// ---- AprilTag anchors (the Landmarks page's second list): /api/apriltags
+async function tagRefresh() {
+  let d;
+  try { d = await api("/api/apriltags"); } catch (e) { $("#tag-status").textContent = "○ " + e.message; return; }
+  const taught = Object.entries(d.tags || {}).sort((a, b) => a[0] - b[0]), seen = d.seen || {};
+  const untaught = Object.keys(seen).filter((id) => !(id in (d.tags || {}))).sort((a, b) => a - b);
+  $("#tag-status").textContent = `${taught.length} taught` + (Object.keys(seen).length ? ` · in view: ${Object.keys(seen).sort((a, b) => a - b).join(", ")}` : " · none in view");
+  const card = (id, t) => el("div", { class: "card tag-card" },
+    el("span", { class: "tag-id" + (t && t.seen ? " seen" : "") }, `tag ${id}`),
+    t ? el("span", { class: "mono muted" }, `${t.x.toFixed(2)}, ${t.y.toFixed(2)} · ${t.z.toFixed(2)} m up · on a ${t.on}`) : el("span", { class: "mono muted" }, "in view, not taught"),
+    t && t.off_square_deg > 10 ? el("span", { class: "tag warn", title: "its taught face is this far from flat on a wall or ceiling: the reading it was taught from was probably poor. Teach it again from closer or more square on" }, `${t.off_square_deg.toFixed(0)}° off square`) : null,
+    seen[id] ? el("span", { class: "tag", title: "a camera sees it now" }, `in view · ${seen[id].range_m} m`) : null,
+    t ? el("button", { class: "btn tiny danger", title: "forget this tag (do this before moving it)", onclick: async () => {
+      if (!confirm(`Forget tag ${id}? The robot will no longer use it to find itself until it is taught again.`)) return;
+      try { await api(`/api/apriltags/${id}`, { method: "DELETE" }); ok(`tag ${id} forgotten`); } catch (e) { err(e); }
+      tagRefresh();
+    } }, "Delete") : null);
+  $("#tag-list").replaceChildren(...(taught.length || untaught.length
+    ? [...taught.map(([id, t]) => card(id, t)), ...untaught.map((id) => card(id, null))]
+    : [el("div", { class: "placeholder" }, "No tags taught. Park the robot where a camera sees a tag, check its place on the map, and press Teach.")]));
+}
+$("#btn-tag-teach").onclick = async () => {
+  const b = $("#btn-tag-teach"); b.disabled = true;
+  try { const r = await post("/api/apriltags/teach", {}); ok(r.message); } catch (e) { err(e); }
+  b.disabled = false; tagRefresh();
+};
 function loadLandmarksView() {
-  lmRefresh();
+  lmRefresh(); tagRefresh();
   clearInterval(lmTimer);
-  lmTimer = setInterval(() => { if (state.view === "landmarks") lmRefresh(); }, 5000);
+  lmTimer = setInterval(() => { if (state.view === "landmarks") { lmRefresh(); tagRefresh(); } }, 5000);
 }
 async function lmAdd() {
   const name = $("#lm-name").value.trim();

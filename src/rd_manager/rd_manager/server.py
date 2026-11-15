@@ -267,19 +267,66 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
             raise HTTPException(404, f"no {name} data yet")
         return Response(b, media_type="application/octet-stream")
 
+    def tag_file() -> Path:
+        """The taught tags' file: the one the tag corrector reads (RD_TAG_POSES_FILE on the robot; rd_nav's own in the rig)."""
+        env = os.environ.get("RD_TAG_POSES_FILE")
+        if env:
+            return Path(env)
+        from ament_index_python.packages import get_package_share_directory
+        return Path(get_package_share_directory("rd_nav")) / "config" / "tag_poses.yaml"
+
     @app.get("/api/apriltags")
     def api_apriltags():
+        """The AprilTag anchors: each taught tag's place in the map, which way its face points, and whether a camera
+        sees it now. `seen` also lists tags in view that are not taught."""
         from rd_nav.tag_corrector import load_tag_poses, mat_to_xy_yaw
         try:
-            from ament_index_python.packages import get_package_share_directory
-            path = Path(get_package_share_directory("rd_nav")) / "config" / "tag_poses.yaml"
+            path = tag_file()
         except Exception:  # noqa: BLE001
-            return {"tags": {}}
+            return {"tags": {}, "seen": {}}
+        now = time.time()
+        seen = {str(k): {"age_s": round(now - v["t"], 1), "range_m": v["range_m"]} for k, v in (getattr(B, "tags_seen", {}) if B else {}).items() if now - v["t"] < 3.0}
         tags = {}
         for tid, M in load_tag_poses(str(path)).items():
             x, y, yaw = mat_to_xy_yaw(M)
-            tags[str(tid)] = {"x": round(x, 3), "y": round(y, 3), "z": round(float(M[2, 3]), 3), "yaw": round(yaw, 3)}
-        return {"tags": tags, "file": str(path)}
+            nz = float(M[2, 2])                                        # the face's normal, its part along the map's up
+            tilt = math.degrees(math.acos(min(1.0, abs(nz))))          # off a level surface (a ceiling or the floor)
+            lean = 90.0 - tilt                                         # off an upright one (a wall)
+            tags[str(tid)] = {"x": round(x, 3), "y": round(y, 3), "z": round(float(M[2, 3]), 3), "yaw": round(yaw, 3),
+                              "on": "ceiling or floor" if tilt < lean else "wall", "off_square_deg": round(min(tilt, lean), 1),
+                              "seen": str(tid) in seen}
+        return {"tags": tags, "seen": seen, "file": str(path)}
+
+    @app.post("/api/apriltags/teach")
+    def api_apriltags_teach():
+        """Teach every tag in view from where the robot is now (the tag corrector's ~/teach_landmarks)."""
+        if not B:
+            raise HTTPException(503, "no ROS")
+        from std_srvs.srv import Trigger
+        cl = B.node.create_client(Trigger, "/tag_corrector/teach_landmarks", callback_group=B.cb)
+        try:
+            if not cl.wait_for_service(timeout_sec=2.0):
+                raise HTTPException(503, "the tag corrector is not running (navigation)")
+            r = cl.call(Trigger.Request())
+        finally:
+            B.node.destroy_client(cl)
+        if not r.success:
+            raise HTTPException(409, r.message)
+        return {"ok": True, "message": r.message, **api_apriltags()}
+
+    @app.delete("/api/apriltags/{tid}")
+    def api_apriltags_delete(tid: int):
+        """Forget a taught tag (it is being moved). The corrector takes the file up again by itself."""
+        from rd_nav.tag_corrector import load_tag_poses, save_tag_poses
+        path = tag_file()
+        poses = load_tag_poses(str(path))
+        if int(tid) not in poses:
+            raise HTTPException(404, f"tag {tid} is not taught")
+        import shutil
+        shutil.copy2(path, str(path) + ".bak")
+        del poses[int(tid)]
+        save_tag_poses(str(path), poses)
+        return {"ok": True, "deleted": int(tid), **api_apriltags()}
 
     @app.get("/api/obstacles")
     def api_obstacles():
