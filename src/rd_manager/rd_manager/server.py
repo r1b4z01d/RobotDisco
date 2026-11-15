@@ -488,7 +488,7 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
                          "medians": {n: m[0] for n, m in (B.cam_median if B else {}).items() if now - m[1] < 5.0}},
             "crop": {n: v for n, v in rd_config.camera_squares().items() if v is not None},
             "crop_locked": bool(t.get("recording") or t.get("saving") or t.get("episodes", 0) > 0),
-            "deck": bool(t.get("deck")), "last": _teleop_last(t), "status": t.get("message", ""), "calib": t.get("calib", ""),
+            "deck": bool(t.get("deck")), "last": _teleop_last(t), "status": t.get("message", ""), "calib": t.get("calib", ""), "after_save": t.get("after_save", "stay_same"),
         }
 
     def meter_exposure(cams_cfg: dict, cam: str | None = None) -> dict:

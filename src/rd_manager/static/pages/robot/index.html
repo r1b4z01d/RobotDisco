@@ -70,6 +70,13 @@
         <input class="text mono" id="dataset-name" placeholder="dataset name (Enter to switch)" title="switch the recording root (not while recording); a new name creates a new dataset, an existing one appends">
         <h3 class="sub">Task</h3>
         <input class="text" id="task" placeholder="task string (Enter to apply)">
+        <h3 class="sub">After a save</h3>
+        <select class="text" id="after-save" title="what the arm and the hand do when an episode is saved">
+          <option value="stay_same">stay, same grip</option>
+          <option value="stay_open">stay, open grip</option>
+          <option value="home_same">home, same grip</option>
+          <option value="home_open">home, open grip</option>
+        </select>
       </section>
 
       <!-- episode (teleop) -->
@@ -136,6 +143,6 @@
 
   </main>
 
-  <script src="/static/pages/robot/robot.js?v=3"></script>
+  <script src="/static/pages/robot/robot.js?v=4"></script>
 </body>
 </html>

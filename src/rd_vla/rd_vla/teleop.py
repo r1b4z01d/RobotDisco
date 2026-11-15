@@ -50,6 +50,7 @@ from .spacemouse import SpaceMouse
 # robot axis -> (puck axis, sign): v1's calibration for this robot seen from the operator's place (sm_calib.json)
 AXIS_MAP = {"x": ("x", -1), "y": ("y", 1), "z": ("z", -1), "roll": ("yaw", -1), "pitch": ("roll", 1), "yaw": ("pitch", -1)}
 AXES = ("x", "y", "z", "roll", "pitch", "yaw")
+AFTER_SAVE = ("stay_same", "stay_open", "home_same", "home_open")
 # The calibration's six steps (v1 teleop/sm_calibrate.py): the gesture the operator wants to mean each motion of the
 # gripper, and the base-frame axis and sign that motion is. The operator stands behind the robot's arm looking the
 # way it reaches: their right is the base frame's -x, away from them is -y, and what they call the gripper's roll
@@ -188,6 +189,8 @@ class Teleop(Node):
         dp("base_frame", "ur_base"); dp("tool_frame", "ur_tool0")
         dp("cameras", list(CAMERA_KEYS)); dp("camera_topic", "/cameras/{name}/image")
         dp("dataset", ""); dp("task", "")
+        # what the arm and the hand do once an episode is saved: stay | home, with the grip as it is | opened
+        dp("after_save", "stay_same")
         dp("record_root", "")
         dp("debug_input", False)              # the rig: the puck is the topic /teleop/debug_input
         dp("deck", True); dp("deck_flip", True)   # the Stream Deck, mounted upside down on the robot (v1)
@@ -226,6 +229,7 @@ class Teleop(Node):
         self.create_service(Trigger, "/teleop/episode/discard", self.on_discard, callback_group=self.cb)
         self.limits = workspace_limits()
         self.enabled = False
+        self._pending_rating = None
         self.homing = False                # a go-home is under way: the puck has let go and takes over after it
         self.freedrive = False                # hand-guiding: the arm is moved by hand, nothing is streamed
         self.target = None
@@ -341,6 +345,8 @@ class Teleop(Node):
             d = json.loads(self._session_file().read_text())
         except (OSError, ValueError):
             return
+        if d.get("after_save") in AFTER_SAVE:
+            self._set("after_save", d["after_save"], remember=False)
         for name in ("dataset", "task"):
             if d.get(name) and not str(self.p(name)).strip():
                 self._set(name, str(d[name]), remember=False)
@@ -394,6 +400,11 @@ class Teleop(Node):
                 self.log(self.rate(int(a.get("stars", 0))))
             elif name == "grasp_mark":
                 self.log(self.regrasp_mark())
+            elif name == "after_save":
+                mode = str(a.get("mode", ""))
+                if mode in AFTER_SAVE:
+                    self._set("after_save", mode)
+                    self.log(f"after a save: {mode.replace('_', ', ')} grip")
             elif name == "task":
                 text = str(a.get("text", "")).strip()
                 if text:
@@ -453,9 +464,12 @@ class Teleop(Node):
 
     def rate(self, stars: int) -> str:
         """1..5 stars for the last saved episode, into the dataset's annotations sidecar."""
+        stars = max(1, min(5, int(stars)))
+        if self.saving:                       # the episode is still being written: kept, and written with it
+            self._pending_rating = stars
+            return f"rated {'★' * stars} (written once the episode is saved)"
         if self.last.get("ep") is None:
             return "no saved episode to rate yet"
-        stars = max(1, min(5, int(stars)))
         write_annotation(self._root() / self.last["dataset"], self.last["ep"], rating=stars)
         self.last["rating"] = stars
         return f"episode {self.last['ep'] + 1}: {'★' * stars}"
@@ -574,8 +588,9 @@ class Teleop(Node):
                 self.episodes, self._episodes_of = ep + 1, str(self.p("dataset"))
                 self.last = {"ep": ep, "frames": frames, "grasps": len(ranges) + 1, "dataset": Path(saved["path"]).name}
                 line = f"episode {ep + 1} saved: {frames} frames, {len(ranges) + 1} grasp(s), in {saved['path']}"
-                if self.deck is not None:
-                    self.deck.enter_rating()
+                stars, self._pending_rating = self._pending_rating, None
+                if stars:                     # rated while it was still being written
+                    line += "; " + self.rate(stars)
             except Exception as e:  # noqa: BLE001
                 line = f"SAVE FAILED: {type(e).__name__}: {e}"
             with self.lock:
@@ -583,8 +598,20 @@ class Teleop(Node):
                 self.saving = False
             self.log(line)
 
+        self._pending_rating = None
+        if self.deck is not None:
+            self.deck.enter_rating()          # the stars at once: the episode takes seconds to encode, the verdict is ready now
         threading.Thread(target=work, daemon=True).start()
         res.success, res.message = True, f"saving {frames} frames"
+        # the take is over: the grip and the arm as the operator chose for the end of a task
+        mode = str(self.p("after_save"))
+        if mode.endswith("_open"):
+            self.curls = [0.0] * 4
+            self.hand_pub.publish(Float32MultiArray(data=[0.0, 0.0, 0.0, 0.0]))     # also when the puck is not driving (freedrive)
+        if mode.startswith("home"):
+            r = self.on_home(Trigger.Request(), Trigger.Response())
+            if not r.success:
+                self.log(f"after the save: no homing ({r.message})")
         return res
 
     def on_discard(self, _req, res):
@@ -676,7 +703,7 @@ class Teleop(Node):
             "freedrive": self.freedrive, "deck": bool(self.deck and self.deck.pad is not None),
             "pose": [round(float(v), 4) for v in self.pose] if (self.enabled or self.freedrive) and self.pose else [],
             "tick_hz": round(hz, 1), "last": self.last,
-            "backend": getattr(w, "backend", None), "message": self.message, "calib": self.calib})))
+            "backend": getattr(w, "backend", None), "message": self.message, "calib": self.calib, "after_save": str(self.p("after_save"))})))
 
 
 def main():
