@@ -752,6 +752,7 @@ function showView(v) {
   state.view = v;
   VIEWS.forEach((name) => { $("#view-" + name).hidden = name !== v; });
   document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.view === v));
+  if (v === "datasets" && typeof datasetsFirstOpen === "function") datasetsFirstOpen();
   if (v === "models") loadModels();
   if (v === "evals") loadEvals();
   if (v === "robot") loadRobot();
@@ -1621,7 +1622,21 @@ async function copyRecordCmd(d) {
   catch (e) { window.prompt("copy the launch line:", cmd); }
 }
 
+// The Datasets tab, the first time it is seen: the dataset that changed last (the one being recorded), its first
+// episode in the player. After that the page stays where the operator left it.
+async function datasetsFirstOpen() {
+  if (state.dsOpened) return;
+  state.dsOpened = true;
+  await loadDatasets();
+  if (state.selected) return;
+  const usable = state.datasets.filter((d) => !d.error && d.episodes > 0);
+  if (!usable.length) return;
+  const newest = usable.reduce((a, b) => ((b.modified || 0) > (a.modified || 0) ? b : a));
+  await selectDataset(newest.name);
+  if (state.episodes.length && state.playing == null) play(state.episodes[0].episode);
+}
 loadDatasets();
+if (state.view === "datasets") datasetsFirstOpen();
 // ---- battery (header, every tab): rd_base's battery_monitor -> /battery -> /api/battery
 async function battRefresh() {
   if (document.visibilityState !== "visible") return;

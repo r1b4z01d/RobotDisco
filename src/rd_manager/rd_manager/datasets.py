@@ -69,6 +69,8 @@ def summarize(root: str, name: str) -> dict[str, Any]:
         "cameras": cams,
         "media": "video" if is_video else "image",
         "size_mb": _size_mb(root),
+        # when it last changed (its info.json is rewritten with every saved episode): the page opens on the newest
+        "modified": os.path.getmtime(os.path.join(root, "meta", "info.json")) if os.path.isfile(os.path.join(root, "meta", "info.json")) else 0.0,
         "has_backup": os.path.isdir(root + ".bak"),
         # camera geometry + recording dates the teleop panel wrote (meta/capture.json); None for
         # datasets recorded before it existed — those carry whatever cameras.py said at the time
