@@ -764,8 +764,6 @@ function showView(v) {
   if (v === "maps") loadMapsView();
   // the header's right side belongs to the robot page while that view is up; the dataset
   // monitor / refresh controls only make sense on the dataset views
-  const robot = v === "robot";
-  $("#hdr-robot").hidden = !robot;
   if (location.hash !== "#" + v) location.hash = "#" + v;
 }
 document.querySelectorAll(".nav-btn").forEach((b) => b.addEventListener("click", () => showView(b.dataset.view)));
