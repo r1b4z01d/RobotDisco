@@ -130,8 +130,6 @@
     </section>
     <h3>Cameras</h3>
     <div class="row" id="cam-panel"></div>
-    <h3>Drive</h3>
-    <div class="row" id="drive-panel"></div>
     <div id="sim-panel" hidden>
       <h3>Simulation</h3>
       <div class="row"><button id="cone-front">+ cone ahead</button><button id="cone-clear">clear cones</button><span class="muted" id="cone-info">no cones</span></div>
@@ -142,7 +140,7 @@
       <button id="cam-reset">reset</button><button id="cam-top">top-down</button><button id="cam-robot">look at robot</button>
     </div>
     <div class="row">
-      <label class="cb"><input type="checkbox" id="follow" checked> follow robot</label>
+      <label class="cb"><input type="checkbox" id="follow" checked> follow robot</label><span id="drive-panel" style="display:contents"></span>
     </div>
     <div id="out" class="mono"></div>
     <button id="t-halt" class="danger halt" title="STOP ALL MOTION: cancel the nav2 goal, zero velocity, stop the route runner and the VLA action / eval">HALT</button>
