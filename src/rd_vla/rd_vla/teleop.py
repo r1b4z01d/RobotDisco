@@ -192,6 +192,7 @@ class Teleop(Node):
         dp("dataset", ""); dp("task", "")
         # what the arm and the hand do once an episode is saved: stay | home, with the grip as it is | opened
         dp("after_save", "stay_same")
+        dp("operator", "")                    # who is recording: written into each episode's annotation (v1's --operator)
         dp("record_root", "")
         dp("debug_input", False)              # the rig: the puck is the topic /teleop/debug_input
         dp("deck", True); dp("deck_flip", True)   # the Stream Deck, mounted upside down on the robot (v1)
@@ -359,7 +360,7 @@ class Teleop(Node):
             return
         if d.get("after_save") in AFTER_SAVE:
             self._set("after_save", d["after_save"], remember=False)
-        for name in ("dataset", "task"):
+        for name in ("dataset", "task", "operator"):
             if d.get(name) and not str(self.p(name)).strip():
                 self._set(name, str(d[name]), remember=False)
 
@@ -417,6 +418,9 @@ class Teleop(Node):
                 if mode in AFTER_SAVE:
                     self._set("after_save", mode)
                     self.log(f"after a save: {mode.replace('_', ', ')} grip")
+            elif name == "operator":
+                self._set("operator", str(a.get("name", "")).strip()[:60])
+                self.log(f"operator: {self.p('operator') or '(none)'}")
             elif name == "task":
                 text = str(a.get("text", "")).strip()
                 if text:
@@ -591,7 +595,7 @@ class Teleop(Node):
             after = str(self.p("after_save"))             # as chosen when SAVE was pressed
             job = {"take": self.take, "frames": frames, "ranges": [list(r) for r in self.regrasp_ranges], "after_save": after,
                    "dataset": str(self.p("dataset")).strip(), "fps": int(round(float(self.p("fps")))), "cameras": tuple(self.p("cameras")),
-                   "rating": None, "ep": None}
+                   "operator": str(self.p("operator")).strip(), "rating": None, "ep": None}
             self.take, self._last_job = [], job
             self._unsaved += 1
         self._jobs.put(job)
@@ -622,7 +626,8 @@ class Teleop(Node):
                 writer.close()                # finalize, so the dataset is loadable after every episode
                 ep = int(saved["episode"])
                 ranges = job["ranges"]
-                write_annotation(saved["path"], ep, grasps=len(ranges) + 1, regrasp_ranges=ranges, after_save=job["after_save"])
+                write_annotation(saved["path"], ep, grasps=len(ranges) + 1, regrasp_ranges=ranges, after_save=job["after_save"],
+                                 **({"operator": job["operator"]} if job.get("operator") else {}))
                 write_capture(saved["path"])
                 line = f"episode {ep + 1} saved: {job['frames']} frames, {len(ranges) + 1} grasp(s), in {saved['path']}"
             except Exception as e:  # noqa: BLE001
@@ -755,7 +760,7 @@ class Teleop(Node):
             "freedrive": self.freedrive, "deck": bool(self.deck and self.deck.pad is not None),
             "pose": [round(float(v), 4) for v in self.pose] if (self.enabled or self.freedrive) and self.pose else [],
             "tick_hz": round(hz, 1), "last": self.last,
-            "backend": "lerobot", "unsaved": self._unsaved, "message": self.message, "calib": self.calib, "after_save": str(self.p("after_save"))})))
+            "backend": "lerobot", "unsaved": self._unsaved, "message": self.message, "calib": self.calib, "after_save": str(self.p("after_save")), "operator": str(self.p("operator"))})))
 
 
 def main():

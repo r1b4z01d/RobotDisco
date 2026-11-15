@@ -197,6 +197,7 @@
     $("#last-upload").textContent = last.upload || "";
     const notes = $("#notes"); if (document.activeElement !== notes && notes.value !== (last.notes || "")) notes.value = last.notes || "";
     const task = $("#task"); if (document.activeElement !== task && st.task != null && task.value !== st.task) task.value = st.task;
+    const oper = $("#operator"); if (document.activeElement !== oper && st.operator != null && oper.value !== st.operator) oper.value = st.operator;
     const after = $("#after-save"); if (document.activeElement !== after && st.after_save && after.value !== st.after_save) after.value = st.after_save;
     // crop sliders: reflect the live value unless the user is dragging
     const crop = st.crop || {};
@@ -267,6 +268,8 @@
     cmd("enable", { on: !state.enabled });
   });
   $("#notes").addEventListener("keydown", e => { if (e.key === "Enter") { cmd("notes", { text: e.target.value }); e.target.blur(); } });
+  $("#operator").addEventListener("keydown", e => { if (e.key === "Enter") { cmd("operator", { name: e.target.value }); e.target.blur(); } });
+  $("#operator").addEventListener("change", e => cmd("operator", { name: e.target.value }));
   $("#after-save").addEventListener("change", e => { cmd("after_save", { mode: e.target.value }); e.target.blur(); });
   $("#task").addEventListener("keydown", e => { if (e.key === "Enter") { cmd("task", { text: e.target.value }); e.target.blur(); } });
   $("#dataset-name").addEventListener("keydown", e => { if (e.key === "Enter") { cmd("dataset", { name: e.target.value }); e.target.blur(); } });
