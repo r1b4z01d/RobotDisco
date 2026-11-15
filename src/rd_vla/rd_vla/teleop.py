@@ -197,6 +197,7 @@ class Teleop(Node):
         self.create_service(Trigger, "/teleop/episode/discard", self.on_discard, callback_group=self.cb)
         self.limits = workspace_limits()
         self.enabled = False
+        self.homing = False                # a go-home is under way: the puck has let go and takes over after it
         self.freedrive = False                # hand-guiding: the arm is moved by hand, nothing is streamed
         self.target = None
         self.curls = [0.0] * 4                # each finger's grasp 0..1 (index, middle, ring, thumb), before max_curls
@@ -223,6 +224,7 @@ class Teleop(Node):
             remote = Remote(f"http://127.0.0.1:{int(config.get('robot.ports.manager', 8092))}", log=self.log)
             self.deck = Deck(self, flip=bool(p("deck_flip")), remote=remote)
             self.create_timer(0.1, self.deck.poll, callback_group=self.cb)
+        self._restore_session()
         # LeRobot (and torch under it) takes many seconds to import on the Orin; the first REC paid for it
         threading.Thread(target=lambda: __import__("rd_vla.recorder", fromlist=["x"]).lerobot_warm(), daemon=True, name="lerobot-import").start()
 
@@ -242,9 +244,30 @@ class Teleop(Node):
         self.get_logger().info(line)
         self.log_pub.publish(String(data=time.strftime("%H:%M:%S ") + line))
 
-    def _set(self, name: str, value: str) -> None:
+    def _set(self, name: str, value: str, remember: bool = True) -> None:
         from rclpy.parameter import Parameter
         self.set_parameters([Parameter(name, Parameter.Type.STRING, value)])
+        if remember:                               # the dataset and the task outlive a restart of this node
+            try:
+                f = self._session_file()
+                d = json.loads(f.read_text()) if f.is_file() else {}
+                d[name] = value
+                f.parent.mkdir(parents=True, exist_ok=True)
+                f.write_text(json.dumps(d))
+            except (OSError, ValueError):
+                pass
+
+    def _session_file(self) -> Path:
+        return config.data_dir() / "outputs" / "teleop_session.json"
+
+    def _restore_session(self) -> None:
+        try:
+            d = json.loads(self._session_file().read_text())
+        except (OSError, ValueError):
+            return
+        for name in ("dataset", "task"):
+            if d.get(name) and not str(self.p(name)).strip():
+                self._set(name, str(d[name]), remember=False)
 
     def on_cmd(self, m: String):
         try:
@@ -393,14 +416,23 @@ class Teleop(Node):
             return res
         if self.freedrive:
             self.set_freedrive(False)
-        self.enabled, self.target = False, None
-        if self.stream.service_is_ready():
-            self.stream.call_async(SetBool.Request(data=False))
         if not self.home.wait_for_service(timeout_sec=2.0):
             res.success, res.message = False, "rd_arm's /arm/go_home is not there"
             return res
-        self.home.call_async(Trigger.Request())
-        res.success, res.message = True, "going home; teleop is off"
+        # The puck lets go for the move (it is a trajectory, not the stream) and takes the arm back when it is done:
+        # going home used to leave teleop off, a second key press before every episode.
+        was_on = self.enabled
+        self.enabled, self.target, self.homing = False, None, True
+        if self.stream.service_is_ready():
+            self.stream.call_async(SetBool.Request(data=False))
+
+        def done(_future):
+            self.homing = False
+            if was_on and not self.enabled and not self.freedrive:
+                r = self.on_enable(SetBool.Request(data=True), SetBool.Response())
+                self.log("home; teleop on again" if r.success else f"home; teleop stayed off: {r.message}")
+        self.home.call_async(Trigger.Request()).add_done_callback(done)
+        res.success, res.message = True, "going home" + ("" if was_on else " (teleop is off)")
         return res
 
     def _root(self) -> Path:

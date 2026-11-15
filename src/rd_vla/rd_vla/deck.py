@@ -233,7 +233,7 @@ class Deck:
     def idle(self) -> bool:
         """Teleop off and nothing of it pending: the keys are the robot's remote."""
         t = self.t
-        return self.remote is not None and not (t.enabled or t.freedrive or t.recording or getattr(t, "saving", False)
+        return self.remote is not None and not (t.enabled or t.freedrive or t.recording or getattr(t, "saving", False) or getattr(t, "homing", False)
                                                 or self.rating_until or self._want_rating)
 
     def _open(self) -> None:

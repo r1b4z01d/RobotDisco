@@ -34,7 +34,42 @@ class ArmPowerServer(Node):
         cb = ReentrantCallbackGroup()
         self.resend = self.create_client(Trigger, "/ur5e/io_and_status_controller/resend_robot_program", callback_group=cb)
         self.create_service(ArmPower, "/arm/power", self.on_request, callback_group=cb)
+        # The control program's watchdog. The driver's program ends when its stream to the UR drops ("Lost connection
+        # to stream", seen once or twice a day on the loaded Orin) and nothing restarted it: the arm then ignored
+        # every target with no fault shown (a policy run on 2026-11-14, teleop on 2026-11-15). Resent here when it
+        # has been stopped for a few seconds with the UR powered, safety normal and in remote control; a UR that is
+        # off, stopped or under the pendant is left alone.
+        from rclpy.qos import QoSDurabilityPolicy, QoSProfile, ReliabilityPolicy
+        from std_msgs.msg import Bool
+        self.declare_parameter("program_watchdog", True)
+        self._running, self._stopped_since, self._last_resend = None, None, 0.0
+        self.create_subscription(Bool, "/ur5e/io_and_status_controller/robot_program_running", self.on_running,
+                                 QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL, reliability=ReliabilityPolicy.RELIABLE),
+                                 callback_group=cb)
+        self.create_timer(2.0, self.watchdog, callback_group=cb)
         self.get_logger().info(f"dashboard {self.dash.ip}:{self.dash.port}")
+
+    def on_running(self, m):
+        import time
+        self._running = bool(m.data)
+        self._stopped_since = None if m.data else (self._stopped_since or time.monotonic())
+
+    def watchdog(self):
+        import time
+        now = time.monotonic()
+        if (self._running is not False or self._stopped_since is None or now - self._stopped_since < 3.0
+                or now - self._last_resend < 10.0 or not self.get_parameter("program_watchdog").value
+                or self.get_parameter("sim_mode").value or not self.resend.service_is_ready()):
+            return
+        try:
+            st = self.dash.status()
+        except (RuntimeError, OSError):
+            return
+        if st["robotmode"] != "RUNNING" or st["safety"] != "NORMAL" or not st["remote"]:
+            return
+        self._last_resend = now
+        r = self.resend.call(Trigger.Request())
+        self.get_logger().warn("the UR's control program had stopped: " + ("resent" if r.success else f"resend failed: {r.message}"))
 
     def fill(self, res, st: dict):
         res.robot_mode = st["robotmode"]
