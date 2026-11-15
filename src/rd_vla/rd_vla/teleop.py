@@ -50,13 +50,18 @@ from .spacemouse import SpaceMouse
 # robot axis -> (puck axis, sign): v1's calibration for this robot seen from the operator's place (sm_calib.json)
 AXIS_MAP = {"x": ("x", -1), "y": ("y", 1), "z": ("z", -1), "roll": ("yaw", -1), "pitch": ("roll", 1), "yaw": ("pitch", -1)}
 AXES = ("x", "y", "z", "roll", "pitch", "yaw")
-# the calibration's six steps (v1 teleop/sm_calibrate.py): the gesture you want to mean each motion of the gripper
-CALIBRATION = (("x", "SLIDE the puck the way the gripper should move RIGHT"),
-               ("y", "SLIDE the puck the way the gripper should move AWAY from you"),
-               ("z", "LIFT the puck the way the gripper should move UP"),
-               ("roll", "TILT the puck the way the gripper should ROLL"),
-               ("pitch", "TILT the puck the way the gripper should PITCH (nose up)"),
-               ("yaw", "TWIST the puck the way the gripper should YAW (spin)"))
+# The calibration's six steps (v1 teleop/sm_calibrate.py): the gesture the operator wants to mean each motion of the
+# gripper, and the base-frame axis and sign that motion is. The operator stands behind the robot's arm looking the
+# way it reaches: their right is the base frame's -x, away from them is -y, and what they call the gripper's roll
+# (about the line away from them) turns about the base y axis, which integrate() names pitch. Bryan's first
+# calibration, taken with every prompt mapped to its own name and +, came out with x, y and yaw inverted and roll
+# and pitch exchanged (2026-11-15).
+CALIBRATION = (("x", -1, "SLIDE the puck the way the gripper should move RIGHT"),
+               ("y", -1, "SLIDE the puck the way the gripper should move AWAY from you"),
+               ("z", 1, "LIFT the puck the way the gripper should move UP"),
+               ("pitch", 1, "TILT the puck the way the gripper should ROLL"),
+               ("roll", 1, "TILT the puck the way the gripper should PITCH (nose up)"),
+               ("yaw", -1, "TWIST the puck the way the gripper should YAW (spin)"))
 
 
 def dominant(samples: list) -> tuple:
@@ -288,7 +293,7 @@ class Teleop(Node):
         """The puck's axis calibration, six gestures prompted on the page (v1 sm_calibrate.py). Run on a thread."""
         new: dict = {}
         try:
-            for i, (axis, prompt) in enumerate(CALIBRATION, 1):
+            for i, (axis, way, prompt) in enumerate(CALIBRATION, 1):
                 head = f"puck calibration {i}/6: {prompt}"
                 while True:
                     self.calib = head + ", and HOLD it"
@@ -314,8 +319,8 @@ class Teleop(Node):
                     if src in [m[0] for m in new.values()]:
                         self.log(f"puck calibration {i}/6: that was the puck's {src} axis, already used for another motion; again, a cleaner gesture")
                         continue
-                    new[axis] = (src, 1 if val > 0 else -1)
-                    self.log(f"puck calibration {i}/6: {axis} = puck {src} {'+' if val > 0 else '-'}")
+                    new[axis] = (src, way * (1 if val > 0 else -1))
+                    self.log(f"puck calibration {i}/6: {axis} = puck {src} {'+' if new[axis][1] > 0 else '-'}")
                     break
             self.axis_map = new
             try:
