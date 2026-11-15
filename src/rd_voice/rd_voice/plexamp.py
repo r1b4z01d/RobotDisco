@@ -118,10 +118,17 @@ class PlexampSkill:
         """The best match for the words: an artist, else an album, else a track."""
         _machine, section = self._library()
         hubs = {h.get("type"): h.get("Metadata") or [] for h in self._server("/hubs/search", query=query, limit=3, sectionId=section).get("Hub", [])}
-        for kind in ("artist", "album", "track"):
+        # an artist by its spelling, then an artist by its sound, and only then an album or a track with those words
+        # in it ("dead mouse" is deadmau5, not Modest Mouse's "We Were Dead Before the Ship Even Sank")
+        if hubs.get("artist"):
+            return hubs["artist"][0]
+        by_sound = self.find_artist_by_sound(query)
+        if by_sound is not None:
+            return by_sound
+        for kind in ("album", "track"):
             if hubs.get(kind):
                 return hubs[kind][0]
-        return self.find_artist_by_sound(query)
+        return None
 
     def find_artist_by_sound(self, query: str, cutoff: float = 0.68) -> Optional[dict]:
         """An artist whose name the ears got roughly right: "dead mouse" for deadmau5, "dead mile 5" too. The search
