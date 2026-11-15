@@ -29,6 +29,45 @@ os.environ.setdefault("HF_HUB_OFFLINE", "1")
 _AUTO = {"timestamp", "frame_index", "episode_index", "index", "task_index"}
 
 
+# --------------------------------------------------------------------------- LeRobot's interpreter
+def _lerobot_here() -> bool:
+    import importlib.util
+    return importlib.util.find_spec("lerobot") is not None
+
+
+def _vla_python() -> str:
+    import sys
+    return os.environ.get("RD_VLA_PYTHON") or ("/opt/vla/bin/python" if os.path.exists("/opt/vla/bin/python") else sys.executable)
+
+
+_ERRORS = {c.__name__: c for c in (ValueError, FileNotFoundError, FileExistsError, PermissionError, LookupError, KeyError, RuntimeError)}
+
+
+def in_lerobot(fn):
+    """Run an operation where LeRobot is. The robot's manager runs under the system python, which has ROS and no
+    LeRobot: there the call is repeated in the LeRobot venv (`python -m rd_manager.ops <name> <json>`) and its result
+    or its error comes back as if it had run here. (Deleting an episode on the robot was a 500, 2026-11-15.)"""
+    import functools
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        if _lerobot_here():
+            return fn(*args, **kwargs)
+        import subprocess
+        pkg_parent = str(Path(__file__).resolve().parent.parent)
+        env = dict(os.environ, PYTHONPATH=os.pathsep.join([pkg_parent] + [p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p]))
+        r = subprocess.run([_vla_python(), "-m", "rd_manager.ops", fn.__name__, json.dumps({"args": list(args), "kwargs": kwargs})],
+                           capture_output=True, text=True, env=env, timeout=3600)
+        line = next((ln for ln in reversed(r.stdout.splitlines()) if ln.startswith("RESULT ")), None)
+        if line is None:
+            raise RuntimeError(f"{fn.__name__} failed in {_vla_python()}: {(r.stderr or r.stdout).strip()[-400:] or 'no output'}")
+        out = json.loads(line[7:])
+        if "error" in out:
+            raise _ERRORS.get(out["error"], RuntimeError)(out["message"])
+        return out["result"]
+    return wrapper
+
+
 # --------------------------------------------------------------------------- helpers
 def _read_info(root: str) -> dict:
     with open(os.path.join(root, "meta", "info.json")) as f:
@@ -107,6 +146,7 @@ def _swap_in_place(datasets_dir: str, name: str, staged: str) -> str:
 
 
 # --------------------------------------------------------------------------- IN-PLACE
+@in_lerobot
 def rename_task(datasets_dir: str, name: str, new_task: str | None = None,
                 episode_tasks: dict[int, str] | None = None) -> dict[str, Any]:
     """Rename the task for the whole dataset (`new_task`) or per-episode (`episode_tasks`).
@@ -126,6 +166,7 @@ def rename_task(datasets_dir: str, name: str, new_task: str | None = None,
 
 
 # --------------------------------------------------------------------------- REBUILD (replace + .bak)
+@in_lerobot
 def delete_episodes(datasets_dir: str, name: str, episodes: list[int]) -> dict[str, Any]:
     from lerobot.datasets import dataset_tools as dt
 
@@ -149,6 +190,7 @@ def delete_episodes(datasets_dir: str, name: str, episodes: list[int]) -> dict[s
             "episodes": _read_info(root)["total_episodes"]}
 
 
+@in_lerobot
 def trim_episode(datasets_dir: str, name: str, episode: int,
                  cut_start_s: float, cut_end_s: float) -> dict[str, Any]:
     """Drop the frames in [cut_start_s, cut_end_s] of one episode, stitching the remainder into a
@@ -224,6 +266,7 @@ def trim_episode(datasets_dir: str, name: str, episode: int,
             "kept_frames": int(len(keep))}
 
 
+@in_lerobot
 def move_episode(datasets_dir: str, src: str, episode: int, dst: str) -> dict[str, Any]:
     """Move one episode from src to dst.
 
@@ -302,6 +345,7 @@ def move_episode(datasets_dir: str, src: str, episode: int, dst: str) -> dict[st
 
 
 # --------------------------------------------------------------------------- NEW dataset
+@in_lerobot
 def merge(datasets_dir: str, names: list[str], out_name: str) -> dict[str, Any]:
     from lerobot.datasets import dataset_tools as dt
 
@@ -338,6 +382,7 @@ def merge(datasets_dir: str, names: list[str], out_name: str) -> dict[str, Any]:
             "sources": names}
 
 
+@in_lerobot
 def to_video(datasets_dir: str, name: str, out_name: str | None = None) -> dict[str, Any]:
     from lerobot.datasets import dataset_tools as dt
 
@@ -449,3 +494,22 @@ def add_dataset(datasets_dir: str, *, source: str | None = None,
         return {"ok": True, "name": name, "copied_from": source}
 
     raise ValueError("add_dataset needs `source` (local path) or `remote` (name on .80)")
+
+
+def _main(argv) -> int:
+    """`python -m rd_manager.ops <operation> <json {args, kwargs}>`: the other end of in_lerobot()."""
+    name, payload = argv[1], json.loads(argv[2])
+    fn = globals().get(name)
+    try:
+        if fn is None or not callable(fn) or name.startswith("_"):
+            raise ValueError(f"no operation {name!r}")
+        out = {"result": fn(*payload.get("args", []), **payload.get("kwargs", {}))}
+    except Exception as e:  # noqa: BLE001  carried back to the caller by name
+        out = {"error": type(e).__name__, "message": str(e)}
+    print("RESULT " + json.dumps(out, default=str), flush=True)
+    return 0
+
+
+if __name__ == "__main__":
+    import sys
+    sys.exit(_main(sys.argv))
