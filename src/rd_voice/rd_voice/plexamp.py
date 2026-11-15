@@ -36,6 +36,12 @@ def read_token(settings_dir: str = SETTINGS) -> str:
     return ""
 
 
+def squash(name: str) -> str:
+    """A name as its letters and digits only, lower case, a leading "the" dropped: what two spellings share."""
+    k = "".join(c for c in name.lower() if c.isalnum())
+    return k[3:] if k.startswith("the") and len(k) > 6 else k
+
+
 def _http(url: str, method: str = "GET", headers: Optional[dict] = None, timeout: float = 8.0) -> bytes:
     with urllib.request.urlopen(urllib.request.Request(url, headers=headers or {}, method=method), timeout=timeout) as r:
         return r.read()
@@ -51,6 +57,7 @@ class PlexampSkill:
         self._start_unit, self._start_wait_s = start_unit, float(start_wait_s)
         self._cmd = 0
         self._machine = self._section = None
+        self._artists = None                 # (squashed name, item) of every artist, read once: for names heard wrong
         self._volume_before_duck: Optional[int] = None
         self._state = ("", 0.0)
 
@@ -114,7 +121,27 @@ class PlexampSkill:
         for kind in ("artist", "album", "track"):
             if hubs.get(kind):
                 return hubs[kind][0]
-        return None
+        return self.find_artist_by_sound(query)
+
+    def find_artist_by_sound(self, query: str, cutoff: float = 0.68) -> Optional[dict]:
+        """An artist whose name the ears got roughly right: "dead mouse" for deadmau5, "dead mile 5" too. The search
+        above matches spelling; this compares the letters and digits of what was heard with every artist's name."""
+        import difflib
+        _machine, section = self._library()
+        if self._artists is None:
+            self._artists = [(squash(m.get("title", "")), m) for m in self._server(f"/library/sections/{section}/all", type=8).get("Metadata", [])]
+            self._artists = [(k, m) for k, m in self._artists if len(k) >= 3]
+        heard = squash(query)
+        if len(heard) < 3:
+            return None
+        best, score = None, cutoff
+        for key, m in self._artists:
+            if abs(len(key) - len(heard)) > max(3, len(heard) // 2):
+                continue
+            r = difflib.SequenceMatcher(None, heard, key).ratio()
+            if r > score:
+                best, score = m, r
+        return best
 
     def play(self, query: str = "") -> str:
         machine, section = self._library()

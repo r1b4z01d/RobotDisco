@@ -174,6 +174,9 @@ def test_plexamp_skill_plays_from_the_plex_server_and_falls_back():
         if u.path == "/hubs/search":
             hubs = [{"type": "artist", "Metadata": [{"type": "artist", "title": "The Beatles", "key": "/library/metadata/7/children"}]}] if q["query"] == "beatles" else []
             return json.dumps({"MediaContainer": {"Hub": hubs}}).encode()
+        if u.path == "/library/sections/3/all" and q.get("type") == "8":
+            return json.dumps({"MediaContainer": {"Metadata": [{"type": "artist", "title": "deadmau5", "key": "/library/metadata/40/children"},
+                                                                {"type": "artist", "title": "Dead Kennedys", "key": "/library/metadata/41/children"}]}}).encode()
         if u.path == "/playQueues":
             return json.dumps({"MediaContainer": {"playQueueID": 9, "Metadata": [{"key": "/library/metadata/55"}]}}).encode()
         raise AssertionError(url)
@@ -197,6 +200,7 @@ def test_plexamp_skill_plays_from_the_plex_server_and_falls_back():
     m.duck(); assert state["volume"] == 20
     m.unduck(); assert state["volume"] == 80
     assert m.play("nobody at all") == "I couldn't find nobody at all in the music library."
+    assert m.play("dead mouse") == "Playing deadmau5." and m.play("dead mile 5") == "Playing deadmau5."      # heard wrong, found by sound
     assert m.play("") == "Playing music." and [c for c in calls if c[2] == "/playQueues"][-1][3]["uri"].endswith("/library/sections/3/all?type=10")
     assert m.stop() == "Music stopped." and state["state"] == "stopped"
     state["up"] = False                                   # Plexamp gone: the local folder plays
