@@ -132,7 +132,12 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
     # ------------------------------------------------------------------ pages and static
     @app.get("/", response_class=HTMLResponse)
     def index():
-        return (STATIC / "index.html").read_text()
+        # the script and the stylesheet carry their modification time: a browser holding last week's app.js against
+        # today's page showed tabs that did nothing (2026-11-15)
+        html = (STATIC / "index.html").read_text()
+        for name in ("app.js", "style.css"):
+            html = html.replace(f'"/{name}"', f'"/{name}?v={int((STATIC / name).stat().st_mtime)}"')
+        return html
 
     @app.get("/live/", response_class=HTMLResponse)
     @app.get("/live", response_class=HTMLResponse)
