@@ -60,7 +60,7 @@ CALIBRATION = (("x", -1, "SLIDE the puck the way the gripper should move RIGHT")
                ("y", -1, "SLIDE the puck the way the gripper should move AWAY from you"),
                ("z", 1, "LIFT the puck the way the gripper should move UP"),
                ("pitch", 1, "TILT the puck the way the gripper should ROLL"),
-               ("roll", 1, "TILT the puck the way the gripper should PITCH (nose up)"),
+               ("roll", -1, "TILT the puck the way the gripper should PITCH (nose up)"),
                ("yaw", -1, "TWIST the puck the way the gripper should YAW (spin)"))
 
 
