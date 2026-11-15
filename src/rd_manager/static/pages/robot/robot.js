@@ -137,7 +137,11 @@
     if (config.mode === "teleop") renderTeleop(st); else renderEval(st);
   }
 
-  // one row per camera: exposure value, measured median brightness (target ~120), per-camera − / +
+  const EXPO_MAX = 5000;
+  const expoFromSlider = (s) => Math.max(1, Math.round(Math.pow(EXPO_MAX, s / 1000)));
+  const sliderFromExpo = (v) => Math.round(1000 * Math.log(Math.max(1, v)) / Math.log(EXPO_MAX));
+
+  // one row per camera: an exposure slider, its value and the measured median brightness (target ~120)
   function renderExpoCams(ex) {
     const box = $("#expo-cams"), vals = ex.values || {}, meds = ex.medians || {};
     const names = ["scene", "side", "wrist"].filter(n => n in vals);
@@ -145,15 +149,25 @@
       box.innerHTML = "";
       names.forEach(n => {
         const row = document.createElement("div"); row.className = "expo-cam"; row.dataset.cam = n;
-        row.innerHTML = `<span>${n}</span><span class="val"><b class="v"></b> <span class="med"></span></span>` +
-          `<button class="btn" data-ecam="${n}" data-eact="minus" title="darker: ${n} only">−</button><button class="btn" data-ecam="${n}" data-eact="plus" title="brighter: ${n} only">+</button>`;
-        row.querySelectorAll("[data-ecam]").forEach(b => b.addEventListener("click", () => cmd("expo", { action: b.dataset.eact, cam: b.dataset.ecam })));
+        // a slider per camera, logarithmic over the exposure time (1 .. 5000 in 100 us units): equal travel = equal stops
+        row.innerHTML = `<span>${n}</span><input type="range" class="expo-slider" min="0" max="1000" step="1" title="${n} exposure: left darker, right brighter">` +
+          `<span class="val"><b class="v"></b> <span class="med"></span></span>`;
+        const sl = row.querySelector(".expo-slider"); let last = 0, timer = null;
+        const send = () => { last = Date.now(); cmd("expo", { action: "set", cam: n, value: expoFromSlider(sl.value) }); };
+        sl.addEventListener("input", () => {                       // live while dragging, at most five a second
+          row.querySelector(".v").textContent = expoFromSlider(sl.value); sl.dataset.held = Date.now();
+          clearTimeout(timer); if (Date.now() - last > 200) send(); else timer = setTimeout(send, 200);
+        });
+        sl.addEventListener("change", () => { clearTimeout(timer); send(); });
         box.appendChild(row);
       });
     }
     names.forEach(n => {
       const row = box.querySelector(`.expo-cam[data-cam="${n}"]`); if (!row) return;
-      row.querySelector(".v").textContent = Math.round(vals[n]);
+      const sl = row.querySelector(".expo-slider");
+      if (Date.now() - (+sl.dataset.held || 0) > 1500) {           // not while it is being dragged: the state trails the hand
+        row.querySelector(".v").textContent = Math.round(vals[n]); sl.value = sliderFromExpo(vals[n]);
+      }
       const m = row.querySelector(".med"), md = meds[n];
       m.textContent = md != null ? `· median ${md}` : ""; m.className = "med " + (md == null ? "" : md < 80 ? "dark" : md > 170 ? "bright" : "");
     });

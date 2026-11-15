@@ -6,7 +6,7 @@
   <title>Teleop</title>
   <link rel="icon" href="/static/favicon.svg">
   <link rel="stylesheet" href="/static/style.css">
-  <link rel="stylesheet" href="/static/pages/robot/robot.css">
+  <link rel="stylesheet" href="/static/pages/robot/robot.css?v=2">
 </head>
 <body class="robot">
 
@@ -81,11 +81,9 @@
       <section class="card">
         <h3>Exposure <span class="tag" id="expo-lock">—</span></h3>
         <div class="expo-cams" id="expo-cams"></div>
-        <div class="row expo-row"><span class="muted small">all</span>
-          <button class="btn" data-cmd="expo" data-args='{"action":"auto"}' title="meter each camera for a frame median near 120 and lock it there (takes about four seconds)">meter</button>
-          <button class="btn" data-cmd="expo" data-args='{"action":"minus"}'>−</button>
-          <button class="btn" data-cmd="expo" data-args='{"action":"plus"}'>+</button>
-          <button class="btn accent" data-cmd="expo" data-args='{"action":"lock"}'>lock</button>
+        <div class="row expo-row">
+          <button class="btn accent" data-cmd="expo" data-args='{"action":"auto"}' title="meter each camera for a frame median near 120 and lock it there (takes about four seconds)">meter all</button>
+          <span class="muted small">then trim with the sliders; a set value stays locked</span>
         </div>
       </section>
 
@@ -136,6 +134,6 @@
 
   </main>
 
-  <script src="/static/pages/robot/robot.js"></script>
+  <script src="/static/pages/robot/robot.js?v=2"></script>
 </body>
 </html>

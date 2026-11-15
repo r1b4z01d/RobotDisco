@@ -166,6 +166,8 @@ def test_exposure_keys_of_the_teleop_page():
     assert s["cameras"]["side"]["exposure"] < 156 and s["locked"]
     up = exposure.adjust(cfg, "plus", "side", run)["cameras"]["side"]["exposure"]
     assert up > s["cameras"]["side"]["exposure"]
+    assert exposure.adjust(cfg, "set", "wrist", run, value=77)["cameras"]["wrist"]["exposure"] == 77      # the page's slider
+    assert exposure.adjust(cfg, "set", "wrist", run, value=99999)["cameras"]["wrist"]["exposure"] == 5000
     assert exposure.adjust(cfg, "auto", None, run)["locked"] is False
     assert exposure.adjust(cfg, "lock", None, run)["locked"] is True
 

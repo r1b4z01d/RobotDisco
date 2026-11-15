@@ -103,7 +103,8 @@ body.log-collapsed .cam { height: min(54vh, 680px); }
 .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
 .expo-row { margin-top: 12px; }
 .expo-cams { display: flex; flex-direction: column; gap: 4px; }
-.expo-cam { display: grid; grid-template-columns: 44px 1fr auto auto; gap: 6px; align-items: center; font-size: 12px; }
+.expo-cam { display: grid; grid-template-columns: 44px 1fr 124px; gap: 8px; align-items: center; font-size: 12px; }
+.expo-slider { width: 100%; min-width: 0; }
 .expo-cam .val { font-family: var(--mono); }
 .expo-cam .val .med { color: var(--muted); }
 .expo-cam .val .med.dark { color: #f0c66a; }

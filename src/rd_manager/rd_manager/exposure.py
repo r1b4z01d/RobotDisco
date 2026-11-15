@@ -67,9 +67,9 @@ def set_locked(cfg: dict, locked: bool, run=_run) -> dict:
     return state(cfg, run)
 
 
-def adjust(cfg: dict, action: str, cam: str | None = None, run=_run) -> dict:
+def adjust(cfg: dict, action: str, cam: str | None = None, run=_run, value=None) -> dict:
     """v1's exposure keys: auto | lock | plus | minus, for every policy camera or just `cam`. plus / minus switch a
-    camera to manual and scale its exposure time by a quarter stop either way."""
+    camera to manual and scale its exposure time by a quarter stop either way; set puts it at `value` (the page's sliders)."""
     if action in ("auto", "lock") and cam is None:
         return set_locked(cfg, action == "lock", run)
     for name, dev in devices(cfg).items():
@@ -81,7 +81,12 @@ def adjust(cfg: dict, action: str, cam: str | None = None, run=_run) -> dict:
         if action in ("auto", "lock"):
             set_locked({"by_path": cfg.get("by_path", ""), name: cfg[name]}, action == "lock", run)
             continue
-        value = c["exposure_time_absolute"] * (1.19 if action == "plus" else 1 / 1.19)
-        value = max(1, min(5000, int(round(value)) + (1 if action == "plus" else -1 if value > 2 else 0)))
+        if action == "set":
+            if value is None:
+                continue
+            value = max(1, min(5000, int(round(float(value)))))
+        else:
+            value = c["exposure_time_absolute"] * (1.19 if action == "plus" else 1 / 1.19)
+            value = max(1, min(5000, int(round(value)) + (1 if action == "plus" else -1 if value > 2 else 0)))
         run(["v4l2-ctl", "-d", dev, "-c", f"auto_exposure={MANUAL},exposure_time_absolute={value}"])
     return state(cfg, run)

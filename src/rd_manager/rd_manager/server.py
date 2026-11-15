@@ -507,7 +507,7 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
                                   + (", ".join(f"{n} {v['exposure']} (median {v['median']:.0f})" for n, v in metered.items()) or "no camera answered"))
                     teleop_page["exposure"] = exposure_mod.state(cams_cfg)
                 else:
-                    teleop_page["exposure"] = exposure_mod.adjust(cams_cfg, str(a.get("action", "")), a.get("cam"))
+                    teleop_page["exposure"] = exposure_mod.adjust(cams_cfg, str(a.get("action", "")), a.get("cam"), value=a.get("value"))
                 teleop_page["exposure_t"] = time.time()
                 B.teleop_note(time.strftime("%H:%M:%S ") + f"exposure {a.get('action')}{' ' + a['cam'] if a.get('cam') else ''}: "
                               + ", ".join(f"{n} {c['exposure']}" for n, c in teleop_page["exposure"].get("cameras", {}).items()))
