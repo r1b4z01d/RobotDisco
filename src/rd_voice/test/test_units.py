@@ -142,3 +142,62 @@ def test_music_player_falls_back_to_gstreamer_without_ffplay():
     assert default_player(lambda name: "/usr/bin/" + name)[0] == "ffplay"
     assert default_player(lambda name: "/usr/bin/gst-play-1.0" if name == "gst-play-1.0" else None) == ["gst-play-1.0", "--no-interactive", "-q"]
     assert default_player(lambda name: None)[0] == "ffplay"
+
+
+def test_plexamp_skill_plays_from_the_plex_server_and_falls_back():
+    """rd_voice/plexamp.py against a fake server and player: search, the play queue, the companion call, the volume
+    for ducking, and the local player when Plexamp does not answer."""
+    import json
+    import urllib.parse
+    from rd_voice.plexamp import MusicWithFallback, PlexampSkill
+    calls, state = [], {"state": "stopped", "volume": 80, "up": True}
+
+    def http(url, method="GET", headers=None, timeout=8.0):
+        u = urllib.parse.urlparse(url); q = dict(urllib.parse.parse_qsl(u.query))
+        calls.append((u.netloc, method, u.path, q))
+        assert headers["X-Plex-Token"] == "tok"
+        if u.netloc == "player:32500":
+            if not state["up"]:
+                raise OSError("refused")
+            if u.path.endswith("playMedia"):
+                state["state"] = "playing"
+            elif u.path.endswith("/stop"):
+                state["state"] = "stopped"
+            elif u.path.endswith("setParameters"):
+                state["volume"] = int(q["volume"])
+            track = '<Track title="Taxman" grandparentTitle="The Beatles" parentTitle="Revolver"/>' if state["state"] == "playing" else ""
+            return f'<MediaContainer><Timeline type="music" state="{state["state"]}" volume="{state["volume"]}">{track}</Timeline></MediaContainer>'.encode()
+        if u.path == "/identity":
+            return json.dumps({"MediaContainer": {"machineIdentifier": "abc"}}).encode()
+        if u.path == "/library/sections":
+            return json.dumps({"MediaContainer": {"Directory": [{"key": "1", "type": "movie"}, {"key": "3", "type": "artist"}]}}).encode()
+        if u.path == "/hubs/search":
+            hubs = [{"type": "artist", "Metadata": [{"type": "artist", "title": "The Beatles", "key": "/library/metadata/7/children"}]}] if q["query"] == "beatles" else []
+            return json.dumps({"MediaContainer": {"Hub": hubs}}).encode()
+        if u.path == "/playQueues":
+            return json.dumps({"MediaContainer": {"playQueueID": 9, "Metadata": [{"key": "/library/metadata/55"}]}}).encode()
+        raise AssertionError(url)
+
+    class Local:
+        def __init__(self): self.played, self.stopped = [], 0
+        def play(self, q=""): self.played.append(q); return "local"
+        def stop(self, quiet=False): self.stopped += 1; return ""
+        def is_playing(self): return False
+        def duck(self): pass
+        def unduck(self): pass
+    plex = PlexampSkill("http://server:32400", "http://player:32500", duck_level=0.25, token=lambda: "tok", http=http)
+    local = Local()
+    m = MusicWithFallback(plex, local)
+    assert m.play("beatles") == "Playing The Beatles."
+    pq = [c for c in calls if c[2] == "/playQueues"][-1]
+    assert pq[1] == "POST" and pq[3]["uri"] == "server://abc/com.plexapp.plugins.library/library/metadata/7" and pq[3]["shuffle"] == "1"
+    pm = [c for c in calls if c[2].endswith("playMedia")][-1][3]
+    assert pm["address"] == "server" and pm["port"] == "32400" and pm["containerKey"].startswith("/playQueues/9") and pm["key"] == "/library/metadata/55"
+    assert m.is_playing() and m.now() == "This is Taxman by The Beatles."
+    m.duck(); assert state["volume"] == 20
+    m.unduck(); assert state["volume"] == 80
+    assert m.play("nobody at all") == "I couldn't find nobody at all in the music library."
+    assert m.play("") == "Playing music." and [c for c in calls if c[2] == "/playQueues"][-1][3]["uri"].endswith("/library/sections/3/all?type=10")
+    assert m.stop() == "Music stopped." and state["state"] == "stopped"
+    state["up"] = False                                   # Plexamp gone: the local folder plays
+    assert m.play("beatles") == "local" and local.played == ["beatles"]

@@ -137,6 +137,10 @@ class VoiceNode(Node):
         dp("hass_url", ""); dp("hass_token", ""); dp("hass_aliases", [""])
         dp("music_dir", "~/Music"); dp("player_cmd", default_player())      # ffplay, or gst-play-1.0 where there is none
         dp("music_continuous", True); dp("music_duck", 0.6)
+        # Music from a Plex server through Plexamp headless on the robot (rd_voice/plexamp.py; the `plexamp` unit, started
+        # when music is asked for). The server's address comes from the robot's own environment (RD_PLEX_SERVER in
+        # ~/.robot_face/voice.env), not from this repository; "" = the local music folder only.
+        dp("plex_server", os.environ.get("RD_PLEX_SERVER", "")); dp("plexamp_url", "http://127.0.0.1:32500"); dp("plexamp_unit", "plexamp")
         dp("volume_sink", str(config.get("audio.sink", ""))); dp("volume_step", 10); dp("volume_max", 100)
         dp("landmarks_dir", ""); dp("task_nav_timeout", 300.0); dp("task_run_timeout", 600.0)
         p = lambda n: self.get_parameter(n).value  # noqa: E731
@@ -168,6 +172,14 @@ class VoiceNode(Node):
         self.home = HomeAssistantSkill(str(p("hass_url")), str(p("hass_token")), {k.strip(): v.strip() for k, v in aliases.items()})
         self.music = MusicSkill(str(p("music_dir")), list(p("player_cmd")), sink=str(p("volume_sink")),
                                 continuous=bool(p("music_continuous")), duck_level=float(p("music_duck")))
+        if str(p("plex_server")).strip():
+            from rd_bringup import units
+            from .plexamp import MusicWithFallback, PlexampSkill
+            unit = str(p("plexamp_unit")).strip()
+            plex = PlexampSkill(str(p("plex_server")).strip(), str(p("plexamp_url")), duck_level=float(p("music_duck")),
+                                start_unit=(lambda: units.start(unit)) if unit else None)
+            self.music = MusicWithFallback(plex, self.music, log=lambda s: self.get_logger().info(s))
+            self.get_logger().info(f"music: Plexamp at {p('plexamp_url')} (unit '{unit}'), the local folder as the fallback")
         self.clock = ClockSkill()
         self.volume = VolumeSkill(str(p("volume_sink")) or "@DEFAULT_SINK@", int(p("volume_step")), int(p("volume_max")), defer=self.after_speech)
         self.landmarks = LandmarkStore(p("landmarks_dir") or None)
