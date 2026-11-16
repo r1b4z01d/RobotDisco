@@ -41,6 +41,10 @@ def generate_launch_description():
         s1_offset['reference_sectors'] = [float(edge) for sector in body['sectors_deg'] for edge in sector]
         s1_offset['reference_ranges'] = [float(r) for r in body['ranges_m']]
 
+    # the scans localisation matches against the map; a lidar whose ranges are off is left out (in_map_matching: false)
+    merged = [t for t, cfg in (('/rp_s1_lidar/scan_filtered', s1_cfg), ('/rp_s2e_lidar/scan_filtered', s2e_cfg), ('/velodyne/scan', velo_cfg))
+              if cfg.get('in_map_matching', True)]
+
     s1_nodes = [
         Node(package='rplidar_ros', executable='rplidar_node', name='rplidar_s1_node', output='screen',
              respawn=True, respawn_delay=3.0, condition=real(s1),   # the CP2102 re-enumerates on a USB hiccup
@@ -91,5 +95,5 @@ def generate_launch_description():
         *s1_nodes, *s2e_nodes, *velo_nodes,
         # all three as one 360 degree scan in the base frame, for localisation (rd_perception/scan_merger.py)
         Node(package='rd_perception', executable='scan_merger', name='scan_merger', output='screen',
-             respawn=True, respawn_delay=3.0, parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}]),
+             respawn=True, respawn_delay=3.0, parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time'), 'scans': merged}]),
     ])
