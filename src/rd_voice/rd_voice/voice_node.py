@@ -140,6 +140,8 @@ class VoiceNode(Node):
         # Music from a Plex server through Plexamp headless on the robot (rd_voice/plexamp.py; the `plexamp` unit, started
         # when music is asked for). The server's address comes from the robot's own environment (RD_PLEX_SERVER in
         # ~/.robot_face/voice.env), not from this repository; "" = the local music folder only.
+        # the LED panels show this WLED effect while music plays and go back to their own afterwards ("" = left alone)
+        dp("panels_music_effect", "GEQ"); dp("panels_host", str(config.get("panels.ip", "")))
         dp("plex_server", os.environ.get("RD_PLEX_SERVER", "")); dp("plexamp_url", "http://127.0.0.1:32500"); dp("plexamp_unit", "plexamp")
         dp("volume_sink", str(config.get("audio.sink", ""))); dp("volume_step", 10); dp("volume_max", 100)
         dp("landmarks_dir", ""); dp("task_nav_timeout", 300.0); dp("task_run_timeout", 600.0)
@@ -180,6 +182,13 @@ class VoiceNode(Node):
                                 start_unit=(lambda: units.start(unit)) if unit else None)
             self.music = MusicWithFallback(plex, self.music, log=lambda s: self.get_logger().info(s))
             self.get_logger().info(f"music: Plexamp at {p('plexamp_url')} (unit '{unit}'), the local folder as the fallback")
+        self.panels = None
+        if str(p("panels_music_effect")).strip() and str(p("panels_host")).strip():
+            from .wled import MusicPanels
+            self.panels = MusicPanels(str(p("panels_host")).strip(), str(p("panels_music_effect")).strip(),
+                                      memory=config.data_dir() / "outputs" / "panels_before_music.json",
+                                      log=lambda s: self.get_logger().info(s))
+            self.create_timer(3.0, self._panels_tick, callback_group=self.cb)
         self.clock = ClockSkill()
         self.volume = VolumeSkill(str(p("volume_sink")) or "@DEFAULT_SINK@", int(p("volume_step")), int(p("volume_max")), defer=self.after_speech)
         self.landmarks = LandmarkStore(p("landmarks_dir") or None)
@@ -386,6 +395,15 @@ class VoiceNode(Node):
         level = f"{round(m.percentage * 100)} percent, " if m.percentage == m.percentage else ""
         doing = " and charging" if m.current > 0.2 else f", drawing {abs(m.current):.1f} amps" if m.current < -0.05 else ""
         return f"My battery is at {level}{m.voltage:.1f} volts{doing}."
+
+    def _panels_tick(self):
+        """Is music playing (asked of Plexamp itself where there is one: it may have been started from a phone)?"""
+        try:
+            plex = getattr(self.music, "plex", None)
+            playing = bool((plex is not None and plex.is_playing(fresh=True)) or getattr(self.music, "local", self.music).is_playing())
+            self.panels.update(playing)
+        except Exception as e:  # noqa: BLE001  never the timer's last tick
+            self.get_logger().warn(f"panels: {type(e).__name__}: {e}", throttle_duration_sec=30.0)
 
     def on_speaking(self, m: Bool):
         self._speaking = bool(m.data)

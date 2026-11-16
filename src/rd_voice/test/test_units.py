@@ -205,3 +205,31 @@ def test_plexamp_skill_plays_from_the_plex_server_and_falls_back():
     assert m.stop() == "Music stopped." and state["state"] == "stopped"
     state["up"] = False                                   # Plexamp gone: the local folder plays
     assert m.play("beatles") == "local" and local.played == ["beatles"]
+
+
+def test_panels_show_geq_while_music_plays_and_go_back(tmp_path):
+    from rd_voice.wled import MusicPanels
+    segs = [{"id": 0, "start": 0, "stop": 32, "fx": 7}, {"id": 1, "start": 32, "stop": 64, "fx": 7}]
+    posts = []
+
+    def http(url, body=None, timeout=3.0):
+        if url.endswith("/json/effects"):
+            return ["Solid"] * 7 + ["Black Hole"] + ["x"] * 131 + ["GEQ"]
+        if body is None:
+            return {"seg": [dict(s) for s in segs]}
+        posts.append(body)
+        for ch in body["seg"]:
+            segs[ch["id"]]["fx"] = ch["fx"]
+        return {}
+    mem = tmp_path / "before.json"
+    p = MusicPanels("wled", "GEQ", memory=mem, http=http)
+    p.update(False); assert posts == []                                 # nothing playing, nothing of ours showing
+    p.update(True); assert [s["fx"] for s in segs] == [139, 139]        # music: GEQ on both panels
+    p.update(True); assert len(posts) == 1                              # no change, no call
+    p.update(False); assert [s["fx"] for s in segs] == [7, 7]           # stopped: back to what it showed
+    p.update(True)
+    p2 = MusicPanels("wled", "GEQ", memory=mem, http=http)             # the assistant restarted during a song...
+    p2.update(False); assert [s["fx"] for s in segs] == [7, 7]          # ...and still puts the effect back
+    segs[0]["fx"] = segs[1]["fx"] = 139
+    mem.unlink(); p3 = MusicPanels("wled", "GEQ", memory=mem, http=http)
+    p3.update(True); p3.update(False); assert [s["fx"] for s in segs] == [139, 139]    # GEQ by the user's own choice: left alone
