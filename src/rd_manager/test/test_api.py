@@ -186,7 +186,8 @@ def test_services_and_robot_tabs(client):
     assert client.get("/api/folks").json()["reachable"] is False
     assert client.get("/api/volume").json()["volume"] is None
     assert client.get("/api/panels").json() == {"url": "", "reachable": False, "info": None}       # no panels configured
-    assert 'data-view="panels"' in client.get("/").text and "loadPanelsView" in client.get("/app.js").text
+    # no Panels tab any more: the panels are drawn on the robot in the 3D view, from the same two endpoints
+    assert 'data-view="panels"' not in client.get("/").text and "l-panels" in client.get("/3d").text
 
 
 def test_panels_tab(tmp_path, monkeypatch):
