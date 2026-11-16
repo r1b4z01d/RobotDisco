@@ -42,6 +42,23 @@ def squash(name: str) -> str:
     return k[3:] if k.startswith("the") and len(k) > 6 else k
 
 
+_LEET = str.maketrans("0134578", "oieastb")
+
+
+def sound_keys(name: str) -> tuple:
+    """How a name sounds, roughly: its letters with digits read as the letters they stand in for (deadmau5 ->
+    deadmaus), and that again without its vowels (ddms). Speech-to-text gets the consonants right far more often
+    than the vowels, so both are compared."""
+    full = squash(name).translate(_LEET)
+    bones = full[:1] + "".join(c for c in full[1:] if c not in "aeiouy")
+    return full, bones
+
+
+def sounds_like(a: tuple, b: tuple) -> float:
+    import difflib
+    return 0.5 * difflib.SequenceMatcher(None, a[0], b[0]).ratio() + 0.5 * difflib.SequenceMatcher(None, a[1], b[1]).ratio()
+
+
 def _http(url: str, method: str = "GET", headers: Optional[dict] = None, timeout: float = 8.0) -> bytes:
     with urllib.request.urlopen(urllib.request.Request(url, headers=headers or {}, method=method), timeout=timeout) as r:
         return r.read()
@@ -118,34 +135,37 @@ class PlexampSkill:
         """The best match for the words: an artist, else an album, else a track."""
         _machine, section = self._library()
         hubs = {h.get("type"): h.get("Metadata") or [] for h in self._server("/hubs/search", query=query, limit=3, sectionId=section).get("Hub", [])}
-        # an artist by its spelling, then an artist by its sound, and only then an album or a track with those words
-        # in it ("dead mouse" is deadmau5, not Modest Mouse's "We Were Dead Before the Ship Even Sank")
-        if hubs.get("artist"):
-            return hubs["artist"][0]
+        # The artist whose name is nearest to what was heard, whether the search found it by spelling or we find it by
+        # sound; only then an album or a track with those words in it. ("dead mouse" is deadmau5: not Eek-A-Mouse,
+        # which the search offers for "mouse", nor Modest Mouse's "We Were Dead Before the Ship Even Sank".)
+        heard = sound_keys(query)
+        near = lambda m: sounds_like(heard, sound_keys(m.get("title", "")))  # noqa: E731
+        candidates = list(hubs.get("artist") or [])
         by_sound = self.find_artist_by_sound(query)
         if by_sound is not None:
-            return by_sound
+            candidates.append(by_sound)
+        if candidates:
+            return max(candidates, key=near)
         for kind in ("album", "track"):
             if hubs.get(kind):
                 return hubs[kind][0]
         return None
 
-    def find_artist_by_sound(self, query: str, cutoff: float = 0.68) -> Optional[dict]:
+    def find_artist_by_sound(self, query: str, cutoff: float = 0.7) -> Optional[dict]:
         """An artist whose name the ears got roughly right: "dead mouse" for deadmau5, "dead mile 5" too. The search
-        above matches spelling; this compares the letters and digits of what was heard with every artist's name."""
-        import difflib
+        above matches spelling; this compares how the heard words sound with every artist's name."""
         _machine, section = self._library()
         if self._artists is None:
-            self._artists = [(squash(m.get("title", "")), m) for m in self._server(f"/library/sections/{section}/all", type=8).get("Metadata", [])]
-            self._artists = [(k, m) for k, m in self._artists if len(k) >= 3]
-        heard = squash(query)
-        if len(heard) < 3:
+            self._artists = [(sound_keys(m.get("title", "")), m) for m in self._server(f"/library/sections/{section}/all", type=8).get("Metadata", [])]
+            self._artists = [(k, m) for k, m in self._artists if len(k[0]) >= 3]
+        heard = sound_keys(query)
+        if len(heard[0]) < 3:
             return None
         best, score = None, cutoff
         for key, m in self._artists:
-            if abs(len(key) - len(heard)) > max(3, len(heard) // 2):
+            if abs(len(key[0]) - len(heard[0])) > max(3, len(heard[0]) // 2):
                 continue
-            r = difflib.SequenceMatcher(None, heard, key).ratio()
+            r = sounds_like(heard, key)
             if r > score:
                 best, score = m, r
         return best
