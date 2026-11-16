@@ -1,4 +1,4 @@
-"""The LED panels follow the music: while something is playing the WLED shows its audio-reactive GEQ effect, and
+"""The LED panels follow the music: while something is playing the WLED shows an audio-reactive effect (Waverly; the name is a parameter), and
 when the music stops it goes back to what it was showing.
 
 WLED's JSON API on the panels' controller (robot.yaml panels.ip): /json/effects names the effects, /json/state has

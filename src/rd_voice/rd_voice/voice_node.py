@@ -141,7 +141,7 @@ class VoiceNode(Node):
         # when music is asked for). The server's address comes from the robot's own environment (RD_PLEX_SERVER in
         # ~/.robot_face/voice.env), not from this repository; "" = the local music folder only.
         # the LED panels show this WLED effect while music plays and go back to their own afterwards ("" = left alone)
-        dp("panels_music_effect", "GEQ"); dp("panels_host", str(config.get("panels.ip", "")))
+        dp("panels_music_effect", "Waverly"); dp("panels_host", str(config.get("panels.ip", "")))
         dp("plex_server", os.environ.get("RD_PLEX_SERVER", "")); dp("plexamp_url", "http://127.0.0.1:32500"); dp("plexamp_unit", "plexamp")
         dp("volume_sink", str(config.get("audio.sink", ""))); dp("volume_step", 10); dp("volume_max", 100)
         dp("landmarks_dir", ""); dp("task_nav_timeout", 300.0); dp("task_run_timeout", 600.0)
