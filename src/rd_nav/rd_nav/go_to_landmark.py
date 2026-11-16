@@ -16,7 +16,7 @@ import time
 
 import rclpy
 from action_msgs.msg import GoalStatus
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, TwistStamped
 from nav2_msgs.action import NavigateToPose
 from rclpy.action import ActionClient, ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
@@ -44,6 +44,15 @@ class GoToLandmarkServer(Node):
         self.declare_parameter("relocalize_service", "/tag_corrector/relocalize_now")
         self.declare_parameter("relocalize_settle_sec", 2.0)
         self.declare_parameter("require_localized", True)   # refuse when map->base is not available
+        # The last few centimetres (rd_nav/final_approach.py): Nav2 stops inside its tolerance (0.25 m, 0.25 rad), the
+        # policies recorded at a landmark want the robot where it stood. Turn, drive, align, slowly, after Nav2 arrives.
+        self.declare_parameter("final_approach", True)
+        self.declare_parameter("final_pos_tol", 0.03)        # m
+        self.declare_parameter("final_yaw_tol", 0.025)       # rad
+        self.declare_parameter("final_max_start", 0.6)       # m: further off than this, Nav2 did not really arrive: left alone
+        self.declare_parameter("final_timeout_sec", 40.0)
+        self.declare_parameter("cmd_vel_topic", "/cmd_vel_nav")   # the navigation's input of the twist mux (TwistStamped)
+        self.cmd_pub = self.create_publisher(TwistStamped, self.get_parameter("cmd_vel_topic").value, 10)
         self.landmarks = LandmarkStore(self.get_parameter("landmarks_dir").value or None)
         self.maps = MapsStore(self.get_parameter("maps_dir").value or None)
         self.map_frame = self.get_parameter("map_frame").value
@@ -89,6 +98,58 @@ class GoToLandmarkServer(Node):
         p.pose.position.y = t.transform.translation.y
         p.pose.orientation = t.transform.rotation
         return p
+
+    def _xy_yaw(self):
+        try:
+            t = self.tf.lookup_transform(self.map_frame, self.base_frame, rclpy.time.Time())
+        except TransformException:
+            return None
+        q = t.transform.rotation
+        return (t.transform.translation.x, t.transform.translation.y,
+                math.atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z)))
+
+    def _drive(self, v: float, w: float) -> None:
+        m = TwistStamped()
+        m.header.stamp = self.get_clock().now().to_msg()
+        m.header.frame_id = self.base_frame
+        m.twist.linear.x, m.twist.angular.z = float(v), float(w)
+        self.cmd_pub.publish(m)
+
+    def final_approach(self, handle, lm: dict, feedback) -> str:
+        """Finish on the landmark itself. Returns what happened, for the log; the goal has succeeded either way."""
+        from .final_approach import Params, State, step
+        p = Params(pos_tol=float(self.get_parameter("final_pos_tol").value), yaw_tol=float(self.get_parameter("final_yaw_tol").value),
+                   max_start=float(self.get_parameter("final_max_start").value))
+        goal = (float(lm["x"]), float(lm["y"]), float(lm.get("yaw", 0.0)))
+        pose = self._xy_yaw()
+        if pose is None:
+            return "no pose for the final approach"
+        off = math.hypot(goal[0] - pose[0], goal[1] - pose[1])
+        if off > p.max_start:
+            return f"{off:.2f} m from the landmark: too far for a final approach"
+        start = f"{off * 100:.0f} cm, {abs(math.degrees(math.atan2(math.sin(goal[2] - pose[2]), math.cos(goal[2] - pose[2])))):.0f} deg off"
+        feedback.nav_state = "final approach"
+        handle.publish_feedback(feedback)
+        st, end, why = State(), time.monotonic() + float(self.get_parameter("final_timeout_sec").value), ""
+        try:
+            while st.phase != "done":
+                if handle.is_cancel_requested:
+                    why = "cancelled"
+                    break
+                if time.monotonic() > end:
+                    why = "timed out"
+                    break
+                pose = self._xy_yaw()
+                if pose is None:
+                    why = "pose lost"
+                    break
+                self._drive(*step(st, pose, goal, p))
+                time.sleep(0.05)
+        finally:
+            for _ in range(3):                    # stopped, and said more than once: the mux holds the last word briefly
+                self._drive(0.0, 0.0)
+                time.sleep(0.03)
+        return f"final approach from {start}: " + (why or st.note)
 
     # ---- execution
     def execute(self, handle):
@@ -177,6 +238,11 @@ class GoToLandmarkServer(Node):
             time.sleep(0.1)
         status = done.result().status
         if status == GoalStatus.STATUS_SUCCEEDED:
+            if self.get_parameter("final_approach").value:
+                note = self.final_approach(handle, lm, feedback)
+                self.get_logger().info(f"'{goal.landmark}': {note}")
+                if handle.is_cancel_requested:
+                    return self._finish(handle, result, False, "cancelled")
             return self._finish(handle, result, True, "arrived")
         if status == GoalStatus.STATUS_CANCELED:
             return self._finish(handle, result, False, "cancelled")
