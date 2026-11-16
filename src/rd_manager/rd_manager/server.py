@@ -3,7 +3,7 @@ checkpoints, datasets) and supervisor. v1 webui/server.py + Scripts/route_editor
 
 Pages:  /            the manager (tabs)        /live/        the route editor               /live/3d   the 3D view
         /arm/        arm + hand + policy       /folks/       the people the robot knows
-The Panels tab (the WLED LED matrices) is a view of the manager page: /api/panels and the /ws/panels pixel relay.
+The LED matrix panels (WLED) are drawn on the robot in the 3D view: /api/panels and the /ws/panels pixel relay.
 """
 from __future__ import annotations
 
@@ -1392,7 +1392,7 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
 
     @app.get("/api/panels")
     def api_panels():
-        """Where the WLED is and what it is set to; the Panels tab draws the pixels from /ws/panels."""
+        """Where the WLED is and what it is set to; the 3D page draws the pixels from /ws/panels."""
         info = panels_info(panels_url) if panels_url else None
         return {"url": slash(panels_url) if panels_url else "", "reachable": info is not None, "info": info}
 
