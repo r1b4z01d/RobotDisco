@@ -673,10 +673,14 @@ class Brain:
     def music_action(self, action: str) -> str:
         a = (action or "").strip().lower().replace(" ", "_")
         if a in ("next", "skip", "next_song"):
+            # a skip is not announced: the next song is its own answer (Bryan, 2026-11-15). Only "nothing is playing" is said.
+            was = self.music.is_playing()
             r = self.music.next()
-            return r or "Nothing is playing; say play some music."
+            return "" if was else (r or "Nothing is playing; say play some music.")
         if a in ("previous", "back", "previous_song", "last"):
-            return self.music.previous()
+            was = self.music.is_playing()
+            r = self.music.previous()
+            return "" if was else r
         if a in ("now_playing", "now", "what", "current"):
             return self.music.now()
         if a == "stop":
