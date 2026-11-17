@@ -201,6 +201,21 @@ class PlexampSkill:
         self._player("/player/playback/skipPrevious")
         return "Previous song."
 
+    def pause(self) -> str:
+        self._player("/player/playback/pause")
+        self._state = ("paused", time.monotonic())
+        return "Paused."
+
+    def resume(self) -> str:
+        self._player("/player/playback/play")
+        return "Playing."
+
+    def status(self) -> dict:
+        """What the player is doing, for the console and the Stream Deck: state is playing / paused / stopped."""
+        t = self._timeline()
+        state = t.get("state", "") if t.get("state") in ("playing", "paused") else "stopped"
+        return {"state": state, "artist": t.get("artist", "") if state != "stopped" else "", "title": t.get("title", "") if state != "stopped" else ""}
+
     def now(self) -> str:
         t = self._timeline()
         if t.get("state") not in ("playing", "paused") or not t.get("title"):

@@ -1106,6 +1106,46 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
             return {"present": False, "error": "no ROS" if not B else "nothing on /battery yet"}
         return {**{k: v for k, v in b.items() if k != "t"}, "age": round(time.time() - b["t"], 1)}
 
+    # ---- music: the Plexamp player on the robot (:32500), the same one the voice assistant plays through
+    music = {"skill": None, "status": None, "t": 0.0}
+
+    def _music():
+        if music["skill"] is None:
+            from rd_voice.plexamp import PlexampSkill
+            music["skill"] = PlexampSkill(server="")
+            music["skill"]._cmd = int(time.time())     # command ids must keep rising across restarts, and clear of the voice assistant's
+        return music["skill"]
+
+    @app.get("/api/music")
+    def api_music():
+        """{available, state: playing | paused | stopped, artist, title}; available is false while the player is not running."""
+        if music["status"] is not None and time.monotonic() - music["t"] < 1.0:
+            return music["status"]
+        try:
+            out = {"available": True, **_music().status()}
+        except Exception as e:  # noqa: BLE001  the unit is stopped until the first "play music", or rd_voice is not installed here
+            out = {"available": False, "state": "stopped", "artist": "", "title": "", "error": str(e)[:120]}
+        music["status"], music["t"] = out, time.monotonic()
+        return out
+
+    @app.post("/api/music/{action}")
+    def api_music_do(action: str):
+        """toggle (pause or carry on), next, previous."""
+        try:
+            m = _music()
+            if action == "toggle":
+                action = "pause" if m.status()["state"] == "playing" else "resume"
+            if action not in ("pause", "resume", "next", "previous"):
+                raise HTTPException(404, f"no music action {action!r}")
+            getattr(m, action)()
+        except HTTPException:
+            raise
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(503, f"the music player is not answering: {str(e)[:120]}")
+        music["status"] = None
+        time.sleep(0.4)             # the player's timeline takes a moment to show the new song
+        return api_music()
+
     @app.get("/api/volume")
     def api_volume():
         if not B:

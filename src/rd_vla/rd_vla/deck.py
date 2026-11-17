@@ -143,7 +143,8 @@ class StreamDeckPad:
             self.deck = None
 
 
-LANDMARK_KEYS = (6, 7, 8, 9, 10, 11, 12, 13, 14)
+LANDMARK_KEYS = (6, 7, 8, 9, 10, 11)
+MUSIC_KEYS = {12: "previous", 13: "toggle", 14: "next"}      # the bottom row's last three: previous, pause / play, next
 ARM_SECONDS = 3.0             # a landmark key drives the robot: the second press must follow the first this soon
 VOLUME_STEP = 10
 
@@ -156,6 +157,7 @@ class Remote:
         self.base, self.log = base.rstrip("/"), log
         self.fetch = fetch or self._http
         self.volume, self.muted, self.mic_muted, self.landmarks = None, False, False, []
+        self.music = "stopped"                    # playing / paused / stopped (the manager's /api/music)
         self._stop = threading.Event()
         self._thread = None
 
@@ -181,6 +183,7 @@ class Remote:
             d = self.fetch("/api/landmarks")
             here = d.get("map")
             self.landmarks = [(lm["id"], lm.get("name") or lm["id"]) for lm in d.get("landmarks", []) if lm.get("map") == here]
+            self.music = self.fetch("/api/music").get("state", "stopped")
         except Exception:  # noqa: BLE001  the manager is away: keep what was known
             pass
 
@@ -289,6 +292,12 @@ class Deck:
         elif key == 5:
             r.mic_muted = not r.mic_muted
             r.send("microphone muted" if r.mic_muted else "microphone on", "/api/voice/mic", {"muted": r.mic_muted})
+        elif key in MUSIC_KEYS:
+            if r.music != "stopped":
+                action = MUSIC_KEYS[key]
+                if action == "toggle":
+                    r.music = "paused" if r.music == "playing" else "playing"
+                r.send(f"music {action}", f"/api/music/{action}", {})
         elif key in LANDMARK_KEYS:
             i = LANDMARK_KEYS.index(key)
             if i < len(r.landmarks):
@@ -307,6 +316,11 @@ class Deck:
         self._label(3, f"VOL +\n{vol}")
         self._label(4, "HALT", bg=(190, 25, 25))
         self._label(5, "MIC\nOFF" if r.mic_muted else "MIC\nON", bg=(120, 30, 30) if r.mic_muted else DARK)
+        on = r.music != "stopped"                    # dim until something is playing
+        bg, fg = ((60, 30, 90), WHITE) if on else (DARK, (90, 90, 90))
+        self._label(12, "PREV", bg=bg, fg=fg)
+        self._label(13, "PAUSE" if r.music == "playing" else "PLAY", bg=(110, 50, 160) if r.music == "playing" else bg, fg=fg)
+        self._label(14, "NEXT", bg=bg, fg=fg)
         armed_key, until = self._armed
         if armed_key is not None and now >= until:
             self._armed, armed_key = (None, 0.0), None

@@ -1187,6 +1187,24 @@ async function voiceEchoPoll() {
   if (Date.now() > voiceEcho.until) { clearInterval(voiceEcho.timer); voiceEcho.timer = null; return; }
   try { voiceEchoRender(await api("/api/voice")); } catch (e) { /* keep the last echo */ }
 }
+// ---- music: what is playing and pause / next / previous, beside the say box
+function showMusic(m) {
+  const on = !!(m && m.available && m.state !== "stopped");
+  $("#music-now").textContent = on ? [m.artist, m.title].filter(Boolean).join(" — ") + (m.state === "paused" ? "  (paused)" : "") : "no music";
+  $("#music-now").title = $("#music-now").textContent;
+  $("#music-toggle").textContent = m && m.state === "playing" ? "⏸" : "▶";
+  for (const id of ["#music-prev", "#music-toggle", "#music-next"]) $(id).disabled = !on;
+}
+async function pollMusic() {
+  if (document.hidden || !$("#music-box").offsetParent) return;
+  try { showMusic(await (await fetch("/api/music")).json()); } catch (e) { showMusic(null); }
+}
+for (const [id, action] of [["#music-prev", "previous"], ["#music-toggle", "toggle"], ["#music-next", "next"]])
+  $(id).addEventListener("click", async () => {
+    try { const r = await fetch("/api/music/" + action, { method: "POST" }); if (r.ok) showMusic(await r.json()); } catch (e) { /* the next poll shows it */ }
+  });
+setInterval(pollMusic, 3000); pollMusic();
+
 $("#voice-form").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const input = $("#voice-text"), btn = $("#voice-send"), text = input.value.trim();
