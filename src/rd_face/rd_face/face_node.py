@@ -69,6 +69,7 @@ class FaceNode(Node):
         # the layout on the 1080x1900 canvas, v1's (combined_face_hand_node.py): eye half-width 187 and height 154,
         # eye centres 280 px down, the mouth 550 px below the eyes
         dp("eye_hw", 187.0); dp("eye_hh", 154.0); dp("eye_side_margin", 80.0); dp("eye_top_margin", 280.0)
+        dp("gaze_travel", 0.0)        # how far the eyes move to follow somebody, canvas pixels; 0 = v1's eye_hw - eye_hh / 2
         dp("mouth_gap", 550.0); dp("mouth_amplitude", 70.0); dp("mouth_width", 0.0)   # width 0 = between the eye centres
         dp("window_focus_seconds", 10.0)     # keep asking GNOME for focus this long after start
         dp("camera_timeout", 3.0); dp("face_stick_seconds", 1.5)
@@ -640,7 +641,7 @@ class FaceNode(Node):
                 wink = max(0.0, 1.0 - (w - close_t - hold_t) / open_t)
         nx = max(-1.0, min(1.0, (self.smoothed_center[0] - self.camera_w / 2.0) / (self.camera_w / 2.0)))
         ny = max(-1.0, min(1.0, (self.smoothed_center[1] - self.camera_h / 2.0) / (self.camera_h / 2.0)))
-        travel = max(float(p("eye_hw")) - float(p("eye_hh")) / 2.0, 0.0) * self.layout_scale   # v1: the pupil's room in the eye (187 - 77)
+        travel = (float(p("gaze_travel")) or max(float(p("eye_hw")) - float(p("eye_hh")) / 2.0, 0.0)) * self.layout_scale
         gaze = (-nx * travel * 0.7, ny * travel * 0.6)
         level, samples, smile, skew, path, blend = self.update_mouth(now, seeing_person=self.tracked_face is not None)
         if self.renderer is None:

@@ -8,11 +8,12 @@ face:
     width: 1080
     height: 1900
     render_fps: 30.0
-    eye_hw: 187.0                           # the layout on the 1080x1900 canvas, v1's: eye half-width and height,
-    eye_hh: 154.0
-    eye_side_margin: 80.0                   # screen edge to the eye, top to the eye centres,
-    eye_top_margin: 280.0
-    mouth_gap: 550.0                        # eye bottom to the mouth line,
+    eye_hw: 168.0                           # the layout on the 1080x1900 canvas: eye half-width and height. 10 % smaller
+    eye_hh: 139.0                           # than v1's 187 x 154 (2026-11-16), centres and mouth where they were,
+    eye_side_margin: 99.0                   # screen edge to the eye, top to the eye centres,
+    eye_top_margin: 295.0
+    gaze_travel: 135.0                      # so the eyes can move further when they follow somebody (v1's rule gave 110)
+    mouth_gap: 565.0                        # eye bottom to the mouth line,
     mouth_amplitude: 70.0                   # its swing at full loudness, and its width (0 = between the eye centres)
     mouth_width: 0.0
     window_focus_seconds: 10.0
