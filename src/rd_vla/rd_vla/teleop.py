@@ -251,6 +251,7 @@ class Teleop(Node):
         self.message = ""
         self.episodes = 0                     # in the current dataset
         self._episodes_of = None
+        self._episodes_read = 0.0
         self.regrasp_ranges: list = []        # [start, end] frames flagged in this episode (the operator's "that grasp missed")
         self._regrasp_open = None
         self.last = {}                        # the last saved episode: ep, frames, grasps, dataset
@@ -749,8 +750,16 @@ class Teleop(Node):
 
     def _publish_state(self):
         dataset, fps = str(self.p("dataset")), float(self.p("fps"))
-        if dataset != self._episodes_of and not self.saving:     # another dataset chosen: how much it already holds
-            self.episodes, self._episodes_of = (episodes_on_disk(self._root() / dataset) if dataset else 0), dataset
+        # How much the dataset holds, read again every two seconds: an episode deleted, trimmed or moved in the Datasets
+        # tab changes it under this node. While a take is being written the count is the writer's.
+        now = time.monotonic()
+        if not self.saving and (dataset != self._episodes_of or now - self._episodes_read > 2.0):
+            n = episodes_on_disk(self._root() / dataset) if dataset else 0
+            if dataset == self._episodes_of and n != self.episodes:
+                self.log(f"dataset {dataset}: {n} episodes now (it was {self.episodes}); the stars no longer rate the last take")
+                with self.lock:               # its number may have moved: a rating must not land on another episode
+                    self.last, self._last_job = {}, None
+            self.episodes, self._episodes_of, self._episodes_read = n, dataset, now
         hz = (len(self._ticks) - 1) / (self._ticks[-1] - self._ticks[0]) if (self.enabled or self.freedrive) and len(self._ticks) > 2 else 0.0
         self.state_pub.publish(String(data=json.dumps({
             "device": self.device_ok, "enabled": self.enabled, "recording": self.recording, "saving": self.saving,
