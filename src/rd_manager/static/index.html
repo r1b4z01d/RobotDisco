@@ -15,17 +15,21 @@
       <button class="nav-btn" data-view="landmarks">Landmarks</button>
       <button class="nav-btn" data-view="routes">Routes</button>
       <button class="nav-btn" data-view="folks">Folks</button>
+      <button class="nav-btn" data-view="robot">VLA Teleop</button>
+      <button class="nav-btn" data-view="datasets">Datasets</button>
+      <button class="nav-btn" data-view="models">Models</button>
+      <button class="nav-btn" data-view="evals">Evals</button>
       <button class="nav-btn" data-view="services">Services</button>
     </nav>
     <div class="brand">Robot Disco <span>V5</span></div>
     <div class="hdr-right">
-      <nav class="views views-right">
-        <button class="nav-btn" data-view="robot">VLA Teleop</button>
-        <button class="nav-btn" data-view="datasets">Datasets</button>
-        <button class="nav-btn" data-view="models">Models</button>
-        <button class="nav-btn" data-view="evals">Evals</button>
-      </nav>
       <span id="hdr-batt" class="mono muted hdr-batt" title="battery: nothing heard from the monitor board" hidden>—</span>
+      <span id="music-box" class="music-box" title="the music the robot is playing (Plexamp)">
+        <span id="music-now" class="mono muted">no music</span>
+        <button id="music-prev" class="btn tiny" type="button" title="previous song">⏮</button>
+        <button id="music-toggle" class="btn tiny" type="button" title="pause / play">⏯</button>
+        <button id="music-next" class="btn tiny" type="button" title="next song">⏭</button>
+      </span>
       <span id="hdr-vol" class="hdr-vol" title="robot speaker volume">
         <button id="vol-mute" class="btn icon" title="mute / unmute the robot speaker">🔊</button>
         <input id="vol-range" type="range" min="0" max="100" step="1" value="0" disabled>
@@ -257,12 +261,6 @@
           </span>
           <span id="map-status" class="mono muted">—</span>
           <a id="map-open" class="muted" href="#" target="_blank" title="open in its own tab">↗</a>
-          <span id="music-box" class="music-box" title="the music the robot is playing (Plexamp)">
-            <span id="music-now" class="mono muted">no music</span>
-            <button id="music-prev" class="btn tiny" type="button" title="previous song">⏮</button>
-            <button id="music-toggle" class="btn tiny" type="button" title="pause / play">⏯</button>
-            <button id="music-next" class="btn tiny" type="button" title="next song">⏭</button>
-          </span>
           <form id="voice-form" class="voice-form" title="typed text goes to the voice assistant exactly as if Whisper had heard it, wake phrase and all: start with “Robot Disco”">
             <input id="voice-text" class="ep-input" type="text" placeholder="what time is it" title="typed text reaches the voice assistant with the wake phrase already in front" autocomplete="off" spellcheck="false">
             <button id="voice-send" class="btn tiny" type="submit" title="send the text to the voice assistant as if it had been heard">Say to robot</button>

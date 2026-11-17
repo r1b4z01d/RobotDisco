@@ -304,10 +304,10 @@ table.svc pre.svc-log { margin: 0; padding: 8px 12px; max-height: 320px; overflo
 .mapedit-view.pan { cursor: grab; }
 
 /* the Live tab's voice box: typed text in, as if heard; what the assistant heard and answered next to it */
-.music-box { display: flex; align-items: center; gap: 6px; margin-left: auto; min-width: 0; }
-.music-box #music-now { max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.music-box { display: flex; align-items: center; gap: 6px; min-width: 0; margin-right: 10px; }
+.music-box #music-now { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .music-box .btn:disabled { opacity: .4; }
-.voice-form { display: flex; align-items: center; gap: 6px; margin-left: 10px; min-width: 0; }
+.voice-form { display: flex; align-items: center; gap: 6px; margin-left: auto; min-width: 0; }
 .voice-form .ep-input { width: 280px; flex: none; }
 .voice-form #voice-echo { max-width: 460px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -316,3 +316,7 @@ table.svc pre.svc-log { margin: 0; padding: 8px 12px; max-height: 320px; overflo
 .tag-card { margin: 0; display: flex; align-items: center; gap: 10px; padding: 8px 12px; }
 .tag-card .tag-id { font-weight: 700; }
 .tag-card .tag-id.seen { color: #39d353; }
+/* ten tabs on the left: none may wrap, and on a narrow window the song gives way first */
+nav.views .nav-btn { white-space: nowrap; }
+@media (max-width: 1650px) { .music-box #music-now { max-width: 130px; } nav.views .nav-btn { padding-left: 9px; padding-right: 9px; } }
+@media (max-width: 1250px) { .music-box #music-now { display: none; } }
