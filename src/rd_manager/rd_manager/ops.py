@@ -138,6 +138,11 @@ def _swap_in_place(datasets_dir: str, name: str, staged: str) -> str:
     """Replace datasets_dir/<name> with `staged`, keeping the old copy as <name>.bak."""
     target = os.path.join(datasets_dir, name)
     bak = target + ".bak"
+    # capture.json (the camera squares the episodes were recorded with) is not LeRobot's, so a rebuild does not carry
+    # it: without this a dataset lost it on the first deleted episode, and a model trained from it had no geometry.
+    capture = os.path.join(target, "meta", "capture.json")
+    if os.path.isfile(capture) and not os.path.exists(os.path.join(staged, "meta", "capture.json")):
+        shutil.copy2(capture, os.path.join(staged, "meta", "capture.json"))
     _rmtree(bak)
     if os.path.exists(target):
         os.rename(target, bak)
