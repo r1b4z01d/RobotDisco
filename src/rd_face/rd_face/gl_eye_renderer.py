@@ -225,7 +225,7 @@ vec3 renderMouth(vec2 frag) {
 
     float lvl   = clamp(u_mouth_level, 0.0, 1.0);
     float ends  = 1.0 - smoothstep(0.90, 1.08, abs(nx));
-    float width = 1.6 + 1.4 * lvl;                        // stroke thickens as it gets louder
+    float width = 3.2 + 2.8 * lvl;                        // stroke thickens as it gets louder
     float core  = smoothstep(width + 1.2, width - 0.6, d);
     float glow  = exp(-dv * 0.10) * (0.35 + 0.65 * lvl);
 

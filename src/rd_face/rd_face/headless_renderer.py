@@ -54,7 +54,7 @@ class HeadlessRenderer:
                 ys = np.sin(xs * math.pi * 3.0) * mouth_level * 0.6
             ys = ys - (1.0 - xs ** 2) * (mouth_smile / max(self.mouth_amp, 1e-6)) * 0.5 + xs * (mouth_skew / max(self.mouth_amp, 1e-6)) * 0.5
             pts = np.stack([mcx + xs * hw, mcy + ys * self.mouth_amp], axis=1).astype(np.int32)
-            cv2.polylines(canvas, [pts], False, (255, 185, 30), 4, cv2.LINE_AA)
+            cv2.polylines(canvas, [pts], False, (255, 185, 30), 8, cv2.LINE_AA)
         self.frame = canvas
         self.frames += 1
         self.last = {"blink": float(blink), "wink": float(wink), "mood": int(mood), "mouth_level": float(mouth_level),
