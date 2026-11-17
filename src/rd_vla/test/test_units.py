@@ -117,7 +117,13 @@ def test_eval_registry(tmp_path):
     items = reg.list()
     assert len(items) == 2 and items[0]["name"] == "20261107_b"
     g = reg.groups()
-    assert g[0]["model"] == "/c/m1" and g[0]["runs"] == 2 and g[0]["success_rate"] == 0.5 and g[0]["rating"] == 4.0
+    assert g[0]["model_key"] == "m1" and g[0]["runs"] == 2 and g[0]["success_rate"] == 0.5 and g[0]["rating"] == 4.0
+    # runs are grouped by the model they ran: <training run>@<step> however the checkpoint path starts
+    key = type(reg).model_key
+    assert key({"checkpoint": "/home/x/outputs/train/tig_1/checkpoints/020000/pretrained_model"}) == "tig_1@020000"
+    assert key({"checkpoint": "train/tig_1/checkpoints/020000/pretrained_model", "model": "tig_1"}) == "tig_1@020000"
+    assert key({"model": "tig_1@last"}) == "tig_1@last" and key({"model": "tig_1"}) == "tig_1" and key({}) == "unassigned"
+    assert all(e["model_key"] == "m1" for e in reg.list())
     reg.rename("20261107_b", "20261107_c")
     assert {i["name"] for i in reg.list()} == {"20261107_a", "20261107_c"}
     reg.delete("20261107_c")

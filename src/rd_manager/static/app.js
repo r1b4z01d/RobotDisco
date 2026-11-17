@@ -887,61 +887,43 @@ async function doDeleteModel(name) {
 }
 $("#btn-models-refresh").addEventListener("click", loadModels);
 
-// ---- evals ----
+// ---- evals: laid out as the Datasets tab is. Left, the models that have runs; right, the chosen model's runs in a
+// table (rating, notes and operator edited in place) over a player for the run's video. ----
+function evalGroupRuns(k) { return (state.evals || []).filter((ev) => (ev.model_key || "unassigned") === k); }
 async function loadEvals() {
   let data; try { data = await api("/api/evals"); } catch (e) { return err(e); }
   state.evals = data.evals;
-  const box = $("#evals-wrap"); box.replaceChildren();
-  if (!data.evals.length) {
-    box.append(el("div", { class: "placeholder" },
-      "No evals yet. Bridge evals are auto-captured here; or add one with “+ New eval”."));
-    return;
-  }
-  // Grouped by model (run/step the server resolved), newest activity first, unassigned last.
-  // Each header carries the COMBINED rating: mean stars over the rated runs in the group.
   let groups = []; try { groups = (await api("/api/evals/groups")).groups; } catch (e) { groups = []; }
-  const byKey = new Map(); for (const ev of data.evals) { const k = ev.model_key || "unassigned"; if (!byKey.has(k)) byKey.set(k, []); byKey.get(k).push(ev); }
-  const order = groups.map((g) => g.model_key).filter((k) => byKey.has(k));
-  for (const k of byKey.keys()) if (!order.includes(k)) order.push(k);
-  state.evalCollapsed = state.evalCollapsed || {};
-  for (const k of order) {
-    const g = groups.find((x) => x.model_key === k) || { runs: byKey.get(k).length, rated: 0, rating: null };
-    const runs = byKey.get(k);
-    const collapsed = !!state.evalCollapsed[k];
-    const title = k === "unassigned" ? "unassigned model" : k;
+  // newest activity first (the server's order), unassigned and anything the roll-up missed after
+  const keys = [...new Set(data.evals.map((ev) => ev.model_key || "unassigned"))];
+  const order = groups.map((g) => g.model_key).filter((k) => keys.includes(k));
+  for (const k of keys) if (!order.includes(k)) order.push(k);
+  state.evalGroups = order.map((k) => groups.find((g) => g.model_key === k) || { model_key: k, runs: evalGroupRuns(k).length, rated: 0, rating: null });
+  if (!order.includes(state.evalGroup)) state.evalGroup = order[0] || null;
+  state.evalSel = new Set([...(state.evalSel || [])].filter((n) => data.evals.some((ev) => ev.name === n)));
+  renderEvalGroups(); renderEvalRuns();
+  // as the Datasets tab opens on its first episode: the first run with a video is loaded, not started
+  const runs = evalGroupRuns(state.evalGroup);
+  if (!runs.some((r) => r.name === state.evalPlaying)) {
+    const first = runs.find((r) => r.videos && r.videos.length);
+    if (first) playEval(first.name, false); else closeEvalPlayer();
+  }
+}
+function renderEvalGroups() {
+  const box = $("#eval-groups"); box.replaceChildren();
+  for (const g of state.evalGroups || []) {
+    const k = g.model_key;
     const stars = g.rating != null
       ? el("span", { class: "group-rating", title: `${g.rated} of ${g.runs} runs rated` },
           "★".repeat(Math.round(g.rating)) + "☆".repeat(5 - Math.round(g.rating)), " ", el("b", {}, g.rating.toFixed(2)))
       : el("span", { class: "muted" }, "no ratings yet");
-    const stats = el("span", { class: "group-stats" },
-      `${g.runs} run${g.runs === 1 ? "" : "s"} · ${g.rated} rated`,
-      g.success_rate != null ? ` · success ${Math.round(g.success_rate * 100)}%` : "",
-      g.inferred ? ` · ${g.inferred} inferred` : "");
-    const head = el("div", { class: "eval-group-head", onclick: () => { state.evalCollapsed[k] = !collapsed; loadEvals(); } },
-      el("span", { class: "group-toggle" }, collapsed ? "▸" : "▾"),
-      el("span", { class: "group-title" }, title), stars, stats);
-    if (k === "unassigned") {
-      head.append(el("button", { class: "btn tiny", onclick: (e) => { e.stopPropagation(); assignGroup(runs); } },
-        "assign model to all…"));
-    }
-    box.append(el("div", { class: "eval-group" + (collapsed ? " collapsed" : "") }, head,
-      collapsed ? "" : el("div", { class: "eval-group-body" }, ...runs.map(evalCard))));
+    box.append(el("div", { class: "ds-card" + (k === state.evalGroup ? " selected" : ""),
+      onclick: () => { if (state.evalGroup === k) return; state.evalGroup = k; state.evalSel = new Set(); state.evalPlaying = null; loadEvals(); } },
+      el("div", { class: "ds-top" }, el("span", { class: "ds-name" }, k === "unassigned" ? "unassigned model" : k)),
+      el("div", { class: "ds-meta" }, `${g.runs} run${g.runs === 1 ? "" : "s"} · ${g.rated} rated`,
+        g.success_rate != null ? ` · success ${Math.round(g.success_rate * 100)}%` : "", g.inferred ? ` · ${g.inferred} assigned by hand` : ""),
+      el("div", { class: "ds-meta" }, stars)));
   }
-}
-async function assignGroup(runs) {
-  const models = (state.models || []).map((m) => m.name);
-  const v = await modal({ title: `Assign a model to ${runs.length} run${runs.length === 1 ? "" : "s"}`, submit: "Assign",
-    fields: [
-      { name: "checkpoint", label: "checkpoint (train/<run>/checkpoints/<step>)", type: "text",
-        placeholder: models.length ? `e.g. train/${models[0]}/checkpoints/020000` : "train/<run>/checkpoints/020000",
-        hint: "Sets the same checkpoint on every run in this group. Marked as inferred, so it stays distinguishable from a server-reported value." },
-    ] });
-  if (!v || !v.checkpoint) return;
-  try {
-    await post("/api/evals/bulk_annotate", { names: runs.map((r) => r.name),
-      fields: { checkpoint: v.checkpoint, checkpoint_inferred: true } });
-    ok(`assigned ${runs.length} runs`); loadEvals();
-  } catch (e) { err(e); }
 }
 function evalStars(ev) {
   const cur = ev.rating || 0;
@@ -950,69 +932,108 @@ function evalStars(ev) {
     box.append(el("span", { class: i <= cur ? "on" : "", onclick: () => annotateEval(ev.name, { rating: i === cur ? null : i }) }, "★"));
   return box;
 }
-function evalCard(ev) {
-  const meta = el("div", { class: "card-meta" });
-  const add = (l, v) => { if (v != null && v !== "") meta.append(el("span", {}, `${l}: `, el("b", {}, String(v)))); };
-  // checkpoint is EDITABLE: runs recorded before the server reported what it served carry only an
-  // address, and the only way to attribute them is for the operator to say which model ran.
-  const ck = el("input", { class: "ep-input mono", value: ev.checkpoint || "", placeholder: "train/<run>/checkpoints/<step>",
-    title: ev.checkpoint_inferred ? "inferred/assigned by hand, not reported by the server" : "as reported by the inference server",
-    style: "min-width:260px" });
-  ck.addEventListener("change", () => annotateEval(ev.name, { checkpoint: ck.value, checkpoint_inferred: !!ck.value }, false));
-  meta.append(el("span", {}, "checkpoint: ", ck, ev.checkpoint_inferred ? el("span", { class: "tag warn", title: "assigned by hand" }, "inferred") : ""));
-  if (ev.server) add("server", ev.server);
-  add("task", ev.task);
-  if (ev.landmark) meta.append(el("span", { title: "the landmark (named place) the robot drove to for this run" }, "at: ", el("b", {}, "⌖ " + ev.landmark)));
-  add("episodes", ev.episodes);
-  if (ev.success_rate != null) add("success", Math.round(ev.success_rate * 100) + "%");
-  else if (ev.successes != null && ev.episodes) add("success", `${ev.successes}/${ev.episodes}`);
-  // hardware-run facts from eval_hw.py — read-only, and the reason a run is or isn't comparable
-  add("steps", ev.steps);
-  if (ev.duration_s != null) add("duration", ev.duration_s + "s");
-  if (ev.fps != null) add("fps", ev.fps);
-  if (ev.n_action_steps != null) add("n-act", ev.n_action_steps);
-  if (ev.exposure && Object.keys(ev.exposure).length) {
-    const vals = Object.values(ev.exposure).map(Math.round);
-    const same = vals.every((v) => v === vals[0]);
-    add("exposure", same ? vals[0] : `${Math.min(...vals)}–${Math.max(...vals)}`);
+function renderEvalRuns() {
+  const k = state.evalGroup, runs = k ? evalGroupRuns(k) : [];
+  $("#evals-title").textContent = k ? `Runs — ${k === "unassigned" ? "unassigned model" : k}` : "Runs";
+  $("#evals-empty").hidden = runs.length > 0; $("#evals-table").hidden = !runs.length; $("#evals-toolbar").hidden = !runs.length;
+  const body = $("#evals-body"); body.replaceChildren();
+  for (const ev of runs) {
+    const sel = el("input", { type: "checkbox" }); sel.checked = state.evalSel.has(ev.name);
+    sel.addEventListener("change", () => { sel.checked ? state.evalSel.add(ev.name) : state.evalSel.delete(ev.name); updateEvalSel(); });
+    const notes = el("input", { class: "ep-input", value: ev.notes || "", placeholder: "notes…" });
+    notes.addEventListener("change", () => annotateEval(ev.name, { notes: notes.value }, true));
+    const oper = el("input", { class: "ep-input", value: ev.operator || "", placeholder: "operator" });
+    oper.addEventListener("change", () => annotateEval(ev.name, { operator: oper.value }, true));
+    const result = ev.success_rate != null ? Math.round(ev.success_rate * 100) + "%"
+      : (ev.successes != null && ev.episodes ? `${ev.successes}/${ev.episodes}` : "—");
+    const facts = [ev.checkpoint ? "checkpoint " + ev.checkpoint + (ev.checkpoint_inferred ? " (assigned by hand)" : "") : "no checkpoint recorded",
+      ev.server ? "server " + ev.server : "", ev.fps != null ? ev.fps + " fps" : "", ev.n_action_steps != null ? "n-act " + ev.n_action_steps : "",
+      ev.exposure && Object.keys(ev.exposure).length ? "exposure " + Object.values(ev.exposure).map(Math.round).join(" / ") : ""].filter(Boolean).join("\n");
+    const hasVideo = !!(ev.videos && ev.videos.length);
+    const play = el("button", { class: "btn tiny primary", title: hasVideo ? "replay this run's video" : "this run has no video", onclick: () => playEval(ev.name, true) }, "▶");
+    play.disabled = !hasVideo;
+    body.append(el("tr", { class: ev.name === state.evalPlaying ? "playing" : "", "data-eval": ev.name },
+      el("td", { class: "c-sel" }, sel),
+      el("td", { title: facts }, el("div", {}, ev.name), el("div", { class: "muted", style: "font-size:11px" }, fmtDate(ev.created))),
+      el("td", {}, ev.task || "—"),
+      el("td", {}, ev.landmark ? "⌖ " + ev.landmark : "—"),
+      el("td", { class: "c-len" }, ev.steps != null ? String(ev.steps) : "—"),
+      el("td", { class: "c-len" }, ev.duration_s != null ? ev.duration_s + "s" : "—"),
+      el("td", { class: "c-num" }, result),
+      el("td", { class: "c-rate" }, evalStars(ev)),
+      el("td", {}, notes),
+      el("td", { class: "c-op" }, oper),
+      el("td", { class: "c-act" }, play,
+        el("a", { class: "btn tiny", href: `/api/evals/${encodeURIComponent(ev.name)}/download`, title: "download the run" }, "⬇"),
+        el("button", { class: "btn tiny", onclick: () => doRenameEval(ev.name) }, "rename"),
+        el("button", { class: "btn tiny danger", onclick: () => doDeleteEval(ev.name) }, "del"))));
   }
-  add("date", fmtDate(ev.created));
-
-  const notes = el("input", { class: "ep-input", value: ev.notes || "", placeholder: "notes…" });
-  notes.addEventListener("change", () => annotateEval(ev.name, { notes: notes.value }, true));
-  const oper = el("input", { class: "ep-input", value: ev.operator || "", placeholder: "operator" });
-  oper.addEventListener("change", () => annotateEval(ev.name, { operator: oper.value }, true));
-
-  const foot = el("div", { class: "card-foot" }, el("span", { class: "muted" }, "rating"), evalStars(ev), notes, oper);
-  if (ev.videos && ev.videos.length)
-    foot.append(el("button", { class: "btn tiny primary", onclick: () => playEvalVideo(ev.name) }, "▶ video"));
-  foot.append(
-    el("a", { class: "btn tiny", href: `/api/evals/${encodeURIComponent(ev.name)}/download` }, "⬇ download"),
-    el("button", { class: "btn tiny", onclick: () => doRenameEval(ev.name) }, "rename"),
-    el("button", { class: "btn tiny danger", onclick: () => doDeleteEval(ev.name) }, "delete"));
-
-  return el("div", { class: "card" },
-    el("div", { class: "card-top" },
-      el("span", { class: "card-name" }, ev.name),
-      el("span", { class: "badge-status " + (ev.source === "auto" ? "done" : "stopped") }, ev.source)),
-    meta, foot);
+  updateEvalSel();
 }
+function updateEvalSel() {
+  const runs = evalGroupRuns(state.evalGroup), n = runs.filter((r) => state.evalSel.has(r.name)).length;
+  $("#btn-eval-del-selected").disabled = !n;
+  $("#btn-eval-del-selected").textContent = n ? `Delete selected (${n})` : "Delete selected";
+  $("#evals-sel-all").checked = !!runs.length && n === runs.length;
+  updateEvalNav();
+}
+function updateEvalNav() {
+  const vids = evalGroupRuns(state.evalGroup).filter((r) => r.videos && r.videos.length), i = vids.findIndex((r) => r.name === state.evalPlaying);
+  $("#btn-eval-prev").disabled = i <= 0; $("#btn-eval-next").disabled = i < 0 || i >= vids.length - 1;
+}
+function playEval(name, start) {
+  const ev = (state.evals || []).find((x) => x.name === name); if (!ev) return;
+  state.evalPlaying = name;
+  $("#eval-player-label").textContent = `${name}${ev.task ? " · " + ev.task : ""}${ev.landmark ? " · ⌖ " + ev.landmark : ""}`;
+  $("#eval-player-frame").replaceChildren(el("video", { src: `/api/evals/${encodeURIComponent(name)}/video`, controls: true, autoplay: !!start, preload: "metadata",
+    style: "position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000" }));
+  for (const tr of $("#evals-body").children) tr.classList.toggle("playing", tr.dataset.eval === name);
+  updateEvalNav();
+}
+function closeEvalPlayer() {
+  state.evalPlaying = null; $("#eval-player-label").textContent = "Player";
+  $("#eval-player-frame").replaceChildren(el("div", { class: "placeholder" }, "Press ▶ on a run to replay its video."));
+  updateEvalNav();
+}
+function stepEval(d) {
+  const vids = evalGroupRuns(state.evalGroup).filter((r) => r.videos && r.videos.length), i = vids.findIndex((r) => r.name === state.evalPlaying);
+  if (i >= 0 && vids[i + d]) playEval(vids[i + d].name, true);
+}
+$("#btn-eval-prev").addEventListener("click", () => stepEval(-1));
+$("#btn-eval-next").addEventListener("click", () => stepEval(1));
+$("#evals-sel-all").addEventListener("change", (e) => {
+  state.evalSel = new Set(e.target.checked ? evalGroupRuns(state.evalGroup).map((r) => r.name) : []); renderEvalRuns();
+});
+$("#btn-eval-del-selected").addEventListener("click", async () => {
+  const names = evalGroupRuns(state.evalGroup).map((r) => r.name).filter((n) => state.evalSel.has(n));
+  if (!names.length || !confirm(`Delete ${names.length} eval run${names.length === 1 ? "" : "s"}?`)) return;
+  let done = 0;
+  for (const n of names) { try { await post(`/api/evals/${encodeURIComponent(n)}/delete`, { confirm: true }); done++; } catch (e) { err(e); } }
+  ok(`deleted ${done} run${done === 1 ? "" : "s"}`); state.evalSel = new Set(); loadEvals();
+});
+$("#btn-eval-assign").addEventListener("click", async () => {
+  const all = evalGroupRuns(state.evalGroup), picked = all.filter((r) => state.evalSel.has(r.name)), runs = picked.length ? picked : all;
+  if (!runs.length) return;
+  const models = (state.models || []).map((m) => m.name);
+  const v = await modal({ title: `Assign a model to ${runs.length} run${runs.length === 1 ? "" : "s"}`, submit: "Assign",
+    fields: [
+      { name: "checkpoint", label: "checkpoint (train/<run>/checkpoints/<step>)", type: "text", value: runs[0].checkpoint || "",
+        placeholder: models.length ? `e.g. train/${models[0]}/checkpoints/020000` : "train/<run>/checkpoints/020000",
+        hint: "Sets the same checkpoint on these runs and moves them under that model. Marked as assigned by hand, so it stays distinguishable from what the server reported." },
+    ] });
+  if (!v || !v.checkpoint) return;
+  try {
+    await post("/api/evals/bulk_annotate", { names: runs.map((r) => r.name), fields: { checkpoint: v.checkpoint, checkpoint_inferred: true } });
+    ok(`assigned ${runs.length} runs`); state.evalSel = new Set(); loadEvals();
+  } catch (e) { err(e); }
+});
 async function annotateEval(name, fields, silent) {
   try {
     await post(`/api/evals/${encodeURIComponent(name)}/annotate`, fields);
     const e = state.evals.find((x) => x.name === name); if (e) Object.assign(e, fields);
-    if ("rating" in fields || "checkpoint" in fields) loadEvals();   // both change the grouping/roll-up
+    if ("rating" in fields) loadEvals();   // the model's combined rating changes with it
     if (!silent) ok("saved");
   } catch (e) { err(e); }
-}
-function playEvalVideo(name) {
-  const back = el("div", { class: "modal-back", onclick: (e) => e.target === back && back.remove() },
-    el("div", { class: "modal", style: "width:auto;max-width:92vw" },
-      el("h3", {}, `${name} — video`),
-      el("video", { src: `/api/evals/${encodeURIComponent(name)}/video`, controls: true, autoplay: true,
-        style: "max-width:86vw;max-height:70vh;display:block;background:#000" }),
-      el("div", { class: "modal-actions" }, el("button", { class: "btn", onclick: () => back.remove() }, "Close"))));
-  document.body.append(back);
 }
 async function doRenameEval(name) {
   const v = await modal({ title: `Rename eval "${name}"`, submit: "Rename",

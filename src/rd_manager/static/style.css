@@ -44,7 +44,7 @@ header {
 
 main { flex: 1; display: flex; min-height: 0; }
 .panel { background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
-#datasets-panel { width: 300px; flex: none; }
+#datasets-panel, #evals-panel { width: 300px; flex: none; }
 .grow { flex: 1; min-width: 0; }
 
 /* view nav + switching */
@@ -320,3 +320,7 @@ table.svc pre.svc-log { margin: 0; padding: 8px 12px; max-height: 320px; overflo
 nav.views .nav-btn { white-space: nowrap; }
 @media (max-width: 1650px) { .music-box #music-now { max-width: 130px; } nav.views .nav-btn { padding-left: 9px; padding-right: 9px; } }
 @media (max-width: 1250px) { .music-box #music-now { display: none; } }
+/* the Evals table: the run's name may break, the short columns may not */
+#evals-table td:nth-child(2) { word-break: break-all; min-width: 200px; }
+#evals-table td:nth-child(3), #evals-table td:nth-child(4) { white-space: nowrap; }
+#evals-table .c-act { width: 190px; }

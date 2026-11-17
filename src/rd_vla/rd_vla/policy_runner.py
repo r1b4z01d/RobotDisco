@@ -244,6 +244,7 @@ class PolicyRunner(Node):
             return False, f"inference server unreachable: {e}"
         writer = None
         log = None
+        video = None
         step = 0
         ended = ""
         info: dict = {}
@@ -311,6 +312,7 @@ class PolicyRunner(Node):
                 else:
                     log = open(run_dir / "steps.csv", "w", newline="")
                     csvw = csv.writer(log)
+                    video = evals.RolloutVideo(run_dir / "rollout.mp4", fps, log=self.get_logger().warn)
                     csvw.writerow(["t", "step", "obs_age_ms", "infer_ms"] + [f"a{i}" for i in range(10)] + [f"s{i}" for i in range(16)])
                     # 4. the loop
                     period = 1.0 / fps
@@ -370,6 +372,7 @@ class PolicyRunner(Node):
                         self.hand_pub.publish(Float32MultiArray(data=[float(v) for v in curls]))
                         if writer is not None:
                             writer.add_frame(images, st, action, goal.task)
+                        video.add(images)
                         csvw.writerow([f"{time.monotonic() - t0:.3f}", step, f"{age * 1000:.0f}", f"{infer_ms:.0f}"]
                                       + [f"{v:.4f}" for v in action] + [f"{v:.4f}" for v in st])
                         step += 1
@@ -404,6 +407,8 @@ class PolicyRunner(Node):
         self._set_squares(restore_squares)
         if log is not None:
             log.close()
+        if video is not None:
+            video.close()
         self._feedback(handle, step, t0, "returning", 0)
         self._stream(False)
         if goal.home_first and ended in ("done", "timeout", "max_steps"):

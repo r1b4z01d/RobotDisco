@@ -49,7 +49,6 @@
     <section id="datasets-panel" class="panel">
       <div class="panel-head">
         <button id="ds-collapse" class="btn icon" title="collapse / expand datasets">«</button>
-        <h2>Datasets</h2>
         <div class="row-actions">
           <button id="btn-sync" class="btn" title="sync every dataset: the GPU box takes the robot's copy (new episodes, ratings, deletions). Works from either console">⇅ Sync</button>
           <button id="btn-add" class="btn">+ Add</button>
@@ -127,16 +126,59 @@
 
     <!-- ===== Evals view ===== -->
     <div id="view-evals" class="view" hidden>
-      <section class="panel grow">
+      <!-- the models that have been evaluated, as the Datasets tab lists datasets -->
+      <section id="evals-panel" class="panel">
         <div class="panel-head">
-          <h2>Evals</h2>
           <div class="row-actions">
-            <button id="btn-eval-new" class="btn">+ New eval</button>
-            <button id="btn-evals-refresh" class="btn">↻ Refresh</button>
+            <button id="btn-eval-new" class="btn">+ Add</button>
+            <button id="btn-evals-refresh" class="btn" title="read the runs again">↻</button>
             <label class="muted auto-lbl" title="re-read the registry every 15 s (runs uploaded by the eval appear as they finish)"><input type="checkbox" id="evals-auto" checked> live</label>
           </div>
         </div>
-        <div id="evals-wrap" class="cards-list"></div>
+        <div id="eval-groups" class="dataset-list"></div>
+      </section>
+      <!-- that model's runs + the player -->
+      <section class="panel grow">
+        <div class="panel-head">
+          <h2 id="evals-title">Runs</h2>
+          <div class="row-actions" id="evals-toolbar" hidden>
+            <button id="btn-eval-assign" class="btn" title="say which model the selected runs (or, with none selected, all of these) were made with">Assign model…</button>
+            <button id="btn-eval-del-selected" class="btn danger" disabled>Delete selected</button>
+          </div>
+        </div>
+        <div class="episodes-wrap">
+          <div class="placeholder" id="evals-empty">No evals yet. A run made from a landmark's task appears here when it finishes; or add one with “+ Add”.</div>
+          <table id="evals-table" hidden>
+            <thead>
+              <tr>
+                <th class="c-sel"><input type="checkbox" id="evals-sel-all" /></th>
+                <th>run</th>
+                <th>task</th>
+                <th title="the landmark the robot stood at">at</th>
+                <th class="c-len">steps</th>
+                <th class="c-len">dur</th>
+                <th class="c-num" title="successes out of episodes, where the run recorded them">result</th>
+                <th class="c-rate">rating</th>
+                <th>notes</th>
+                <th class="c-op">operator</th>
+                <th class="c-act">actions</th>
+              </tr>
+            </thead>
+            <tbody id="evals-body"></tbody>
+          </table>
+        </div>
+        <div class="player">
+          <div class="player-head">
+            <span id="eval-player-label" class="muted">Player</span>
+            <div class="row-actions">
+              <button id="btn-eval-prev" class="btn tiny" title="previous run" disabled>◀ Prev</button>
+              <button id="btn-eval-next" class="btn tiny" title="next run" disabled>Next ▶</button>
+            </div>
+          </div>
+          <div id="eval-player-frame" class="player-frame">
+            <div class="placeholder">Press ▶ on a run to replay its video.</div>
+          </div>
+        </div>
       </section>
     </div><!-- /view-evals -->
 
@@ -192,8 +234,9 @@
       <section class="panel grow robot-view">
         <div class="routes-bar">
           <span id="folks-status" class="mono muted">—</span>
-          <input id="folks-url" class="robot-url mono" placeholder="http://192.168.11.80:8096/" title="Folks page URL (Enter to apply)">
-          <a id="folks-open" class="muted" href="#" target="_blank" title="open in its own tab">↗</a>
+          <!-- the address box and the open-in-a-tab link are kept for the script, not shown -->
+          <input id="folks-url" style="display:none">
+          <a id="folks-open" style="display:none" href="#"></a>
           <button id="folks-wink" class="btn" title="the face winks once">😉 wink</button>
         </div>
         <iframe id="folks-frame" class="robot-frame" title="folks" allow="fullscreen"></iframe>

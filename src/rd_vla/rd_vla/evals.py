@@ -8,6 +8,7 @@ from __future__ import annotations
 import glob
 import json
 import os
+import re
 import shutil
 import time
 from pathlib import Path
@@ -71,6 +72,7 @@ class EvalRegistry:
             for k in META_KEYS + RUN_KEYS:
                 if k in d:
                     item[k] = d[k]
+            item["model_key"] = self.model_key(item)
             out.append(item)
         out.sort(key=lambda x: x["created"], reverse=True)
         return out
@@ -115,15 +117,27 @@ class EvalRegistry:
 
     @staticmethod
     def model_key(meta: dict) -> str:
-        return str(meta.get("checkpoint") or meta.get("model") or "?")
+        """The model a run belongs under: <training run>@<step> where the checkpoint path names them (however the path
+        starts: the robot's, the GPU box's, or relative), else the model's name, else "unassigned"."""
+        for v in (meta.get("checkpoint"), meta.get("model")):
+            m = re.search(r"([^/]+)/checkpoints/([^/]+)", str(v or ""))
+            if m:
+                return f"{m.group(1)}@{m.group(2)}"
+        m = re.fullmatch(r"([^/@]+)@([^/]+)", str(meta.get("model") or ""))
+        if m:
+            return f"{m.group(1)}@{m.group(2)}"
+        name = str(meta.get("model") or "").rstrip("/").split("/")[-1]
+        return name or "unassigned"
 
     def groups(self) -> list[dict[str, Any]]:
-        """Per checkpoint: how many runs, mean rating, success rate over the rated runs."""
+        """Per model: how many runs, how many rated, mean rating, success rate, how many were assigned by hand."""
         groups: dict[str, dict] = {}
         for e in self.list():
-            key = self.model_key(e)
-            g = groups.setdefault(key, {"model": key, "runs": 0, "ratings": [], "episodes": 0, "successes": 0, "latest": 0})
+            key = e["model_key"]
+            g = groups.setdefault(key, {"model": key, "model_key": key, "runs": 0, "ratings": [], "episodes": 0, "successes": 0,
+                                        "latest": 0, "inferred": 0})
             g["runs"] += 1
+            g["inferred"] += 1 if e.get("checkpoint_inferred") else 0
             if e.get("rating"):
                 g["ratings"].append(float(e["rating"]))
             g["episodes"] += int(e.get("episodes") or 0)
@@ -132,8 +146,60 @@ class EvalRegistry:
         out = []
         for g in groups.values():
             r = g.pop("ratings")
+            g["rated"] = len(r)
             g["rating"] = round(sum(r) / len(r), 2) if r else None
             g["success_rate"] = round(g["successes"] / g["episodes"], 3) if g["episodes"] else None
             out.append(g)
         out.sort(key=lambda g: g["latest"], reverse=True)
         return out
+
+
+class RolloutVideo:
+    """What the cameras saw during a run, side by side, as rollout.mp4 beside the run's eval.json: the Evals tab plays
+    it. H.264 (avc1), which a browser plays. A video that cannot be written is given up on quietly: it must never
+    cost the run."""
+
+    def __init__(self, path, fps: float, height: int = 360, log=lambda s: None):
+        self.path, self.fps, self.height, self.log = str(path), float(fps), int(height), log
+        self._w = None
+        self._size = None
+        self._dead = False
+        self.frames = 0
+
+    def add(self, images: dict) -> None:
+        if self._dead:
+            return
+        try:
+            import cv2
+            import numpy as np
+            tiles = []
+            for name in sorted(images):
+                im = images[name]
+                h, w = im.shape[:2]
+                tiles.append(cv2.resize(im, (max(2, int(round(w * self.height / h)) // 2 * 2), self.height), interpolation=cv2.INTER_AREA))
+            frame = cv2.cvtColor(np.hstack(tiles), cv2.COLOR_RGB2BGR)
+            if self._w is None:
+                self._size = (frame.shape[1], frame.shape[0])
+                self._w = cv2.VideoWriter(self.path, cv2.VideoWriter_fourcc(*"avc1"), self.fps, self._size)
+                if not self._w.isOpened():
+                    raise RuntimeError("no H.264 writer in this OpenCV")
+            if (frame.shape[1], frame.shape[0]) != self._size:
+                frame = cv2.resize(frame, self._size)
+            self._w.write(frame)
+            self.frames += 1
+        except Exception as e:  # noqa: BLE001
+            self._dead = True
+            self.log(f"rollout video given up on: {e}")
+
+    def close(self) -> None:
+        if self._w is not None:
+            try:
+                self._w.release()
+            except Exception:  # noqa: BLE001
+                pass
+            self._w = None
+        if (self._dead or not self.frames) and os.path.exists(self.path):
+            try:
+                os.remove(self.path)             # half a file would show as a video that does not play
+            except OSError:
+                pass

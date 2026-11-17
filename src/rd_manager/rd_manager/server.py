@@ -13,6 +13,7 @@ import json
 import math
 import os
 import re
+import subprocess
 import threading
 import time
 from pathlib import Path
@@ -1411,13 +1412,52 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
         evals.delete(_guard(name))
         return {"ok": True}
 
+    def _browser_video(src: Path) -> Path:
+        """The run's video in a codec a browser plays. v1's rollouts are MPEG-4 part 2, which none does: those are
+        re-encoded to H.264 once, into .web/ beside them. Anything that fails serves the file as it is."""
+        try:
+            import cv2
+            cap = cv2.VideoCapture(str(src))
+            four = int(cap.get(cv2.CAP_PROP_FOURCC))
+            codec = "".join(chr((four >> (8 * i)) & 0xFF) for i in range(4)).lower()
+            if codec in ("avc1", "h264", "av01", "vp09", "vp90"):
+                cap.release()
+                return src
+            out = src.parent / ".web" / (src.stem + "_h264.mp4")
+            if out.exists() and out.stat().st_mtime >= src.stat().st_mtime:
+                cap.release()
+                return out
+            out.parent.mkdir(exist_ok=True)
+            cap.release()
+            tmp = out.with_suffix(".tmp.mp4")
+            r = subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(src), "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                                "-movflags", "+faststart", str(tmp)], capture_output=True, timeout=180)
+            if r.returncode != 0 or not tmp.exists():       # no libx264 in this ffmpeg (the robot's): OpenCV's own H.264 writer
+                cap = cv2.VideoCapture(str(src))
+                fps = cap.get(cv2.CAP_PROP_FPS) or 12.0
+                size = (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
+                w = cv2.VideoWriter(str(tmp), cv2.VideoWriter_fourcc(*"avc1"), fps, size)
+                if not w.isOpened():
+                    return src
+                while True:
+                    ok_, frame = cap.read()
+                    if not ok_:
+                        break
+                    w.write(frame)
+                w.release()
+                cap.release()
+            os.replace(tmp, out)
+            return out
+        except Exception:  # noqa: BLE001
+            return src
+
     @app.get("/api/evals/{name}/video")
     def api_eval_video(name: str):
         d = evals.path(_guard(name))
         vids = sorted(d.glob("*.mp4"))
         if not vids:
             raise HTTPException(404, "no video")
-        return FileResponse(vids[0], media_type="video/mp4")
+        return FileResponse(_browser_video(vids[0]), media_type="video/mp4")
 
     @app.get("/api/evals/{name}/csv")
     def api_eval_csv(name: str):
