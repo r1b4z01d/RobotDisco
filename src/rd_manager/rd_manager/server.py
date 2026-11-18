@@ -1390,6 +1390,12 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
     def api_eval_create(payload: dict = Body(...)):
         return _run(evals.create, _guard(str(payload.get("name", ""))), payload.get("fields") or payload)
 
+    @app.get("/api/evals/latest")
+    def api_eval_latest():
+        """The newest run, for the Stream Deck's pass / fail keys: {name, created, successes, judged, ended}, or {}."""
+        runs = evals.list()
+        return {k: runs[0].get(k) for k in ("name", "created", "successes", "judged", "ended", "task")} if runs else {}
+
     @app.get("/api/evals/groups")
     def api_eval_groups():
         return {"groups": evals.groups()}

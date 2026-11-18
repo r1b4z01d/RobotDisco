@@ -537,11 +537,14 @@ def test_stream_deck_is_the_robots_remote_while_teleop_is_off():
     from rd_vla.deck import Deck, Remote
     now, sent = [100.0], []
 
+    latest = {"name": "run_a", "successes": 0}
+
     def fetch(path, body=None, timeout=4.0):
         if body is not None:
             sent.append((path, body))
             return {}
         return {"/api/volume": {"volume": 50, "muted": False}, "/api/voice": {"mic_muted": False},
+                "/api/music": {"state": "stopped"}, "/api/evals/latest": latest,
                 "/api/landmarks": {"map": "home", "landmarks": [{"id": "left-bookshelf", "name": "Left Bookshelf", "map": "home"},
                                                                 {"id": "attic", "name": "Attic", "map": "other"}]}}[path]
     r = Remote("http://x", log=lambda s: None, fetch=fetch)
@@ -571,6 +574,20 @@ def test_stream_deck_is_the_robots_remote_while_teleop_is_off():
     assert sent[-1] == ("/api/landmarks/left-bookshelf/goto", {})
     press(10)                                            # a finger key does nothing here
     assert t.nudges == []
+    # a policy run finishes: PASS / FAIL come up for fifteen seconds; the run that was already there never asked
+    assert pad.labels[6] == "Left\nBookshelf"
+    latest.clear(); latest.update(name="run_b", successes=1)
+    r.refresh(); d.poll()
+    assert pad.labels[6] == "PASS" and pad.labels[8] == "FAIL" and pad.labels[7].startswith("EVAL\npass?")
+    press(8)
+    assert sent[-1] == ("/api/evals/run_b/annotate", {"episodes": 1, "successes": 0, "judged": True})
+    d.poll()
+    assert pad.labels[6] == "Left\nBookshelf"            # answered: the landmarks are back
+    latest.update(name="run_c", successes=0)
+    r.refresh(); d.poll()
+    assert pad.labels[6] == "PASS"
+    now[0] += 16.0; d.poll()
+    assert pad.labels[6] == "Left\nBookshelf"            # nobody answered: gone, the run keeps its own score
     press(0)
     assert t.commands == ["enable"]
     t.enabled = True; d.poll()                           # teleop on: its own keys

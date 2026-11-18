@@ -144,6 +144,8 @@ class StreamDeckPad:
 
 
 LANDMARK_KEYS = (6, 7, 8, 9, 10, 11)
+VERDICT_SECONDS = 15.0        # after a policy run: how long PASS / FAIL stay up on the idle keys
+VERDICT_KEYS = {6: 1, 8: 0}   # key -> successes; key 7 between them names the run
 MUSIC_KEYS = {12: "previous", 13: "toggle", 14: "next"}      # the bottom row's last three: previous, pause / play, next
 ARM_SECONDS = 3.0             # a landmark key drives the robot: the second press must follow the first this soon
 VOLUME_STEP = 10
@@ -157,6 +159,7 @@ class Remote:
         self.base, self.log = base.rstrip("/"), log
         self.fetch = fetch or self._http
         self.volume, self.muted, self.mic_muted, self.landmarks = None, False, False, []
+        self.eval = None                         # the newest eval run (the manager's /api/evals/latest); None until first heard
         self.music = "stopped"                    # playing / paused / stopped (the manager's /api/music)
         self._stop = threading.Event()
         self._thread = None
@@ -184,6 +187,7 @@ class Remote:
             here = d.get("map")
             self.landmarks = [(lm["id"], lm.get("name") or lm["id"]) for lm in d.get("landmarks", []) if lm.get("map") == here]
             self.music = self.fetch("/api/music").get("state", "stopped")
+            self.eval = self.fetch("/api/evals/latest")
         except Exception:  # noqa: BLE001  the manager is away: keep what was known
             pass
 
@@ -211,6 +215,8 @@ class Deck:
         self.t, self.flip, self.clock = teleop, flip, clock
         self.remote = remote                # the idle keys' line to the manager; None = teleop keys only (the old deck)
         self._armed = (None, 0.0)           # (landmark key, until): pressed once, waiting for the second press
+        self._eval_seen = None              # the newest run's name when the deck first heard of one: no keys for old runs
+        self._verdict = (None, 0.0)         # (run name, until): PASS / FAIL are up for it
         self._was_idle = None
         self.pad = pad
         self.events: queue.Queue = queue.Queue()
@@ -278,6 +284,13 @@ class Deck:
         r, now = self.remote, self.clock()
         armed_key, until = self._armed
         self._armed = (None, 0.0)                       # any other key disarms a landmark
+        run, v_until = self._verdict
+        if run and now < v_until and key in (6, 7, 8):
+            if key in VERDICT_KEYS:
+                won = VERDICT_KEYS[key]
+                r.send(f"eval {run}: {'pass' if won else 'fail'}", f"/api/evals/{run}/annotate", {"episodes": 1, "successes": won, "judged": True})
+                self._verdict = (None, 0.0)
+            return
         if key == 0:
             self.t.command("enable", {"on": True})
         elif key == 1:
@@ -321,10 +334,27 @@ class Deck:
         self._label(12, "PREV", bg=bg, fg=fg)
         self._label(13, "PAUSE" if r.music == "playing" else "PLAY", bg=(110, 50, 160) if r.music == "playing" else bg, fg=fg)
         self._label(14, "NEXT", bg=bg, fg=fg)
+        # a policy run has just finished: PASS / FAIL for it, over three landmark keys, for fifteen seconds
+        latest = (r.eval or {}).get("name") if r.eval is not None else None
+        if r.eval is not None and self._eval_seen is None:
+            self._eval_seen = latest or ""
+        elif latest and latest != self._eval_seen:
+            self._eval_seen, self._verdict = latest, (latest, now + VERDICT_SECONDS)
+        run, v_until = self._verdict
+        verdict = bool(run) and now < v_until
+        if run and not verdict:
+            self._verdict = (None, 0.0)
         armed_key, until = self._armed
         if armed_key is not None and now >= until:
             self._armed, armed_key = (None, 0.0), None
+        if verdict:
+            own = "pass" if (r.eval or {}).get("successes") else "fail"
+            self._label(6, "PASS", bg=(25, 120, 45))
+            self._label(7, f"EVAL\n{own}?\n{max(0, int(v_until - now))} s")
+            self._label(8, "FAIL", bg=(170, 30, 30))
         for i, key in enumerate(LANDMARK_KEYS):
+            if verdict and key in (6, 7, 8):
+                continue
             if i < len(r.landmarks):
                 name = r.landmarks[i][1]
                 if key == armed_key:
