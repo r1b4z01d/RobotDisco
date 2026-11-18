@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 META_KEYS = ("model", "checkpoint", "task", "episodes", "successes", "success_rate", "rating", "notes", "operator",
-             "checkpoint_inferred", "landmark")
+             "checkpoint_inferred", "landmark", "judged")      # judged: a person set pass / fail, over the run's own ending
 RUN_KEYS = ("steps", "duration_s", "exposure", "fps", "n_action_steps", "remote", "ended", "backend", "dataset")
 
 

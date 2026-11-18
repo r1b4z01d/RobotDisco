@@ -324,3 +324,10 @@ nav.views .nav-btn { white-space: nowrap; }
 #evals-table td:nth-child(2) { word-break: break-all; min-width: 200px; }
 #evals-table td:nth-child(3), #evals-table td:nth-child(4) { white-space: nowrap; }
 #evals-table .c-act { width: 190px; }
+/* a run's pass / fail: outlined while it is the run's own score, filled once a person has judged it */
+.verdict { min-width: 58px; background: transparent; }
+.verdict.pass { color: #7ed07e; border-color: #3f7a3f; }
+.verdict.fail { color: #e08080; border-color: #7a3f3f; }
+.verdict.pass.judged { background: #24602a; color: #eaffea; }
+.verdict.fail.judged { background: #6a2626; color: #ffecec; }
+#evals-table .c-num { width: 76px; }

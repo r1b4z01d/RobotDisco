@@ -944,8 +944,17 @@ function renderEvalRuns() {
     notes.addEventListener("change", () => annotateEval(ev.name, { notes: notes.value }, true));
     const oper = el("input", { class: "ep-input", value: ev.operator || "", placeholder: "operator" });
     oper.addEventListener("change", () => annotateEval(ev.name, { operator: oper.value }, true));
-    const result = ev.success_rate != null ? Math.round(ev.success_rate * 100) + "%"
-      : (ev.successes != null && ev.episodes ? `${ev.successes}/${ev.episodes}` : "—");
+    // pass / fail. A run scores itself by how it ended ("done" = the hand's end condition, which a grasp of thin air
+    // also meets); a click here is the operator's verdict and replaces that. Hand-entered evals of several episodes
+    // keep their n/m.
+    let result;
+    if ((ev.episodes || 1) > 1) result = el("span", { class: "mono" }, `${ev.successes || 0}/${ev.episodes}`);
+    else {
+      const pass = !!ev.successes;
+      result = el("button", { class: "btn tiny verdict " + (pass ? "pass" : "fail") + (ev.judged ? " judged" : ""),
+        title: (ev.judged ? "your verdict" : `scored by the run itself${ev.ended ? ": it ended “" + ev.ended + "”" : ""}`) + " — click to mark it " + (pass ? "failed" : "passed"),
+        onclick: () => annotateEval(ev.name, { episodes: 1, successes: pass ? 0 : 1, judged: true }, true) }, pass ? "✓ pass" : "✗ fail");
+    }
     const facts = [ev.checkpoint ? "checkpoint " + ev.checkpoint + (ev.checkpoint_inferred ? " (assigned by hand)" : "") : "no checkpoint recorded",
       ev.server ? "server " + ev.server : "", ev.fps != null ? ev.fps + " fps" : "", ev.n_action_steps != null ? "n-act " + ev.n_action_steps : "",
       ev.exposure && Object.keys(ev.exposure).length ? "exposure " + Object.values(ev.exposure).map(Math.round).join(" / ") : ""].filter(Boolean).join("\n");
@@ -1031,7 +1040,7 @@ async function annotateEval(name, fields, silent) {
   try {
     await post(`/api/evals/${encodeURIComponent(name)}/annotate`, fields);
     const e = state.evals.find((x) => x.name === name); if (e) Object.assign(e, fields);
-    if ("rating" in fields) loadEvals();   // the model's combined rating changes with it
+    if ("rating" in fields || "successes" in fields) loadEvals();   // the model's combined rating and success rate change with it
     if (!silent) ok("saved");
   } catch (e) { err(e); }
 }
