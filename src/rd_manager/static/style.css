@@ -331,3 +331,5 @@ nav.views .nav-btn { white-space: nowrap; }
 .verdict.pass.judged { background: #24602a; color: #eaffea; }
 .verdict.fail.judged { background: #6a2626; color: #ffecec; }
 #evals-table .c-num { width: 76px; }
+.badge-status.receiving { background: #c89a2b; color: #1a1400; }
+.card-top .badge-status + .badge-status { margin-left: 6px; }

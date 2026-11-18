@@ -50,6 +50,19 @@ def _train_config(run: str) -> dict:
     return {}
 
 
+def _arriving(run: str) -> bool:
+    """A checkpoint of this run is still being copied in: rsync's hidden temporary file is there, or the weights are
+    not yet. Its configs arrive after the weights, so until then the run would show without policy, dataset or steps."""
+    for d in glob.glob(os.path.join(run, "checkpoints", "*", "pretrained_model")):
+        try:
+            names = os.listdir(d)
+        except OSError:
+            continue
+        if any(n.startswith(".") for n in names) or "model.safetensors" not in names:
+            return True
+    return False
+
+
 def _checkpoints(run: str) -> list[str]:
     d = os.path.join(run, "checkpoints")
     if not os.path.isdir(d):
@@ -111,6 +124,8 @@ def list_models(repo_root: str) -> list[dict[str, Any]]:
         is_running = name in running
         done = bool(steps) and any(int(c) >= int(steps) for c in ckpts)
         status = "training" if is_running else ("done" if done else "stopped")
+        if not is_running and _arriving(run):
+            status = "receiving"          # the robot's side of "-> robot": the copy is still coming in
         row: dict[str, Any] = {
             "name": name,
             "policy": (cfg.get("policy") or {}).get("type"),

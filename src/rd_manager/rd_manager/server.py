@@ -1351,8 +1351,13 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
 
     @app.get("/api/models")
     def api_models():
-        return {"models": models_mod.list_models(str(Path(data_dir))), "runs": checkpoints.list_runs(outputs / "train"),
-                "served": str(checkpoints.served(outputs) or "")}
+        rows = models_mod.list_models(str(Path(data_dir)))
+        for m in rows:                      # "-> robot" pressed and the copy still running (minutes over Wi-Fi)
+            if m["name"] in pushes:
+                m["sending"] = {"step": pushes[m["name"]]["step"], "seconds": round(time.time() - pushes[m["name"]]["started"])}
+        return {"models": rows, "runs": checkpoints.list_runs(outputs / "train"), "served": str(checkpoints.served(outputs) or "")}
+
+    pushes: dict = {}                       # run name -> {step, started}: copies to the robot in progress
 
     @app.post("/api/models/{name}/rename")
     def api_model_rename(name: str, payload: dict = Body(...)):
@@ -1365,7 +1370,13 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
     @app.post("/api/models/{name}/push")
     def api_model_push(name: str, payload: dict = Body(default={})):
         """GPU box: copy a run's checkpoint to the robot and, unless {serve: false}, make it the one the robot serves."""
-        out = _run(models_mod.push_checkpoint, str(Path(data_dir)), _guard(name), payload.get("step") or None, payload.get("dest") or None)
+        if name in pushes:
+            raise HTTPException(409, f"{name} is already being sent to the robot")
+        pushes[name] = {"step": payload.get("step") or "newest", "started": time.time()}
+        try:
+            out = _run(models_mod.push_checkpoint, str(Path(data_dir)), _guard(name), payload.get("step") or None, payload.get("dest") or None)
+        finally:
+            pushes.pop(name, None)
         if payload.get("serve", True) and not payload.get("dest") and robot_url:
             try:
                 import urllib.request

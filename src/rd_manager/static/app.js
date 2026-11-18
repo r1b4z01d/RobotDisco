@@ -836,7 +836,9 @@ function modelCard(m) {
   const card = el("div", { class: "card" + (m.status === "training" ? " training" : "") },
     el("div", { class: "card-top" },
       el("span", { class: "card-name" }, m.name),
-      el("span", { class: "badge-status " + m.status }, m.status)),
+      el("span", { class: "badge-status " + m.status }, m.status === "receiving" ? "receiving…" : m.status),
+      m.sending ? el("span", { class: "badge-status training", title: "the checkpoint is being copied to the robot: about 900 MB, minutes over Wi-Fi" },
+        `sending to robot… ${Math.floor(m.sending.seconds / 60)}:${String(m.sending.seconds % 60).padStart(2, "0")}`) : ""),
     meta);
 
   if (m.status === "training") {
@@ -853,6 +855,10 @@ function modelCard(m) {
   const foot = el("div", { class: "card-foot" });
   if (m.status === "training") {
     foot.append(el("span", { class: "muted" }, "actions available once training finishes"));
+  } else if (m.status === "receiving") {
+    foot.append(el("span", { class: "muted" }, "arriving from the GPU box; its details and actions appear when the copy is complete"));
+  } else if (m.sending) {
+    foot.append(el("span", { class: "muted" }, "being sent to the robot; the other actions come back when it has arrived"));
   } else {
     foot.append(
       el("a", { class: "btn tiny", href: `/api/models/${encodeURIComponent(m.name)}/download` }, "⬇ download"),
@@ -869,9 +875,12 @@ async function doPushModel(m) {
     fields: [{ name: "step", label: `checkpoint (${steps.join(", ") || "none"}); empty = the newest`, type: "text", value: "" }] });
   if (!v) return;
   try {
-    const r = await post(`/api/models/${encodeURIComponent(m.name)}/push`, { step: v.step || null });
+    const sent = post(`/api/models/${encodeURIComponent(m.name)}/push`, { step: v.step || null });
+    setTimeout(loadModels, 600);            // the card shows "sending to robot…" while the copy runs
+    const r = await sent;
     ok(`${r.spec} copied to the robot` + (r.served ? " and served" : r.serve_error ? ` (not served: ${r.serve_error})` : ""));
   } catch (e) { err(e); }
+  loadModels();
 }
 async function doRenameModel(name) {
   const v = await modal({ title: `Rename model "${name}"`, submit: "Rename",
