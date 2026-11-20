@@ -54,6 +54,49 @@ def heart_frame(width: int, height: int, boxes, scale: float, color=(255, 0, 40)
     return bytes(buf)
 
 
+def tree_frame(width: int, height: int, boxes) -> bytes:
+    """RGB bytes (row-major) with a Christmas tree in each box: a star, three green tiers with lights, a trunk."""
+    GREEN, DARK, TRUNK, STAR = (0, 150, 30), (0, 95, 20), (110, 55, 15), (255, 200, 0)
+    LIGHTS = ((255, 0, 0), (255, 190, 0), (0, 90, 255), (255, 255, 255), (255, 0, 160))
+    buf = bytearray(width * height * 3)
+
+    def put(x, y, c):
+        if 0 <= x < width and 0 <= y < height:
+            buf[(y * width + x) * 3:(y * width + x) * 3 + 3] = bytes(c)
+
+    for (x0, y0, x1, y1) in boxes:
+        bw, bh = x1 - x0, y1 - y0
+        cx = x0 + bw // 2                       # the tree's axis is between columns cx - 1 and cx
+        top, base = y0 + int(bh * 0.17), y0 + int(bh * 0.80)      # the green runs from top to base
+        half_max = min(bw // 2 - 2, int((base - top) * 0.55))
+        tiers = 3
+        tier_h = (base - top) / tiers
+        inside = []
+        for y in range(top, base):
+            t = int((y - top) / tier_h)                           # which tier, 0 at the top
+            f = ((y - top) - t * tier_h) / tier_h                 # 0..1 down this tier
+            # each tier widens from a little over half the one above's base to its own base
+            lo, hi = half_max * (t + 0.25) / (tiers + 0.25) * 0.55, half_max * (t + 1.25) / (tiers + 0.25)
+            half = max(1, int(round(lo + (hi - lo) * f)))
+            for x in range(cx - half, cx + half):
+                put(x, y, DARK if (x + y) % 5 == 0 else GREEN)
+                inside.append((x, y, half))
+        # the lights: a fixed scatter, the same every time (no random: the two panels must match)
+        n = 0
+        for (x, y, half) in inside:
+            if half >= 3 and abs(x - cx) < half - 1 and (x * 7 + y * 13) % 23 == 0:
+                put(x, y, LIGHTS[n % len(LIGHTS)])
+                n += 1
+        tw = max(2, bw // 8)
+        for y in range(base, min(y1 - 1, base + max(3, bh // 9))):
+            for x in range(cx - tw // 2, cx - tw // 2 + tw):
+                put(x, y, TRUNK)
+        sy = top - 3                                             # the star: a plus with a bright centre
+        for dx, dy in ((0, 0), (-1, 0), (0, -1), (0, 1), (-2, 0), (1, 0), (0, -2), (-1, -2), (0, 2), (-1, 2), (-1, -1), (-1, 1)):
+            put(cx + dx, sy + dy, STAR)
+    return bytes(buf)
+
+
 class WledPanels:
     """Shows the heart on a WLED matrix; show_heart() returns at once, the frames go out on a thread."""
 
@@ -105,6 +148,28 @@ class WledPanels:
                 time.sleep(min(0.25, max(0.0, t0 + seconds - time.monotonic())))
             # a zero timeout ends realtime mode now: the WLED resumes its own effect
             sock.sendto(bytes([4, 0, 0, 0, 0, 0, 0]), (self.host, self.udp_port))
+        finally:
+            sock.close()
+
+    def hold(self, frame_of) -> None:
+        """Put a still picture up and leave it: frame_of(width, height, boxes) -> RGB bytes. A realtime timeout of 255
+        is the WLED's "until told otherwise", so nothing has to keep sending. release() gives the panels back."""
+        w, h, boxes = self.layout()
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            frame = frame_of(w, h, boxes)
+            for _ in range(3):                    # UDP: three times, a lost packet would leave a band of the old picture
+                self._send(sock, frame, timeout_s=255)
+                time.sleep(0.05)
+        finally:
+            sock.close()
+
+    def release(self) -> None:
+        """End realtime mode now: the WLED resumes its own effect."""
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            for _ in range(2):
+                sock.sendto(bytes([4, 0, 0, 0, 0, 0, 0]), (self.host, self.udp_port))
         finally:
             sock.close()
 

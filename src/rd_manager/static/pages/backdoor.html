@@ -85,6 +85,7 @@
   <button onclick="post('/api/people/any/wink', {})" title="the face winks once">😉</button>
   <button onclick="post('/api/panels/heart', {})" title="the heart on the side panels for a few seconds">❤️</button>
   <button id="fx-sound" class="mono" onclick="post('/api/panels/sound', {}).then((r) => this.classList.toggle('primary', !!(r && r.on)))" title="the side panels' sound-reactive effect on / off (off = back to what they were showing)">.ılılı.</button>
+  <button onclick="post('/api/panels/tree', {}).then((r) => this.classList.toggle('primary', !!(r && r.on)))" title="a Christmas tree on the side panels, on / off (off = back to their own effect)">🎄</button>
   <span id="speaking" class="mono muted"></span></div></div>
 <script>
 const $ = (id) => document.getElementById(id);

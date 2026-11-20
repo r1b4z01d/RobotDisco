@@ -1543,6 +1543,28 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
             panel_fx["heart"] = WledPanels(u.hostname, 3.0, http_port=u.port or 80)
         return {"ok": True, "started": panel_fx["heart"].show_heart()}
 
+    @app.post("/api/panels/tree")
+    def api_panels_tree(body: dict = Body(default={})):
+        """A Christmas tree on both panels, left up until switched off ({on: bool}; without it, the other of the two).
+        Off gives the panels back to their own effect."""
+        if not panels_url:
+            raise HTTPException(503, "no LED panels configured")
+        from urllib.parse import urlparse
+
+        from rd_face.wled_panels import WledPanels, tree_frame
+        on = (not panel_fx.get("tree")) if body.get("on") is None else bool(body["on"])
+        try:
+            u = urlparse(panels_url)
+            panels = WledPanels(u.hostname, http_port=u.port or 80)
+            if on:
+                panels.hold(tree_frame)
+            else:
+                panels.release()
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(503, f"the LED panels are not answering: {str(e)[:120]}")
+        panel_fx["tree"] = on
+        return {"ok": True, "on": on}
+
     @app.post("/api/panels/sound")
     def api_panels_sound(body: dict = Body(default={})):
         """The panels' sound-reactive effect ({effect}, Waverly by default: what they show while music plays) on, or,
