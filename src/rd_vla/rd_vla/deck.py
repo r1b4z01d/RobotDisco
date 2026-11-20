@@ -306,10 +306,11 @@ class Deck:
             r.mic_muted = not r.mic_muted
             r.send("microphone muted" if r.mic_muted else "microphone on", "/api/voice/mic", {"muted": r.mic_muted})
         elif key in MUSIC_KEYS:
-            if r.music != "stopped":
-                action = MUSIC_KEYS[key]
-                if action == "toggle":
-                    r.music = "paused" if r.music == "playing" else "playing"
+            action = MUSIC_KEYS[key]
+            if action == "toggle":                # always live: with nothing loaded the manager starts the music
+                r.music = "paused" if r.music == "playing" else "playing"
+                r.send("music play / pause", "/api/music/toggle", {})
+            elif r.music != "stopped":
                 r.send(f"music {action}", f"/api/music/{action}", {})
         elif key in LANDMARK_KEYS:
             i = LANDMARK_KEYS.index(key)
@@ -332,7 +333,7 @@ class Deck:
         on = r.music != "stopped"                    # dim until something is playing
         bg, fg = ((60, 30, 90), WHITE) if on else (DARK, (90, 90, 90))
         self._label(12, "PREV", bg=bg, fg=fg)
-        self._label(13, "PAUSE" if r.music == "playing" else "PLAY", bg=(110, 50, 160) if r.music == "playing" else bg, fg=fg)
+        self._label(13, "PAUSE" if r.music == "playing" else "PLAY", bg=(110, 50, 160) if r.music == "playing" else (60, 30, 90), fg=WHITE)
         self._label(14, "NEXT", bg=bg, fg=fg)
         # a policy run has just finished: PASS / FAIL for it, over three landmark keys, for fifteen seconds
         latest = (r.eval or {}).get("name") if r.eval is not None else None

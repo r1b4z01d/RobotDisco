@@ -1144,11 +1144,26 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
 
     @app.post("/api/music/{action}")
     def api_music_do(action: str):
-        """toggle (pause or carry on), next, previous."""
+        """toggle (pause, carry on, or start the music when nothing is loaded), next, previous."""
+        if action == "toggle":
+            try:
+                state = _music().status()["state"]
+            except Exception:  # noqa: BLE001  the player is not running: it starts with the first "play music"
+                state = "stopped"
+            if state == "stopped":
+                # nothing to carry on with: the voice assistant starts it, as "Robot Disco, play music" does (it
+                # starts the player, picks the songs and sets the panels)
+                if not ros_up():
+                    raise HTTPException(503, "the ROS bridge is not up")
+                sent = B.voice_text("play music")
+                if not sent.get("listeners"):
+                    raise HTTPException(503, "the voice assistant is not running, so nothing can start the music")
+                music["status"] = None
+                return {"available": True, "state": "starting", "artist": "", "title": ""}
         try:
             m = _music()
             if action == "toggle":
-                action = "pause" if m.status()["state"] == "playing" else "resume"
+                action = "pause" if state == "playing" else "resume"
             if action not in ("pause", "resume", "next", "previous"):
                 raise HTTPException(404, f"no music action {action!r}")
             getattr(m, action)()

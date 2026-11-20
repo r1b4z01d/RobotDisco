@@ -1239,7 +1239,7 @@ async function voiceEchoPoll() {
 // ---- music: what is playing and pause / next / previous, beside the say box
 function showMusic(m) {
   const on = !!(m && m.available && m.state !== "stopped");
-  const text = on ? [m.artist, m.title].filter(Boolean).join(" — ") + (m.state === "paused" ? "  (paused)" : "") : "no music";
+  const text = on ? [m.artist, m.title].filter(Boolean).join(" — ") + (m.state === "paused" ? "  (paused)" : "") : (m && m.state === "starting" ? "starting the music…" : "no music");
   const box = $("#music-now");
   if (box.dataset.text !== text) {          // only when the song changes: rewriting it every poll would restart the scroll
     box.dataset.text = text; box.title = text;
@@ -1250,15 +1250,25 @@ function showMusic(m) {
     if (over > 4) { run.style.setProperty("--over", `-${over}px`); run.style.animationDuration = `${Math.max(6, over / 18 + 5)}s`; run.classList.add("scroll"); }
   }
   $("#music-toggle").textContent = m && m.state === "playing" ? "⏸" : "▶";
-  for (const id of ["#music-prev", "#music-toggle", "#music-next"]) $(id).disabled = !on;
+  for (const id of ["#music-prev", "#music-next"]) $(id).disabled = !on;     // play is always live: with nothing loaded it starts the music
 }
+let musicHold = 0;          // until then "starting the music…" stays up while the player still says it is stopped
 async function pollMusic() {
   if (document.hidden || !$("#music-box").offsetParent) return;
-  try { showMusic(await (await fetch("/api/music")).json()); } catch (e) { showMusic(null); }
+  try {
+    const m = await (await fetch("/api/music")).json();
+    if (Date.now() < musicHold && m.state === "stopped") return;
+    musicHold = 0; showMusic(m);
+  } catch (e) { showMusic(null); }
 }
 for (const [id, action] of [["#music-prev", "previous"], ["#music-toggle", "toggle"], ["#music-next", "next"]])
   $(id).addEventListener("click", async () => {
-    try { const r = await fetch("/api/music/" + action, { method: "POST" }); if (r.ok) showMusic(await r.json()); } catch (e) { /* the next poll shows it */ }
+    try {
+      const r = await fetch("/api/music/" + action, { method: "POST" }), d = await r.json().catch(() => ({}));
+      if (!r.ok) return err(d.detail || `music: ${r.status}`);
+      showMusic(d);
+      if (d.state === "starting") musicHold = Date.now() + 12000;      // the player takes some seconds to come up
+    } catch (e) { /* the next poll shows it */ }
   });
 setInterval(pollMusic, 3000); pollMusic();
 
