@@ -21,6 +21,7 @@ HTTP_PORT = 80            # WLED JSON API
 # bytes of one: the last four LEDs of every packet stayed dark, four holes in a row wherever a packet ended inside
 # the heart (seen in its own live view, 2026-11-19). 480 keeps well inside that.
 DNRGB_MAX_LEDS = 480
+DDP_PORT = 4048
 
 
 def heart_coverage(u: float, v: float) -> bool:
@@ -54,11 +55,16 @@ def heart_frame(width: int, height: int, boxes, scale: float, color=(255, 0, 40)
     return bytes(buf)
 
 
-def tree_frame(width: int, height: int, boxes) -> bytes:
-    """RGB bytes (row-major) with a Christmas tree in each box: a star, three green tiers with lights, a trunk."""
-    GREEN, DARK, TRUNK, STAR = (0, 150, 30), (0, 95, 20), (110, 55, 15), (255, 200, 0)
-    LIGHTS = ((255, 0, 0), (255, 190, 0), (0, 90, 255), (255, 255, 255), (255, 0, 160))
+TREE_GREEN, TREE_DARK, TREE_TRUNK, TREE_STAR = (0, 150, 30), (0, 95, 20), (110, 55, 15), (255, 200, 0)
+TREE_LIGHTS = ((255, 0, 0), (255, 190, 0), (0, 90, 255), (255, 255, 255), (255, 0, 160))
+
+
+def tree_parts(width: int, height: int, boxes):
+    """A Christmas tree in each box, the full height of it: (still, lights, star). `still` is the RGB frame of what
+    never changes (the green tiers and the trunk); lights is [(pixel index, colour, group)], group 0..2 by colour, so
+    each group can follow a different part of the music; star is the star's pixel indices."""
     buf = bytearray(width * height * 3)
+    lights, star = [], []
 
     def put(x, y, c):
         if 0 <= x < width and 0 <= y < height:
@@ -67,7 +73,8 @@ def tree_frame(width: int, height: int, boxes) -> bytes:
     for (x0, y0, x1, y1) in boxes:
         bw, bh = x1 - x0, y1 - y0
         cx = x0 + bw // 2                       # the tree's axis is between columns cx - 1 and cx
-        top, base = y0 + max(6, int(bh * 0.13)), y0 + int(bh * 0.88)   # the green runs from top to base: as big as the panel takes
+        sy = y0 + 2                             # the star's centre: it takes rows y0 .. y0 + 4
+        top, base = y0 + 5, y1 - max(4, bh // 10)       # the green runs from top to base, the trunk from there to the last row
         half_max = bw // 2 - 1
         tiers = 3
         tier_h = (base - top) / tiers
@@ -79,24 +86,106 @@ def tree_frame(width: int, height: int, boxes) -> bytes:
             lo, hi = half_max * (t + 0.25) / (tiers + 0.25) * 0.55, half_max * (t + 1.25) / (tiers + 0.25)
             half = max(1, int(round(lo + (hi - lo) * f)))
             for x in range(cx - half, cx + half):
-                put(x, y, DARK if (x + y) % 5 == 0 else GREEN)
+                put(x, y, TREE_DARK if (x + y) % 5 == 0 else TREE_GREEN)
                 inside.append((x, y, half))
         # the lights: a fixed scatter, the same every time (no random: the two panels must match)
         n = 0
         for (x, y, half) in inside:
             if half >= 3 and abs(x - cx) < half - 1 and (x * 7 + y * 13) % 23 == 0:
-                put(x, y, LIGHTS[n % len(LIGHTS)])
+                lights.append((y * width + x, TREE_LIGHTS[n % len(TREE_LIGHTS)], n % 3))
                 n += 1
         tw = max(2, bw // 8)
-        for y in range(base, y1 - 1):
+        for y in range(base, y1):
             for x in range(cx - tw // 2, cx - tw // 2 + tw):
-                put(x, y, TRUNK)
-        sy = top - 3                                             # the star: a fat plus, five wide and five tall
-        for dx in range(-3, 3):
+                put(x, y, TREE_TRUNK)
+        for dx in range(-3, 3):                                   # the star: a small diamond
             for dy in range(-2, 3):
                 if dx in (-1, 0) or dy == 0 or (abs(dx + 0.5) < 2 and abs(dy) < 2):
-                    put(cx + dx, sy + dy, STAR)
+                    x, y = cx + dx, sy + dy
+                    if x0 <= x < x1 and y0 <= y < y1:
+                        star.append(y * width + x)
+    return bytes(buf), lights, star
+
+
+def tree_frame(width: int, height: int, boxes, levels=(1.0, 1.0, 1.0), star_level: float = 1.0) -> bytes:
+    """The tree's RGB frame with each group of lights at its level (0..1) and the star at star_level."""
+    still, lights, star = tree_parts(width, height, boxes)
+    return _tree_lit(still, lights, star, levels, star_level)
+
+
+def _tree_lit(still: bytes, lights, star, levels, star_level: float) -> bytes:
+    buf = bytearray(still)
+    for i, colour, group in lights:
+        k = max(0.0, min(1.0, levels[group]))
+        buf[i * 3:i * 3 + 3] = bytes(int(c * k) for c in colour)
+    k = max(0.0, min(1.0, star_level))
+    lit = bytes(int(c * k) for c in TREE_STAR)
+    for i in star:
+        buf[i * 3:i * 3 + 3] = lit
     return bytes(buf)
+
+
+SOUND_SYNC_GROUP, SOUND_SYNC_PORT = "239.0.0.1", 11988     # the WLED's "UDP Sound Sync": what its microphone hears, 20 a second
+
+
+class MicLevels:
+    """How loud the bass, the middle and the treble are, each 0..1 against its own recent peak, from the WLED's sound
+    sync packets (its microphone's 16 frequency channels). With no sound for a while every level rests at `rest`."""
+
+    BANDS = ((0, 4), (4, 10), (10, 16))        # which of the 16 channels: bass, middle, treble
+
+    def __init__(self, rest: float = 0.6):
+        self.rest = rest
+        self.peaks = [8.0, 8.0, 8.0]           # a floor: room noise must not be stretched to full brightness
+        self.levels = [rest, rest, rest]
+        self.quiet = 0
+
+    def feed(self, packet: bytes):
+        if len(packet) < 34 or packet[:5] != b"00002":
+            return self.levels
+        bins = packet[18:34]
+        if max(bins) < 6:                                        # silence: glow steadily
+            self.quiet += 1
+            if self.quiet > 20:
+                self.levels = [lv + (self.rest - lv) * 0.15 for lv in self.levels]
+                return self.levels
+        else:
+            self.quiet = 0
+        for b, (lo, hi) in enumerate(self.BANDS):
+            e = sum(bins[lo:hi]) / float(hi - lo)
+            self.peaks[b] = max(e, self.peaks[b] * 0.995, 8.0)   # the band's own loudest lately: an automatic gain
+            v = (e / self.peaks[b]) ** 1.5                       # the exponent keeps the lights dark between beats
+            self.levels[b] = v if v > self.levels[b] else self.levels[b] * 0.6 + v * 0.4     # up at once, down slower
+        return self.levels
+
+
+class WledMic:
+    """The WLED's microphone as the robot hears of it: its sound sync packets (multicast). read() gives the newest
+    one, or b"" when none has come since the last call."""
+
+    def __init__(self, host: str):
+        probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            probe.connect((host, SOUND_SYNC_PORT))               # which of this machine's addresses faces the WLED
+            mine = probe.getsockname()[0]
+        finally:
+            probe.close()
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.sock.bind(("", SOUND_SYNC_PORT))
+        self.sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton(SOUND_SYNC_GROUP) + socket.inet_aton(mine))
+        self.sock.setblocking(False)
+
+    def read(self) -> bytes:
+        newest = b""
+        while True:
+            try:
+                newest = self.sock.recv(256)
+            except (BlockingIOError, OSError):
+                return newest
+
+    def close(self) -> None:
+        self.sock.close()
 
 
 class WledPanels:
@@ -163,6 +252,51 @@ class WledPanels:
             for _ in range(3):                    # UDP: three times, a lost packet would leave a band of the old picture
                 self._send(sock, frame, timeout_s=255)
                 time.sleep(0.05)
+        finally:
+            sock.close()
+
+    def sound_sync(self, on: bool = True) -> None:
+        """The WLED sends what its microphone hears (UDP Sound Sync, send mode) or stops. A saved setting of its."""
+        want = 1 if on else 0
+        with urllib.request.urlopen(f"http://{self.host}:{self.http_port}/json/cfg", timeout=3.0) as r:
+            now = (json.loads(r.read()).get("um", {}).get("AudioReactive", {}).get("sync", {}) or {}).get("mode")
+        if now != want:
+            req = urllib.request.Request(f"http://{self.host}:{self.http_port}/json/cfg", method="POST", headers={"Content-Type": "application/json"},
+                                         data=json.dumps({"um": {"AudioReactive": {"sync": {"mode": want}}}}).encode())
+            urllib.request.urlopen(req, timeout=4.0).read()
+
+    def _send_ddp(self, sock, rgb: bytes) -> None:
+        """One frame by DDP (:4048). Unlike DNRGB, the WLED keeps its microphone running while DDP pixels arrive
+        (it suspends sound processing in its "UDP" realtime mode: seen in its info page, 2026-11-20)."""
+        n, off, seq = len(rgb), 0, 1
+        while off < n:
+            chunk = rgb[off:off + 1440]
+            last = off + len(chunk) >= n
+            sock.sendto(bytes([0x41 if last else 0x40, seq & 15, 0x01, 1]) + off.to_bytes(4, "big") + len(chunk).to_bytes(2, "big") + chunk,
+                        (self.host, DDP_PORT))
+            off += len(chunk)
+            seq += 1
+
+    def tree_show(self, stop, audio=None, fps: float = 20.0) -> None:
+        """The tree until stop (a threading.Event) is set, its lights and star following the music: `audio` is a
+        callable returning the WLED's newest sound sync packet (or b"" for none: WledMic.read); without one the
+        lights are steady. Blocks; run it on a thread. The panels are given back at the end."""
+        w, h, boxes = self.layout()
+        still, lights, star = tree_parts(w, h, boxes)
+        music = MicLevels()
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            last, last_sent = None, 0.0
+            while not stop.is_set():
+                t0 = time.monotonic()
+                pcm = audio() if audio else b""
+                bass, mid, treble = music.feed(pcm) if pcm else music.levels
+                frame = _tree_lit(still, lights, star, (0.08 + 0.92 * bass, 0.08 + 0.92 * mid, 0.08 + 0.92 * treble), 0.35 + 0.65 * bass)
+                if frame != last or t0 - last_sent > 0.5:        # an unchanged picture is only kept alive
+                    self._send_ddp(sock, frame)
+                    last, last_sent = frame, t0
+                stop.wait(max(0.0, 1.0 / fps - (time.monotonic() - t0)))
+            sock.sendto(bytes([4, 0, 0, 0, 0, 0, 0]), (self.host, self.udp_port))
         finally:
             sock.close()
 

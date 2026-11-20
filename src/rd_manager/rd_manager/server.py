@@ -1545,25 +1545,49 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
 
     @app.post("/api/panels/tree")
     def api_panels_tree(body: dict = Body(default={})):
-        """A Christmas tree on both panels, left up until switched off ({on: bool}; without it, the other of the two).
-        Off gives the panels back to their own effect."""
+        """A Christmas tree on both panels until switched off ({on: bool}; without it, the other of the two), its
+        lights and star following what the panels' own microphone hears. Off gives the panels back to their effect."""
         if not panels_url:
             raise HTTPException(503, "no LED panels configured")
         from urllib.parse import urlparse
 
-        from rd_face.wled_panels import WledPanels, tree_frame
-        on = (not panel_fx.get("tree")) if body.get("on") is None else bool(body["on"])
-        try:
-            u = urlparse(panels_url)
-            panels = WledPanels(u.hostname, http_port=u.port or 80)
-            if on:
-                panels.hold(tree_frame)
-            else:
-                panels.release()
-        except Exception as e:  # noqa: BLE001
-            raise HTTPException(503, f"the LED panels are not answering: {str(e)[:120]}")
-        panel_fx["tree"] = on
-        return {"ok": True, "on": on}
+        from rd_face.wled_panels import WledMic, WledPanels
+        running = panel_fx.get("tree")
+        on = (not running) if body.get("on") is None else bool(body["on"])
+        if running:                                    # always stop the one that is up: on again restarts it cleanly
+            running["stop"].set()
+            running["thread"].join(timeout=3)
+            panel_fx["tree"] = None
+        audio_ok = False
+        if on:
+            try:
+                u = urlparse(panels_url)
+                panels = WledPanels(u.hostname, http_port=u.port or 80)
+                panels.layout()
+            except Exception as e:  # noqa: BLE001
+                raise HTTPException(503, f"the LED panels are not answering: {str(e)[:120]}")
+            read = close = None
+            try:
+                panels.sound_sync(True)               # the WLED sends what its microphone hears
+                mic = WledMic(u.hostname)
+                read, close = mic.read, mic.close
+            except Exception:  # noqa: BLE001  no microphone data: the lights are steady
+                pass
+            audio_ok = read is not None
+            stop = threading.Event()
+
+            def run():
+                try:
+                    panels.tree_show(stop, read)
+                except Exception:  # noqa: BLE001  decoration: never the console's problem
+                    pass
+                finally:
+                    if close:
+                        close()
+            th = threading.Thread(target=run, daemon=True, name="panels-tree")
+            th.start()
+            panel_fx["tree"] = {"stop": stop, "thread": th}
+        return {"ok": True, "on": on, "follows_music": audio_ok}
 
     @app.post("/api/panels/sound")
     def api_panels_sound(body: dict = Body(default={})):
