@@ -1226,14 +1226,6 @@ async function voiceEchoPoll() {
   if (Date.now() > voiceEcho.until) { clearInterval(voiceEcho.timer); voiceEcho.timer = null; return; }
   try { voiceEchoRender(await api("/api/voice")); } catch (e) { /* keep the last echo */ }
 }
-// ---- beside the say box: a wink, the heart on the side panels, their sound-reactive effect on / off
-$("#fx-wink").addEventListener("click", async () => { try { await post("/api/people/any/wink", {}); } catch (e) { err(e); } });
-$("#fx-heart").addEventListener("click", async () => { try { await post("/api/panels/heart", {}); } catch (e) { err(e); } });
-$("#fx-sound").addEventListener("click", async () => {
-  try { const r = await post("/api/panels/sound", {}); $("#fx-sound").classList.toggle("primary", !!r.on); ok(r.on ? `panels: ${r.effect}` : "panels: back to their own effect"); }
-  catch (e) { err(e); }
-});
-
 // ---- music: what is playing and pause / next / previous, beside the say box
 function showMusic(m) {
   const on = !!(m && m.available && m.state !== "stopped");
