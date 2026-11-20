@@ -788,7 +788,7 @@ $("#btn-lm-refresh").addEventListener("click", () => { lmS.sig = ""; lmRefresh()
 $("#lm-name").addEventListener("keydown", (e) => { if (e.key === "Enter") lmAdd(); });
 
 // ---- view switching (Datasets / Models / Evals) ----
-const VIEWS = ["datasets", "models", "evals", "robot", "routes", "landmarks", "map", "maps", "services", "folks"];
+const VIEWS = ["datasets", "models", "evals", "robot", "routes", "landmarks", "map", "maps", "services", "folks", "backdoor"];
 function showView(v) {
   state.view = v;
   VIEWS.forEach((name) => { $("#view-" + name).hidden = name !== v; });
@@ -803,6 +803,7 @@ function showView(v) {
   if (v === "folks") loadFolksView();
   if (v === "landmarks") loadLandmarksView();
   if (v === "maps") loadMapsView();
+  if (v === "backdoor") { const fr = $("#backdoor-frame"); if (!fr.getAttribute("src")) fr.src = "/backdoor/"; }
   // the header's right side belongs to the robot page while that view is up; the dataset
   // monitor / refresh controls only make sense on the dataset views
   if (location.hash !== "#" + v) location.hash = "#" + v;
@@ -1230,7 +1231,7 @@ async function voiceEchoPoll() {
 {
   const brand = document.querySelector(".brand"); let hold = null;
   const cancel = () => { clearTimeout(hold); hold = null; };
-  brand.addEventListener("pointerdown", (e) => { if (e.button) return; cancel(); hold = setTimeout(() => { location.href = "/backdoor/"; }, 5000); });
+  brand.addEventListener("pointerdown", (e) => { if (e.button) return; cancel(); hold = setTimeout(() => showView("backdoor"), 5000); });
   for (const ev of ["pointerup", "pointerleave", "pointercancel"]) brand.addEventListener(ev, cancel);
   brand.addEventListener("contextmenu", (e) => e.preventDefault());      // a long press on a touch screen
 }
