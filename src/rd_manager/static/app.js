@@ -1239,8 +1239,16 @@ async function voiceEchoPoll() {
 // ---- music: what is playing and pause / next / previous, beside the say box
 function showMusic(m) {
   const on = !!(m && m.available && m.state !== "stopped");
-  $("#music-now").textContent = on ? [m.artist, m.title].filter(Boolean).join(" — ") + (m.state === "paused" ? "  (paused)" : "") : "no music";
-  $("#music-now").title = $("#music-now").textContent;
+  const text = on ? [m.artist, m.title].filter(Boolean).join(" — ") + (m.state === "paused" ? "  (paused)" : "") : "no music";
+  const box = $("#music-now");
+  if (box.dataset.text !== text) {          // only when the song changes: rewriting it every poll would restart the scroll
+    box.dataset.text = text; box.title = text;
+    const run = el("span", { class: "music-run" }, text);
+    box.replaceChildren(run);
+    // too long for the box: it slides to its end and back, at a steady reading pace
+    const over = run.scrollWidth - box.clientWidth;
+    if (over > 4) { run.style.setProperty("--over", `-${over}px`); run.style.animationDuration = `${Math.max(6, over / 18 + 5)}s`; run.classList.add("scroll"); }
+  }
   $("#music-toggle").textContent = m && m.state === "playing" ? "⏸" : "▶";
   for (const id of ["#music-prev", "#music-toggle", "#music-next"]) $(id).disabled = !on;
 }
