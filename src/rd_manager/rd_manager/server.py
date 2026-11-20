@@ -140,23 +140,34 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
             html = html.replace(f'"/{name}"', f'"/{name}?v={int((STATIC / name).stat().st_mtime)}"')
         return html
 
+    def _page(*parts: str) -> str:
+        """A page from static/pages with every script and stylesheet it loads from /static stamped with that file's
+        modification time, as the index is: with the fixed ?v=1 the arm page kept an old hand.js in the browser after
+        the fingers were remapped (2026-11-20)."""
+        html = (STATIC / "pages").joinpath(*parts).read_text()
+
+        def stamp(m):
+            f = STATIC / m.group(2)
+            return f'{m.group(1)}/static/{m.group(2)}?v={int(f.stat().st_mtime)}"' if f.is_file() else m.group(0)
+        return re.sub(r'((?:src|href)=")/static/([^"?]+\.(?:js|css))(?:\?v=[^"]*)?"', stamp, html)
+
     @app.get("/live/", response_class=HTMLResponse)
     @app.get("/live", response_class=HTMLResponse)
     def live_page():
-        return (STATIC / "pages" / "live.html").read_text()
+        return _page("live.html")
 
     @app.get("/live/3d", response_class=HTMLResponse)
     @app.get("/3d", response_class=HTMLResponse)
     def map3d_page():
-        return (STATIC / "pages" / "map3d.html").read_text()
+        return _page("map3d.html")
 
     @app.get("/arm/", response_class=HTMLResponse)
     def arm_page():
-        return (STATIC / "pages" / "arm.html").read_text()
+        return _page("arm.html")
 
     @app.get("/teleop/", response_class=HTMLResponse)
     def teleop_page_html():
-        return (STATIC / "pages" / "robot" / "index.html").read_text()
+        return _page("robot", "index.html")
 
     @app.get("/folks/", response_class=HTMLResponse)
     def folks_page():
