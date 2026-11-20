@@ -304,7 +304,7 @@
 
     <div id="view-map" class="view">
       <section class="panel grow robot-view">
-        <div class="routes-bar">
+        <div class="routes-bar" style="display:none"><!-- hidden (Bryan, 2026-11-20): the live / sim switch, the map line, the open link. Their elements stay for the script; the say box moved to the Backdoor -->
           <span class="source-switch" title="which map this tab shows: the robot's, or a simulation — choosing sim starts route_editor.py --sim on the computer running this manager">
             <label><input type="radio" name="map-source" value="live"> live</label>
             <label><input type="radio" name="map-source" value="sim"> sim</label>

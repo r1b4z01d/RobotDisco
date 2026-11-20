@@ -79,7 +79,9 @@
   </div>
   <pre id="policy" class="mono"></pre>
 </div>
-<div class="card"><div class="row"><b>Say</b> <input id="say" placeholder="something to say" size="40"><button onclick="post('/api/say', {text: $('say').value})">Say</button>
+<div class="card"><div class="row"><b>Ask</b> <form onsubmit="ask(event)" style="display:contents"><input id="ask" placeholder="what time is it" size="40" autocomplete="off" spellcheck="false" title="typed text reaches the voice assistant as if it had been heard, with the wake phrase already in front"><button type="submit">Say to robot</button></form>
+  <span id="ask-echo" class="mono muted"></span></div>
+<div class="row"><b>Say</b> <input id="say" placeholder="something to say" size="40"><button onclick="post('/api/say', {text: $('say').value})">Say</button>
   <button onclick="post('/api/people/any/wink', {})" title="the face winks once">😉</button>
   <button onclick="post('/api/panels/heart', {})" title="the heart on the side panels for a few seconds">❤️</button>
   <button id="fx-sound" class="mono" onclick="post('/api/panels/sound', {}).then((r) => this.classList.toggle('primary', !!(r && r.on)))" title="the side panels' sound-reactive effect on / off (off = back to what they were showing)">.ılılı.</button>
@@ -87,6 +89,21 @@
 <script>
 const $ = (id) => document.getElementById(id);
 async function post(path, body) { const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); const d = await r.json().catch(() => ({})); if (!r.ok) alert(d.detail || r.status); return d; }
+let askTimer = null;
+async function ask(ev) {
+  ev.preventDefault();
+  const text = $("ask").value.trim(); if (!text) return;
+  const v0 = await fetch("/api/voice").then((r) => r.json()).catch(() => ({}));
+  const r = await post("/api/voice/text", { text });
+  $("ask").value = "";
+  $("ask-echo").textContent = r.listeners ? `sent: ${text}` : "sent, but the voice assistant is not listening (Services tab)";
+  clearInterval(askTimer); const until = Date.now() + 25000;
+  askTimer = setInterval(async () => {
+    const v = await fetch("/api/voice").then((x) => x.json()).catch(() => ({}));
+    if (v.reply && (v.reply_t || 0) > (v0.reply_t || 0)) { $("ask-echo").textContent = `“${text}” → ${v.reply}`; clearInterval(askTimer); }
+    else if (Date.now() > until) clearInterval(askTimer);
+  }, 1000);
+}
 async function power(cmd) { const d = await post("/api/arm/power", { command: cmd }); $("arm-status").textContent = `${d.robot_mode || "?"} / ${d.safety_status || "?"} — ${d.message || ""}`; }
 async function runPolicy() { await post("/api/policy/run", { task: $("task").value, checkpoint: $("ckpt").value, max_seconds: +$("seconds").value, done_when: $("done").value, record: $("record").checked }); }
 async function refresh() {
