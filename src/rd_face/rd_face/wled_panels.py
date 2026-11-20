@@ -67,8 +67,8 @@ def tree_frame(width: int, height: int, boxes) -> bytes:
     for (x0, y0, x1, y1) in boxes:
         bw, bh = x1 - x0, y1 - y0
         cx = x0 + bw // 2                       # the tree's axis is between columns cx - 1 and cx
-        top, base = y0 + int(bh * 0.17), y0 + int(bh * 0.80)      # the green runs from top to base
-        half_max = min(bw // 2 - 2, int((base - top) * 0.55))
+        top, base = y0 + max(6, int(bh * 0.13)), y0 + int(bh * 0.88)   # the green runs from top to base: as big as the panel takes
+        half_max = bw // 2 - 1
         tiers = 3
         tier_h = (base - top) / tiers
         inside = []
@@ -88,12 +88,14 @@ def tree_frame(width: int, height: int, boxes) -> bytes:
                 put(x, y, LIGHTS[n % len(LIGHTS)])
                 n += 1
         tw = max(2, bw // 8)
-        for y in range(base, min(y1 - 1, base + max(3, bh // 9))):
+        for y in range(base, y1 - 1):
             for x in range(cx - tw // 2, cx - tw // 2 + tw):
                 put(x, y, TRUNK)
-        sy = top - 3                                             # the star: a plus with a bright centre
-        for dx, dy in ((0, 0), (-1, 0), (0, -1), (0, 1), (-2, 0), (1, 0), (0, -2), (-1, -2), (0, 2), (-1, 2), (-1, -1), (-1, 1)):
-            put(cx + dx, sy + dy, STAR)
+        sy = top - 3                                             # the star: a fat plus, five wide and five tall
+        for dx in range(-3, 3):
+            for dy in range(-2, 3):
+                if dx in (-1, 0) or dy == 0 or (abs(dx + 0.5) < 2 and abs(dy) < 2):
+                    put(cx + dx, sy + dy, STAR)
     return bytes(buf)
 
 
