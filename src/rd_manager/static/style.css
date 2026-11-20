@@ -333,3 +333,4 @@ nav.views .nav-btn { white-space: nowrap; }
 #evals-table .c-num { width: 76px; }
 .badge-status.receiving { background: #c89a2b; color: #1a1400; }
 .card-top .badge-status + .badge-status { margin-left: 6px; }
+.brand { user-select: none; -webkit-user-select: none; touch-action: none; }

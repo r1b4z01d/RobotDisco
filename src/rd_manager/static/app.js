@@ -1226,6 +1226,15 @@ async function voiceEchoPoll() {
   if (Date.now() > voiceEcho.until) { clearInterval(voiceEcho.timer); voiceEcho.timer = null; return; }
   try { voiceEchoRender(await api("/api/voice")); } catch (e) { /* keep the last echo */ }
 }
+// ---- the way in to the Backdoor (the dev tools page): hold the "Robot Disco V5" title for five seconds
+{
+  const brand = document.querySelector(".brand"); let hold = null;
+  const cancel = () => { clearTimeout(hold); hold = null; };
+  brand.addEventListener("pointerdown", (e) => { if (e.button) return; cancel(); hold = setTimeout(() => { location.href = "/backdoor/"; }, 5000); });
+  for (const ev of ["pointerup", "pointerleave", "pointercancel"]) brand.addEventListener(ev, cancel);
+  brand.addEventListener("contextmenu", (e) => e.preventDefault());      // a long press on a touch screen
+}
+
 // ---- music: what is playing and pause / next / previous, beside the say box
 function showMusic(m) {
   const on = !!(m && m.available && m.state !== "stopped");
