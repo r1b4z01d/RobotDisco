@@ -182,6 +182,10 @@ def test_training_runs_under_the_lerobot_python_and_its_own_script(tmp_path, mon
     monkeypatch.setenv("RD_VLA_PYTHON", "/somewhere/vla/bin/python")
     monkeypatch.setattr(models, "_running_runs", lambda: set())
     r = models.start_training(str(tmp_path), str(tmp_path / "outputs" / "datasets"), "demo", "smolvla", 30, 4, 15, dry_run=True)
+    # GR00T: only what fits the 24 GB card (the action head's diffusion model frozen, batch 16, fewer checkpoints)
+    g = models.start_training(str(tmp_path), str(tmp_path / "outputs" / "datasets"), "demo", "groot", 20000, 64, 2500, dry_run=True)
+    assert g["batch_size"] == 16 and g["save_freq"] == 5000 and len(g["notes"]) == 2 and g["run"] == "demo_groot"
+    assert "--policy.type=groot" in g["command"] and "--policy.tune_diffusion_model=false" in g["command"]
     cmd = r["command"].split()
     assert cmd[0] == "/somewhere/vla/bin/python"                      # not the manager's own interpreter, which has no lerobot
     script = Path(cmd[1])

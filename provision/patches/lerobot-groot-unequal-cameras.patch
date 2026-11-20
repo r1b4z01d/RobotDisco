@@ -1,0 +1,30 @@
+--- a/lerobot/policies/groot/processor_groot.py
++++ b/lerobot/policies/groot/processor_groot.py
+@@ -276,7 +276,26 @@
+         if not img_keys and OBS_IMAGE in obs:
+             img_keys = [OBS_IMAGE]
+         if img_keys:
+-            cams = [_to_uint8_np_bhwc(obs[k]) for k in img_keys]
++            # --- local patch (Robot Disco GPU box, 2026-11-19): the cameras are not one size here (wrist 540x960, the
++            # others 540x540) and np.stack below needs them equal. Each is padded to a square with black bars and
++            # brought to the smallest square among them, so no view is stretched. Original file: .orig beside this.
++            tensors = [obs[k] for k in img_keys]
++            if len({tuple(t.shape[-2:]) for t in tensors}) > 1:
++                import torch.nn.functional as _F
++                side = min(max(t.shape[-2:]) for t in tensors)
++                fitted = []
++                for t in tensors:
++                    h, w = t.shape[-2:]
++                    m = max(h, w)
++                    t = _F.pad(t, ((m - w) // 2, m - w - (m - w) // 2, (m - h) // 2, m - h - (m - h) // 2))
++                    if m != side:
++                        was_int = not t.dtype.is_floating_point
++                        t = _F.interpolate(t.float(), size=(side, side), mode="bilinear", antialias=True, align_corners=False)
++                        t = t.round().clamp(0, 255).to(torch.uint8) if was_int else t
++                    fitted.append(t)
++                tensors = fitted
++            cams = [_to_uint8_np_bhwc(t) for t in tensors]
++            # ---
+             video = np.stack(cams, axis=1)  # (B, V, H, W, C)
+             video = np.expand_dims(video, axis=1)  # (B, 1, V, H, W, C)
+             # GR00T validates that video.shape[3] == 3 (channels), so reorder to (B, T, V, C, H, W)

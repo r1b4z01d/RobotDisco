@@ -1,0 +1,66 @@
+--- a/lerobot/policies/groot/eagle2_hg_model/modeling_eagle2_5_vl.py
++++ b/lerobot/policies/groot/eagle2_hg_model/modeling_eagle2_5_vl.py
+@@ -44,6 +44,16 @@
+ """
+ 
+ 
++# --- local patch (Robot Disco GPU box, 2026-11-19): flash_attn has no wheel for torch 2.10 and does not build here, so
++# without it attention falls back to PyTorch's scaled-dot-product (same maths). The original file is beside this
++# one as .orig.
++try:
++    import flash_attn as _fa  # noqa: F401
++    _ATTN = "flash_attention_2"
++except Exception:  # noqa: BLE001
++    _ATTN = "sdpa"
++# ---
++
+ @add_start_docstrings(
+     "The bare Eagle2_5_VL Model outputting raw hidden-states without any specific head on top.",
+     EAGLE2_5_VL_START_DOCSTRING,
+@@ -104,7 +114,7 @@
+             self.vision_model = vision_model
+         else:
+             if config.vision_config.model_type == "siglip_vision_model":
+-                config.vision_config._attn_implementation = "flash_attention_2"
++                config.vision_config._attn_implementation = _ATTN
+                 self.vision_model = SiglipVisionModel(config.vision_config)
+             else:
+                 raise NotImplementedError(f"{config.vision_config.model_type} is not implemented.")
+@@ -118,7 +128,8 @@
+                 raise NotImplementedError("Phi3 is not implemented.")
+                 # self.language_model = Phi3ForCausalLM(config.text_config)
+             elif config.text_config.architectures[0] == "Qwen2ForCausalLM":
+-                assert config.text_config._attn_implementation == "flash_attention_2", (
++                config.text_config._attn_implementation = _ATTN
++                assert config.text_config._attn_implementation == _ATTN, (
+                     f"Qwen2 must use flash_attention_2 but got {config.text_config._attn_implementation}"
+                 )
+                 self.language_model = Qwen2ForCausalLM(config.text_config)
+--- a/lerobot/policies/groot/eagle2_hg_model/configuration_eagle2_5_vl.py
++++ b/lerobot/policies/groot/eagle2_hg_model/configuration_eagle2_5_vl.py
+@@ -26,6 +26,16 @@
+ logger = logging.get_logger(__name__)
+ 
+ 
++# --- local patch (Robot Disco GPU box, 2026-11-19): flash_attn has no wheel for torch 2.10 and does not build here, so
++# without it attention falls back to PyTorch's scaled-dot-product (same maths). The original file is beside this
++# one as .orig.
++try:
++    import flash_attn as _fa  # noqa: F401
++    _ATTN = "flash_attention_2"
++except Exception:  # noqa: BLE001
++    _ATTN = "sdpa"
++# ---
++
+ class Eagle25VLConfig(PretrainedConfig):
+     model_type = "eagle_2_5_vl"
+     is_composition = True
+@@ -97,7 +107,7 @@
+         self.min_dynamic_tiles = min_dynamic_tiles
+         self.max_dynamic_tiles = max_dynamic_tiles
+         self.tie_word_embeddings = self.text_config.tie_word_embeddings
+-        self._attn_implementation = _attn_implementation
++        self._attn_implementation = _attn_implementation if _attn_implementation != "flash_attention_2" else _ATTN
+         self._attn_implementation_autoset = _attn_implementation_autoset
+         self.image_token_index = image_token_index
+         self.use_pixel_shuffle = use_pixel_shuffle

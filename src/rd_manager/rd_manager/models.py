@@ -198,9 +198,20 @@ def start_training(repo_root: str, datasets_dir: str, dataset_name: str,
     if active:
         raise ValueError(f"a training run is already active ({', '.join(sorted(active))}); "
                          "stop it before starting another")
-    if policy_type not in ("smolvla", "act"):
-        raise ValueError(f"policy must be 'smolvla' or 'act', got {policy_type!r}")
+    if policy_type not in ("smolvla", "act", "groot"):
+        raise ValueError(f"policy must be 'smolvla', 'act' or 'groot', got {policy_type!r}")
     steps, batch_size, save_freq = int(steps), int(batch_size), int(save_freq)
+    notes = []
+    if policy_type == "groot":
+        # Measured on the 24 GB 4090, 2026-11-19: GR00T's default fine-tune (projector + the action head's diffusion
+        # model, 1.07 billion parameters) runs out of memory at any batch size; with the diffusion model frozen it
+        # trains at batch 16 (21 GB, 1.4 steps a second) and not at 32. A checkpoint is about 10 GB.
+        if batch_size > 16:
+            notes.append(f"batch size {batch_size} -> 16: the most GR00T fits in on this GPU")
+            batch_size = 16
+        if save_freq < 5000:
+            notes.append(f"a checkpoint every {save_freq} -> 5000 steps: each is about 10 GB")
+            save_freq = 5000
     if steps <= 0 or batch_size <= 0 or save_freq <= 0:
         raise ValueError("steps, batch_size, save_freq must be positive")
 
@@ -252,6 +263,10 @@ def start_training(repo_root: str, datasets_dir: str, dataset_name: str,
         cmd = [python, os.path.join(os.path.dirname(os.path.abspath(__file__)), "trainers", "train_regrasp.py"), "--regrasp-weight", str(weight),
                "--policy.path=lerobot/smolvla_base", f"--rename_map={json.dumps(rename)}"] + common
         extra = {"regrasp_share": round(share, 3), "regrasp_weight": weight}
+    elif policy_type == "groot":
+        # needs provision/groot_setup.sh run once on this machine (the extra packages and the two patches)
+        extra = {"notes": notes}
+        cmd = [python, "-m", "lerobot.scripts.lerobot_train", "--policy.type=groot", "--policy.tune_diffusion_model=false", "--log_freq=100"] + common
     else:
         extra = {}
         cmd = [python, "-m", "lerobot.scripts.lerobot_train", f"--policy.type={policy_type}"] + common
@@ -369,6 +384,15 @@ def push_checkpoint(repo_root: str, name: str, step: str | None = None, dest: st
     if r.returncode != 0:
         raise RuntimeError(f"rsync failed: {r.stderr.strip()[:300]}")
     capture = os.path.join(_train_dir(repo_root), name, "capture.json")
+    if not os.path.isfile(capture):
+        # runs started through lerobot_train itself (groot, act) have none beside them: the dataset's own, which the
+        # checkpoint's train_config names
+        try:
+            ds_root = (json.load(open(os.path.join(src, "train_config.json"))).get("dataset") or {}).get("root") or ""
+            cand = os.path.join(ds_root, "meta", "capture.json")
+            capture = cand if os.path.isfile(cand) else capture
+        except (OSError, ValueError):
+            pass
     if os.path.isfile(capture):
         subprocess.run(["rsync", "-a", "-e", "ssh -o ConnectTimeout=8 -o BatchMode=yes", capture, f"{dest.rstrip('/')}/{name}/"],
                        capture_output=True, text=True, timeout=60)

@@ -11,8 +11,10 @@ from __future__ import annotations
 from rd_bringup.process import exit_with_parent
 
 import argparse
+import json
 import sys
 import threading
+from pathlib import Path
 import time
 
 from . import checkpoints, wire
@@ -33,8 +35,33 @@ class Server:
             path = str(checkpoints.resolve(spec, self.models_dir))
         if self.backend is not None and spec and (path or spec) == self.checkpoint:
             return self.info()             # already serving it: a run that names the loaded checkpoint costs nothing
-        b = make_backend(self.backend_name, path or spec, device=self.device, **self.kw)
-        if self.backend_name == "fake":
+        name = self.backend_name
+        if name != "fake" and path:
+            # the checkpoint says what it is (config.json "type"), so one server serves SmolVLA and GR00T runs alike;
+            # --backend is what it starts as and what a checkpoint without a type is taken for
+            try:
+                kind = json.loads((Path(path) / "config.json").read_text()).get("type")
+            except (OSError, ValueError):
+                kind = None
+            if kind in ("smolvla", "groot"):
+                name = kind
+        if self.backend is not None and name != "fake":
+            with self.lock:                # the one being replaced leaves the GPU first (a forward pass still in its
+                try:                       # prefetch thread keeps it until that pass ends)
+                    self.backend.reset()
+                except Exception:  # noqa: BLE001
+                    pass
+                self.backend = None
+            try:
+                import gc
+
+                import torch
+                gc.collect()
+                torch.cuda.empty_cache()
+            except Exception:  # noqa: BLE001
+                pass
+        b = make_backend(name, path or spec, device=self.device, **self.kw)
+        if name == "fake":
             b.load(spec)
         with self.lock:
             self.backend, self.checkpoint = b, (path or spec)
@@ -42,17 +69,21 @@ class Server:
 
     def infer(self, state, images, task):
         with self.lock:
+            if self.backend is None:
+                raise RuntimeError("no model loaded (a checkpoint failed to load)")
             return self.backend.act(state, images, task)
 
     def reset(self):
         with self.lock:
-            self.backend.reset()
+            if self.backend is not None:
+                self.backend.reset()
 
     def info(self) -> dict:
         d = {"checkpoint": self.checkpoint, "resolved": self.checkpoint, "device": self.device}
         if self.checkpoint and self.backend_name != "fake":
             d.update(checkpoints.describe(self.checkpoint))
-        d.update(self.backend.info())
+        if self.backend is not None:
+            d.update(self.backend.info())
         return d
 
     def command(self, msg: dict) -> dict:
@@ -92,6 +123,10 @@ def main(argv=None) -> int:
               "prefetch": args.prefetch, "prefetch_at": args.prefetch_at, "rtc": args.rtc, "num_steps": args.num_steps,
               "rtc_inference_delay": args.rtc_inference_delay, "rtc_execution_horizon": args.rtc_execution_horizon,
               "rtc_max_guidance": args.rtc_max_guidance}
+    if args.backend == "groot":
+        if args.rtc:
+            ap.error("--rtc is for smolvla: the groot backend has no Real-Time Chunking")
+        kw = {"n_action_steps": args.n_action_steps or None, "prefetch": args.prefetch, "prefetch_at": args.prefetch_at}
     if args.backend == "fake":
         kw = {"close_after": args.fake_close_after, "drift": args.fake_drift}
     server = Server(args.backend, args.ckpt, args.device, args.models_dir, **kw)

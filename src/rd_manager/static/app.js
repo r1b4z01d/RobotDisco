@@ -451,6 +451,7 @@ async function doTrain(name) {
     fields: [
       { name: "policy", label: "policy", type: "select", value: "smolvla", options: [
         { value: "smolvla", label: "SmolVLA (fine-tune pretrained)" },
+        { value: "groot", label: "GR00T N1.5 (projector only; batch 16 at most, about 4 h for 20,000 steps)" },
         { value: "act", label: "ACT (from scratch)" }] },
       { name: "steps", label: "steps", type: "number", value: "20000" },
       { name: "batch_size", label: "batch size", type: "number", value: "64" },
@@ -462,7 +463,7 @@ async function doTrain(name) {
     const r = await post(`/api/datasets/${encodeURIComponent(name)}/train`,
       { policy: v.policy, steps: Number(v.steps), batch_size: Number(v.batch_size),
         save_freq: Number(v.save_freq) });
-    ok(`training started: ${r.run}`);
+    ok(`training started: ${r.run}` + ((r.notes || []).length ? ` (${r.notes.join("; ")})` : ""));
     showView("models");
   } catch (e) { err(e); }
 }
