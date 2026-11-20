@@ -1506,6 +1506,60 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
         info = panels_info(panels_url) if panels_url else None
         return {"url": slash(panels_url) if panels_url else "", "reachable": info is not None, "info": info}
 
+    panel_fx = {"heart": None}
+
+    def _wled(path: str, body: dict | None = None):
+        import urllib.request
+        req = urllib.request.Request(panels_url.rstrip("/") + path, data=json.dumps(body).encode() if body is not None else None,
+                                     headers={"Content-Type": "application/json"}, method="POST" if body is not None else "GET")
+        with urllib.request.urlopen(req, timeout=3.0) as r:
+            return json.loads(r.read() or b"{}")
+
+    @app.post("/api/panels/heart")
+    def api_panels_heart():
+        """The heart on both panels for a few seconds (the one a known face gets), then back to their own effect."""
+        if not panels_url:
+            raise HTTPException(503, "no LED panels configured")
+        if panel_fx["heart"] is None:
+            from urllib.parse import urlparse
+
+            from rd_face.wled_panels import WledPanels
+            u = urlparse(panels_url)
+            panel_fx["heart"] = WledPanels(u.hostname, 3.0, http_port=u.port or 80)
+        return {"ok": True, "started": panel_fx["heart"].show_heart()}
+
+    @app.post("/api/panels/sound")
+    def api_panels_sound(body: dict = Body(default={})):
+        """The panels' sound-reactive effect ({effect}, Waverly by default: what they show while music plays) on, or,
+        when they are already showing it, back to what they showed before. {on: bool} forces one or the other."""
+        if not panels_url:
+            raise HTTPException(503, "no LED panels configured")
+        name = str(body.get("effect") or "Waverly")
+        memory = Path(data_dir) / "outputs" / "panels_before_sound.json"
+        try:
+            names = [str(n).strip().lower() for n in _wled("/json/effects")]
+            if name.lower() not in names:
+                raise HTTPException(404, f"the panels have no effect named {name}")
+            fx = names.index(name.lower())
+            segs = [g for g in _wled("/json/state").get("seg", []) if g.get("stop", 0) > g.get("start", 0)]
+            showing = bool(segs) and all(int(g.get("fx", -1)) == fx for g in segs)
+            on = (not showing) if body.get("on") is None else bool(body["on"])
+            if on and not showing:
+                memory.parent.mkdir(parents=True, exist_ok=True)
+                memory.write_text(json.dumps({str(g["id"]): int(g.get("fx", 0)) for g in segs}))
+                _wled("/json/state", {"on": True, "seg": [{"id": g["id"], "fx": fx} for g in segs]})
+            elif not on and showing:
+                try:
+                    before = {int(k): int(v) for k, v in json.loads(memory.read_text()).items()}
+                except (OSError, ValueError):
+                    before = {}
+                _wled("/json/state", {"seg": [{"id": g["id"], "fx": before.get(int(g["id"]), 0)} for g in segs]})
+            return {"ok": True, "on": on, "effect": name}
+        except HTTPException:
+            raise
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(503, f"the LED panels are not answering: {str(e)[:120]}")
+
     @app.websocket("/ws/panels")
     async def ws_panels(socket: WebSocket):
         await socket.accept()
