@@ -161,7 +161,7 @@ class TestFace(unittest.TestCase):
         frames = [p for p in self.heart[:-1] if p[2:4] == bytes([0, 0])]
         self.assertGreaterEqual(len(frames), 5)
         self.assertTrue(all(p[0] == 4 and p[1] == 2 for p in self.heart[:-1]))
-        self.assertEqual(len(frames[0]), 4 + 489 * 3)
+        self.assertEqual(len(frames[0]), 4 + 480 * 3)
         self.assertTrue(any(frames[0][4:]), 'the frame is dark: no heart in it')
         self.spin(1.5)                      # the face loses the person (face_stick_seconds)
 

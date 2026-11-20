@@ -17,7 +17,10 @@ import urllib.request
 
 UDP_PORT = 21324          # WLED realtime UDP
 HTTP_PORT = 80            # WLED JSON API
-DNRGB_MAX_LEDS = 489      # LEDs per DNRGB packet
+# LEDs per DNRGB packet. The protocol allows 489 (a 1471-byte datagram), but this WLED takes in only the first 1460
+# bytes of one: the last four LEDs of every packet stayed dark, four holes in a row wherever a packet ended inside
+# the heart (seen in its own live view, 2026-11-19). 480 keeps well inside that.
+DNRGB_MAX_LEDS = 480
 
 
 def heart_coverage(u: float, v: float) -> bool:
