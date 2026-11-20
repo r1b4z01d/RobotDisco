@@ -18,9 +18,9 @@ what the pages' buttons do. With teleop on:
     row 3  10 ✊ close the hand   11..14  close finger 1..4    (held)
     after a save, for 30 s: row 3 is 1..5 stars for that episode
 
-Fingers are numbered as they sit on the hand, thumb first: 1 thumb, 2 index, 3 middle, 4 ring. The curl channels
-(the dataset's action columns: index, middle, ring, thumb) do not drive the fingers their names suggest on this
-hand (v1, measured 2026-10-26: channel 0 moves the middle finger, 1 the ring, 2 the index, 3 the thumb), so the
+Fingers are numbered as they sit on the hand, thumb first: 1 thumb, 2 index, 3 middle, 4 pinky. The curl channels
+(the dataset's action columns) are in servo order, which is the other way round: channel 0 is the pinky (servos 1-2),
+1 the middle finger (3-4), 2 the index (5-6), 3 the thumb (7-8) (Bryan, 2026-11-20; rd_arm/hand_protocol.py), so the
 keys map a finger number to its channel.
 """
 from __future__ import annotations
@@ -31,7 +31,7 @@ import threading
 import time
 import urllib.request
 
-FINGER_CHANNEL = {1: 3, 2: 2, 3: 0, 4: 1}
+FINGER_CHANNEL = {1: 3, 2: 2, 3: 1, 4: 0}
 # key -> (curl channel or -1 for the whole hand, +1 close / -1 open)
 FINGER_KEYS = {5: (-1, -1), **{5 + n: (FINGER_CHANNEL[n], -1) for n in (1, 2, 3, 4)},
                10: (-1, +1), **{10 + n: (FINGER_CHANNEL[n], +1) for n in (1, 2, 3, 4)}}

@@ -14,9 +14,9 @@ JOINT_CLOSE_OFFSETS = np.array(
     [90.0, -90.0, 90.0, -90.0, 90.0, -90.0, 70.0, -70.0], dtype=np.float32
 )
 FINGER_TO_SERVO = {
-    "index": (0, 1),
+    "ring": (0, 1),          # the hand's fourth finger (its pinky): servos 1-2 (rd_arm/hand_protocol.py)
     "middle": (2, 3),
-    "ring": (4, 5),
+    "index": (4, 5),
     "thumb": (6, 7),
 }
 FINGER_LANDMARK_INDICES = {

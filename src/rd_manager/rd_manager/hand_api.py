@@ -23,7 +23,7 @@ def build_command(curls, abduct=None, speed=200) -> dict:
     """Four curls (0 open .. 1 closed) and four abductions (-1 .. 1, the sideways spread) -> the servo offsets and
     the J: line they make. ValueError on a wrong count. Pure, tested."""
     if len(curls) != 4:
-        raise ValueError("curls must have 4 values (the channels index, middle, ring, thumb)")
+        raise ValueError("curls must have 4 values (the channels pinky, middle, index, thumb)")
     if abduct is not None and len(abduct) != 4:
         raise ValueError("abduct must have 4 values")
     curls = [min(1.0, max(0.0, float(c))) for c in curls]

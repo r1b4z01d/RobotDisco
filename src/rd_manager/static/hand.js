@@ -14,11 +14,10 @@ async function api(path, opts) {
 const post = (path, body) => api(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 const err = (e) => handLog("error: " + (e && e.message ? e.message : e));
 // The AmazingHand over UDP, through the manager (/api/hand*): the hand card of the Arm page (it was the Hand tab).
-// Sliders are by PHYSICAL finger. The four curl channels the API takes (the dataset / schema order, named
-// index, middle, ring, thumb) do not drive the fingers their names suggest on this hand — measured 2026-10-26
-// for the Stream Deck keys (ur5e_lerobot/teleop/manual_panel.py): channel 0 moves the middle finger, 1 the
-// pinky, 2 the index, 3 the thumb. The channel order itself stays: recorded datasets replay through it.
-const HAND_FINGERS = [["thumb", 3], ["index", 2], ["middle", 0], ["pinky", 1]];   // [label, curl channel]
+// Sliders are by PHYSICAL finger. The four curl channels the API takes are in servo order: channel 0 is the pinky
+// (servos 1-2), 1 the middle finger (3-4), 2 the index (5-6), 3 the thumb (7-8) (Bryan, 2026-11-20). The channel
+// order itself never changes: recorded datasets replay through it.
+const HAND_FINGERS = [["thumb", 3], ["index", 2], ["middle", 1], ["pinky", 0]];   // [label, curl channel]
 const HAND_CH = Object.fromEntries(HAND_FINGERS);                                // label -> channel
 const handPoseOf = (open) => { const c = [1, 1, 1, 1]; for (const [f, v] of Object.entries(open)) c[HAND_CH[f]] = v; return c; };
 const HAND_POSES = { open: [0, 0, 0, 0], half: [0.5, 0.5, 0.5, 0.5], close: [1, 1, 1, 1],

@@ -19,7 +19,7 @@ PKG = Path(__file__).resolve().parents[1]
 
 def test_protocol_roundtrip():
     assert curls_to_offsets([0, 0, 0, 0]) == list(JOINT_OPEN_OFFSETS)
-    assert curls_to_offsets({"index": 1, "middle": 1, "ring": 1, "thumb": 1}) == list(JOINT_CLOSE_OFFSETS)
+    assert curls_to_offsets({"pinky": 1, "middle": 1, "index": 1, "thumb": 1}) == list(JOINT_CLOSE_OFFSETS)
     half = curls_to_offsets([0.5, 0, 0, 0])
     assert half[0] == pytest.approx(27.5) and half[1] == pytest.approx(-27.5) and half[2:] == list(JOINT_OPEN_OFFSETS[2:])
     assert offsets_to_curls(half) == pytest.approx([0.5, 0, 0, 0])

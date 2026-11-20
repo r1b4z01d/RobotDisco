@@ -7,6 +7,9 @@
 from __future__ import annotations
 
 ARM_POSE_NAMES = ("ee_x", "ee_y", "ee_z", "ee_rx", "ee_ry", "ee_rz")
+# The four curl channels drive, in order, the pinky, the middle finger, the index and the thumb (servos 1-2, 3-4, 5-6,
+# 7-8: rd_arm/hand_protocol.py). The column names below say otherwise and stay as they are: they are written into
+# every recorded dataset and every checkpoint's config, and datasets with different column names do not merge.
 HAND_CURL_NAMES = ("curl_index", "curl_middle", "curl_ring", "curl_thumb")
 ACTION_NAMES = ARM_POSE_NAMES + HAND_CURL_NAMES
 ARM_POSE_DIM, HAND_CURL_DIM = len(ARM_POSE_NAMES), len(HAND_CURL_NAMES)

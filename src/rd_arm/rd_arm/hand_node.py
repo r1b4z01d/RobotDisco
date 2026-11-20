@@ -1,6 +1,6 @@
 """The AmazingHand as ROS 2 topics and services (the only client of the hand on the robot).
 
-  sub  /hand/curls    std_msgs/Float32MultiArray [index, middle, ring, thumb] in 0..1   (policies, teleop)
+  sub  /hand/curls    std_msgs/Float32MultiArray [pinky, middle, index, thumb] in 0..1   (policies, teleop)
   sub  /hand/offsets  std_msgs/Float32MultiArray 8 per-servo degrees                   (the manager's Hand tab)
   pub  /hand/state    std_msgs/Float32MultiArray [commanded curls x4, reported flex x4 (or the commanded again)]
   srv  /hand/open, /hand/close   std_srvs/Trigger

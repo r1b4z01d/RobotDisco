@@ -440,6 +440,8 @@ def test_stream_deck_keys():
     t.nudges.clear(); pad.cb(5, True); d.poll(); pad.cb(5, False); d.poll()
     assert t.nudges == [(-0.072, -1)]
     pad.cb(7, True); d.poll(); pad.cb(7, False); assert t.nudges[-1] == (-0.072, 2)      # finger 2 = the index = channel 2
+    from rd_vla.deck import FINGER_CHANNEL
+    assert FINGER_CHANNEL == {1: 3, 2: 2, 3: 1, 4: 0}      # thumb, index, middle, pinky -> servos 7-8, 5-6, 3-4, 1-2
     # after a save the bottom row is the stars for 30 s, then the fingers again
     t.recording = False; t.nudges.clear()
     d.enter_rating(); d.poll()
