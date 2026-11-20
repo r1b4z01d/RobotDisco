@@ -2,7 +2,7 @@
 checkpoints, datasets) and supervisor. v1 webui/server.py + Scripts/route_editor.py in one process.
 
 Pages:  /            the manager (tabs)        /live/        the route editor               /live/3d   the 3D view
-        /arm/        arm + hand + policy       /folks/       the people the robot knows
+        /backdoor/   dev tools: arm, hand, policy       /folks/       the people the robot knows
 The LED matrix panels (WLED) are drawn on the robot in the 3D view: /api/panels and the /ws/panels pixel relay.
 """
 from __future__ import annotations
@@ -161,9 +161,11 @@ def build_app(ros: bool = True, sim: bool = False, data_dir: str = "/mnt/data", 
     def map3d_page():
         return _page("map3d.html")
 
-    @app.get("/arm/", response_class=HTMLResponse)
-    def arm_page():
-        return _page("arm.html")
+    @app.get("/backdoor/", response_class=HTMLResponse)
+    @app.get("/backdoor", response_class=HTMLResponse)
+    @app.get("/arm/", response_class=HTMLResponse)          # its old address: bookmarks keep working
+    def backdoor_page():
+        return _page("backdoor.html")
 
     @app.get("/teleop/", response_class=HTMLResponse)
     def teleop_page_html():

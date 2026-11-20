@@ -91,7 +91,7 @@ class FakeWled:
 
 
 def test_pages_and_static(client):
-    for path in ("/", "/live/", "/live/3d", "/arm/", "/folks/"):
+    for path in ("/", "/live/", "/live/3d", "/backdoor/", "/arm/", "/folks/"):
         r = client.get(path)
         assert r.status_code == 200 and "<html" in r.text.lower(), path
     assert client.get("/app.js").status_code == 200
