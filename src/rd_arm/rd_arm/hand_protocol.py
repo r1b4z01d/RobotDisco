@@ -12,14 +12,15 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-# The fingers as they are wired on the robot's hand (Bryan, 2026-11-20), servos numbered 1..8 on the bus:
-#   1 2 pinky    3 4 middle    5 6 index    7 8 thumb
+# The fingers as they are wired on the robot's hand, servos numbered 1..8 on the bus (checked on the hand with the
+# console's sliders, Bryan, 2026-11-20):
+#   1 2 index    3 4 middle    5 6 pinky    7 8 thumb
 # This is also the order of the four curl channels everywhere (/hand/curls, the datasets' action and state columns,
-# the policies): channel 0 is the pinky, 1 the middle, 2 the index, 3 the thumb. The channel ORDER is what every
-# recorded dataset and trained model is in and must not change; only the names were wrong (they said index, middle,
-# ring, thumb, and the datasets' column names still do: rd_vla/schema.py).
-FINGER_ORDER = ("pinky", "middle", "index", "thumb")
-FINGER_TO_SERVO = {"pinky": (0, 1), "middle": (2, 3), "index": (4, 5), "thumb": (6, 7)}
+# the policies): channel 0 is the index, 1 the middle, 2 the pinky, 3 the thumb. The channel ORDER is what every
+# recorded dataset and trained model is in and must not change. (The datasets' column names call the pinky "ring":
+# rd_vla/schema.py.)
+FINGER_ORDER = ("index", "middle", "pinky", "thumb")
+FINGER_TO_SERVO = {"index": (0, 1), "middle": (2, 3), "pinky": (4, 5), "thumb": (6, 7)}
 JOINT_OPEN_OFFSETS = (-35.0, 35.0, -35.0, 35.0, -35.0, 35.0, -35.0, 35.0)
 JOINT_CLOSE_OFFSETS = (90.0, -90.0, 90.0, -90.0, 90.0, -90.0, 70.0, -70.0)
 DEFAULT_SPEED = 200          # firmware units 50..2000
@@ -31,7 +32,7 @@ def clamp01(x: float) -> float:
 
 
 def curls_to_offsets(curls) -> list[float]:
-    """Per-finger curl in [0,1] (mapping, or [pinky, middle, index, thumb]) -> 8 per-servo offsets (deg)."""
+    """Per-finger curl in [0,1] (mapping, or [index, middle, pinky, thumb]) -> 8 per-servo offsets (deg)."""
     if isinstance(curls, Mapping):
         vals = [float(curls.get(f, 0.0)) for f in FINGER_ORDER]
     else:

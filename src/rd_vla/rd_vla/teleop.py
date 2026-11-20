@@ -182,7 +182,7 @@ class Teleop(Node):
         dp("angular_speed", 0.45)             # rad/s (v1 SM_ROT_GAIN)
         dp("grasp_close_rate", 0.104); dp("grasp_open_rate", 0.060)      # per tick while the button is held (v1)
         dp("button_close", 0); dp("button_open", 1)
-        dp("max_curls", [1.0, 1.0, 1.0, 1.0])  # pinky, middle, index, thumb (the channel order) at a full grasp
+        dp("max_curls", [1.0, 1.0, 1.0, 1.0])  # index, middle, pinky, thumb (the channel order) at a full grasp
         dp("axis_map", json.dumps(AXIS_MAP))
         dp("deadband", 0.12); dp("scale", 350.0)
         dp("max_step_m", 0.05)     # as the policy runner and v1: recording and playing back go through the same limits
@@ -235,7 +235,7 @@ class Teleop(Node):
         self.homing = False                # a go-home is under way: the puck has let go and takes over after it
         self.freedrive = False                # hand-guiding: the arm is moved by hand, nothing is streamed
         self.target = None
-        self.curls = [0.0] * 4                # each finger's grasp 0..1 (pinky, middle, index, thumb), before max_curls
+        self.curls = [0.0] * 4                # each finger's grasp 0..1 (index, middle, pinky, thumb), before max_curls
         self.lock = threading.Lock()          # the writer: the tick adds frames, the services open / save / discard
         self.writer = None
         self.recording = False

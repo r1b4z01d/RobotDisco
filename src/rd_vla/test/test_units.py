@@ -439,9 +439,9 @@ def test_stream_deck_keys():
     assert t.nudges == [(0.1248, 3), (0.1248, 3)]                    # 0.104 per teleop tick, this poll runs every 0.1 s at 12 Hz
     t.nudges.clear(); pad.cb(5, True); d.poll(); pad.cb(5, False); d.poll()
     assert t.nudges == [(-0.072, -1)]
-    pad.cb(7, True); d.poll(); pad.cb(7, False); assert t.nudges[-1] == (-0.072, 2)      # finger 2 = the index = channel 2
+    pad.cb(7, True); d.poll(); pad.cb(7, False); assert t.nudges[-1] == (-0.072, 0)      # finger 2 = the index = channel 0
     from rd_vla.deck import FINGER_CHANNEL
-    assert FINGER_CHANNEL == {1: 3, 2: 2, 3: 1, 4: 0}      # thumb, index, middle, pinky -> servos 7-8, 5-6, 3-4, 1-2
+    assert FINGER_CHANNEL == {1: 3, 2: 0, 3: 1, 4: 2}      # thumb, index, middle, pinky -> servos 7-8, 1-2, 3-4, 5-6
     # after a save the bottom row is the stars for 30 s, then the fingers again
     t.recording = False; t.nudges.clear()
     d.enter_rating(); d.poll()
@@ -450,7 +450,7 @@ def test_stream_deck_keys():
     assert t.rated == [4] and t.nudges == [] and pad.labels[13] == "3"
     d.enter_rating(); d.poll(); now[0] += 31; d.poll()
     assert pad.labels[10] == "✊"
-    pad.cb(12, True); d.poll(); assert t.nudges and t.nudges[-1][1] == 2 and t.rated == [4]
+    pad.cb(12, True); d.poll(); assert t.nudges and t.nudges[-1][1] == 0 and t.rated == [4]
 
 
 def test_tool_voltage_is_twelve_or_nothing(monkeypatch):
