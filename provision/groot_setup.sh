@@ -30,3 +30,12 @@ for p in "$HERE"/patches/lerobot-groot-*.patch; do
   fi
 done
 "$VENV/bin/python" -c "import peft, timm, tree; from lerobot.policies.groot.modeling_groot import GrootPolicy; print('groot: ready')"
+
+# A fine-tuned checkpoint does not load by itself: LeRobot builds the base model first, from the Hugging Face cache.
+# The robot does not reach the hub (HF_HUB_OFFLINE=1), so both folders are copied to it from a machine that has
+# trained GR00T (5 GB, once):
+#   rsync -a ~/.cache/huggingface/hub/models--nvidia--GR00T-N1.5-3B/ RD:.cache/huggingface/hub/models--nvidia--GR00T-N1.5-3B/
+#   rsync -a ~/.cache/huggingface/lerobot/lerobot/eagle2hg-processor-groot-n1p5/ RD:.cache/huggingface/lerobot/lerobot/eagle2hg-processor-groot-n1p5/
+for d in hub/models--nvidia--GR00T-N1.5-3B lerobot/lerobot/eagle2hg-processor-groot-n1p5; do
+  [ -d "${HF_HOME:-$HOME/.cache/huggingface}/$d" ] || echo "note: $d is not in the Hugging Face cache here: copy it before serving a GR00T checkpoint offline"
+done

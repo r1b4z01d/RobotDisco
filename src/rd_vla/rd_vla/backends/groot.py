@@ -3,10 +3,13 @@ a chunk of 16 actions out, served one action per step. Imports lerobot lazily, l
 
 Needs, in the interpreter that serves it, LeRobot's groot extras (peft, timm, dm-tree; flash-attn where it installs)
 and, on machines where flash-attn does not build and for cameras of unequal size, the two local patches of LeRobot's
-groot code (provision/patches/lerobot-groot-*.patch).
+groot code (provision/patches/lerobot-groot-*.patch): provision/groot_setup.sh does both. Loading a fine-tuned
+checkpoint also needs the base model (nvidia/GR00T-N1.5-3B, 5 GB) and the tokenizer assets in the Hugging Face
+cache; the robot is offline to the hub, so they are copied there from the GPU box (the script says how).
 
-Timing: a chunk takes 0.05 s on the 4090 (7 GB of GPU memory, 2026-11-20); the Orin is not measured yet. A chunk is 16
-actions, 1.3 s at 12 Hz. With `prefetch` the next chunk is computed in a thread once `prefetch_at` actions remain
+Timing: a chunk takes 0.05 s on the 4090 and 0.58 s on the robot's AGX Orin (7 GB of GPU memory on both; the first
+pass after a load takes 4.5 s there; measured 2026-11-20). A chunk is 16 actions, 1.3 s at 12 Hz, so on the Orin a
+forward pass is seven steps: prefetch_at 8 leaves seven actions served from each chunk. With `prefetch` the next chunk is computed in a thread once `prefetch_at` actions remain
 (rd_vla/chunks.py), which must cover the forward pass in steps. There is no Real-Time Chunking here.
 
 Two things LeRobot's own flow does not do for a chunk: its post-processor keeps only the LAST step of a 3-D chunk (so
