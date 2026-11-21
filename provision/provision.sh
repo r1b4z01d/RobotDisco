@@ -315,6 +315,12 @@ phase_sysctl() {
   # wants a larger buffer for point clouds: net.core.rmem_max.
   # the last line lets the manager (user rd) serve the console on port 80 beside 8092: http://<robot>/
   printf 'net.core.rmem_max=8388608\nnet.core.rmem_default=8388608\nnet.ipv4.ip_unprivileged_port_start=80\n' | sudo tee /etc/sysctl.d/60-robot-disco.conf >/dev/null
+  # Ubuntu's update notifier starts update-manager a few minutes after login, and on the robot it sat at a full core
+  # (2026-11-20). Nobody reads its window there: its autostart entry is switched off for this user.
+  if [ -f /etc/xdg/autostart/update-notifier.desktop ]; then
+    mkdir -p "$HOME/.config/autostart"
+    { grep -v -e '^Hidden=' -e '^X-GNOME-Autostart-enabled=' /etc/xdg/autostart/update-notifier.desktop; echo 'Hidden=true'; echo 'X-GNOME-Autostart-enabled=false'; } > "$HOME/.config/autostart/update-notifier.desktop"
+  fi
   sudo sysctl --system >/dev/null
 }
 
