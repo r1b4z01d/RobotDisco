@@ -79,7 +79,7 @@
   </div>
   <pre id="policy" class="mono"></pre>
 </div>
-<div class="card"><div class="row"><b>Ask</b> <form onsubmit="ask(event)" style="display:contents"><input id="ask" placeholder="what time is it" size="40" autocomplete="off" spellcheck="false" title="typed text reaches the voice assistant as if it had been heard, with the wake phrase already in front"><button type="submit">Say to robot</button></form>
+<div class="card"><div class="row"><b>Ask</b> <form onsubmit="askRobot(event)" style="display:contents"><input id="ask" placeholder="what time is it" size="40" autocomplete="off" spellcheck="false" title="typed text reaches the voice assistant as if it had been heard, with the wake phrase already in front"><button type="submit">Say to robot</button></form>
   <span id="ask-echo" class="mono muted"></span></div>
 <div class="row"><b>Say</b> <input id="say" placeholder="something to say" size="40"><button onclick="post('/api/say', {text: $('say').value})">Say</button>
   <button onclick="post('/api/people/any/wink', {})" title="the face winks once">😉</button>
@@ -91,7 +91,8 @@
 const $ = (id) => document.getElementById(id);
 async function post(path, body) { const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); const d = await r.json().catch(() => ({})); if (!r.ok) alert(d.detail || r.status); return d; }
 let askTimer = null;
-async function ask(ev) {
+// not "ask": inside the form's onsubmit that name is the text box (id="ask"), not this function
+async function askRobot(ev) {
   ev.preventDefault();
   const text = $("ask").value.trim(); if (!text) return;
   const v0 = await fetch("/api/voice").then((r) => r.json()).catch(() => ({}));
