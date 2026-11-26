@@ -74,8 +74,12 @@ class TestBase(unittest.TestCase):
         end = time.monotonic() + seconds
         while time.monotonic() < end:
             now = self.node.get_clock().now().to_msg()
+            # the obstacle goes into a scan the monitor listens to: the front lidar's, or the back one's while
+            # robot.yaml has the front lidar off the robot (sensors.rplidar_s1.enabled: false)
+            from rd_bringup import config as robot
+            seen_by = 'rp_s1_lidar' if (robot.get('sensors.rplidar_s1') or {}).get('enabled', True) else 'rp_s2e_lidar'
             for pub, frame in ((self.s1, 'rp_s1_lidar'), (self.s2, 'rp_s2e_lidar')):
-                m = _scan(frame, obstacle if frame == 'rp_s1_lidar' else None)
+                m = _scan(frame, obstacle if frame == seen_by else None)
                 m.header.stamp = now
                 pub.publish(m)
             t = TwistStamped()

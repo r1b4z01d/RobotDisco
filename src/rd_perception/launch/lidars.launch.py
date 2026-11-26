@@ -43,7 +43,7 @@ def generate_launch_description():
 
     # the scans localisation matches against the map; a lidar whose ranges are off is left out (in_map_matching: false)
     merged = [t for t, cfg in (('/rp_s1_lidar/scan_filtered', s1_cfg), ('/rp_s2e_lidar/scan_filtered', s2e_cfg), ('/velodyne/scan', velo_cfg))
-              if cfg.get('in_map_matching', True)]
+              if cfg.get('in_map_matching', True) and cfg.get('enabled', True)]
 
     s1_nodes = [
         Node(package='rplidar_ros', executable='rplidar_node', name='rplidar_s1_node', output='screen',
@@ -87,7 +87,7 @@ def generate_launch_description():
              remappings=[('scan', 'velodyne/scan')], arguments=quiet),
     ]
     return LaunchDescription([
-        DeclareLaunchArgument('s1', default_value='true'),
+        DeclareLaunchArgument('s1', default_value='true' if s1_cfg.get('enabled', True) else 'false'),    # robot.yaml sensors.rplidar_s1.enabled
         DeclareLaunchArgument('s2e', default_value='true'),
         DeclareLaunchArgument('velodyne', default_value='true'),
         DeclareLaunchArgument('sim', default_value='false'),

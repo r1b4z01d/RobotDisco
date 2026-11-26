@@ -97,6 +97,8 @@ sensors:
     serial_port: /dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0
     baudrate: 256000
     frame: rp_s1_lidar
+    enabled: false                # 2026-11-25: the unit is off the robot (its USB adapter is gone from the bus) until the Hokuyo replaces
+                                  # it. false = no driver, and the collision monitor and the costmaps do not wait for its scan.
     in_map_matching: false        # 2026-11-15: reads 7 cm long at 1 m even after the correction below, so it is kept out of the
                                   # merged scan localisation uses (mapping already uses the back lidar alone). Obstacle avoidance still uses it.
     # This S1 reads every range too long by an amount that changes between days: +0.33 m on 2026-11-02 (taped box, both

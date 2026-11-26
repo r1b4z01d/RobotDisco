@@ -24,8 +24,23 @@ def generate_launch_description():
     maps_dir = MapsStore().dir
     use_sim_time = LaunchConfiguration('use_sim_time')
     autostart = LaunchConfiguration('autostart')
+    # A lidar that robot.yaml marks enabled: false is taken out of the costmaps' observation sources: a costmap waits
+    # for every source it lists, and one that never comes keeps the controller from running.
+    nav2_yaml = os.path.join(share, 'config', 'nav2.yaml')
+    from rd_bringup import config as _robot
+    off = [src for src, key in (('scan_s1', 'sensors.rplidar_s1'), ('scan_s2e', 'sensors.rplidar_s2e'))
+           if not (_robot.get(key) or {}).get('enabled', True)]
+    if off:
+        import re
+        import tempfile
+        text = open(nav2_yaml).read()
+        text = re.sub(r'^(\s*observation_sources:)(.*)$',
+                      lambda m: m.group(1) + ' ' + ' '.join(w for w in m.group(2).split() if w not in off), text, flags=re.M)
+        with tempfile.NamedTemporaryFile('w', prefix='nav2_', suffix='.yaml', delete=False) as f:
+            f.write(text)
+        nav2_yaml = f.name
     params = RewrittenYaml(
-        source_file=os.path.join(share, 'config', 'nav2.yaml'), root_key='',
+        source_file=nav2_yaml, root_key='',
         param_rewrites={'use_sim_time': use_sim_time, 'autostart': autostart}, convert_types=True)
     # nav2.yaml carries no use_sim_time keys, so the rewrite above sets none: every node gets it explicitly (under
     # Isaac's clock a wall-time node stamps goals the others cannot transform; the loopback sim's clock hid this)

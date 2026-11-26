@@ -72,9 +72,15 @@ def generate_launch_description():
         parameters=[os.path.join(share, 'config', 'twist_mux.yaml'), {'use_sim_time': use_sim_time}],
         remappings=[('/cmd_vel_out', '/cmd_vel_raw')], arguments=quiet)
 
+    # A lidar that robot.yaml marks enabled: false is not waited for: the monitor stops the base when any of its sources
+    # goes quiet, so a unit that is off the robot would hold it still for good. The rig keeps both (it simulates both).
+    from rd_bringup import config as _robot
+    off = [name for name, key in (('rp_s1_lidar', 'sensors.rplidar_s1'), ('rp_s2e_lidar', 'sensors.rplidar_s2e'))
+           if not (_robot.get(key) or {}).get('enabled', True)]
+    monitor_sources = {'observation_sources': [n for n in ('rp_s1_lidar', 'rp_s2e_lidar') if n not in off]} if off else {}
     monitor = Node(
         package='nav2_collision_monitor', executable='collision_monitor', name='collision_monitor',
-        parameters=[os.path.join(share, 'config', 'collision_monitor.yaml'), {'use_sim_time': use_sim_time}],
+        parameters=[os.path.join(share, 'config', 'collision_monitor.yaml'), {'use_sim_time': use_sim_time}, monitor_sources],
         output='screen', condition=IfCondition(collision_monitor))
     monitor_lifecycle = Node(
         package='nav2_lifecycle_manager', executable='lifecycle_manager', name='lifecycle_manager_collision_monitor',
