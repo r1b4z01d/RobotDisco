@@ -329,6 +329,10 @@ class PolicyRunner(Node):
                     done_when = (goal.done_when or "").strip().lower()
                     self._feedback(handle, 0, t0, "running", 0)
                     was_running = False
+                    # max_seconds is the policy's time on the arm, counted from here. It used to run from the start of
+                    # the request: a GR00T model's first load (the unit starting, the checkpoint, the exposure
+                    # metering: 61 s) used all 60 of them and the run "timed out" without one step (2026-11-25).
+                    t_run = time.monotonic()
                     while True:
                         if cancelled():
                             ended = "cancelled"
@@ -340,7 +344,7 @@ class PolicyRunner(Node):
                         elif was_running:
                             ended = "arm stopped (protective stop?)"
                             break
-                        if goal.max_seconds and time.monotonic() - t0 > goal.max_seconds:
+                        if goal.max_seconds and time.monotonic() - t_run > goal.max_seconds:
                             ended = "timeout"
                             break
                         if goal.max_steps and step >= goal.max_steps:
@@ -424,8 +428,8 @@ class PolicyRunner(Node):
                               "backend": info.get("backend", ""), "steps": step, "duration_s": round(time.monotonic() - t0, 1),
                               "fps": fps, "ended": ended, "landmark": goal.landmark, "operator": p("operator"), "episodes": 1,
                               "successes": 1 if ended == "done" else 0, "exposure": out.get("exposure", {}), "remote": f"{p('infer_host')}:{p('infer_port')}"})
-        ok = ended in ("done", "timeout", "max_steps")
-        return ok, ended
+        ok = ended in ("done", "timeout", "max_steps") and step > 0      # a run that never took a step did not run
+        return ok, ended if step > 0 or ended not in ("timeout", "max_steps") else f"{ended} before the first step"
 
 
 def main():
